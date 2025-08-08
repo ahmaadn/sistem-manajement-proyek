@@ -1,0 +1,14 @@
+User-agent: *
+Disallow: /api/
+Disallow: /docs
+Disallow: /redoc
+Disallow: /openapi.json
+Disallow: /auth/
+Disallow: /static/
+Disallow: /v1/
+
+Allow: /static/favicon.ico
+Allow: /static/img/
+
+Crawl-delay: 1
+
