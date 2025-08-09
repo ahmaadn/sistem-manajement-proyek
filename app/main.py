@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -46,7 +47,9 @@ def get_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.add_exception_handler(422, error_handler.validation_exception_handler)  # type: ignore
+    app.add_exception_handler(
+        RequestValidationError, error_handler.validation_exception_handler
+    )
     app.add_exception_handler(Exception, error_handler.global_exception_handler)
     app.add_exception_handler(AppException, error_handler.app_exception_handler)  # type: ignore
     return app

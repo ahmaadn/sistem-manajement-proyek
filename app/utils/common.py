@@ -8,3 +8,4 @@ class ErrorCode(StrEnum):
 
     APP_ERROR = auto()
     INTERNAL_SERVER_ERROR = auto()
+    VALIDATION_ERROR = auto()
