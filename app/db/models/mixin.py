@@ -7,12 +7,12 @@ from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 class TimeStampMixin:
     if TYPE_CHECKING:
-        create_at: Mapped[datetime.datetime]
-        update_at: Mapped[datetime.datetime]
+        created_at: Mapped[datetime.datetime]
+        updated_at: Mapped[datetime.datetime]
     else:
 
         @declared_attr
-        def create_at(cls) -> Mapped[datetime.datetime]:  # noqa: N805
+        def created_at(cls) -> Mapped[datetime.datetime]:  # noqa: N805
             return mapped_column(
                 DateTime(True),
                 nullable=False,
@@ -21,7 +21,7 @@ class TimeStampMixin:
             )
 
         @declared_attr
-        def update_at(cls) -> Mapped[datetime.datetime]:  # noqa: N805
+        def updated_at(cls) -> Mapped[datetime.datetime]:  # noqa: N805
             return mapped_column(
                 DateTime(True),
                 nullable=False,
