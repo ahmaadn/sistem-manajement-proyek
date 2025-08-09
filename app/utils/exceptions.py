@@ -1,5 +1,7 @@
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from .common import ErrorCode
 
 
@@ -27,3 +29,18 @@ class AppException(Exception):  # noqa: N818
             "message": self.message,
             **self.extra,
         }
+
+
+class ValidationErrorResponse(BaseModel):
+    error_code: str = Field(
+        description="Kode kesalahan yang menunjukkan jenis kesalahan validasi."
+    )
+    message: str = Field(
+        description=(
+            "Pesan kesalahan yang memberikan rincian lebih lanjut "
+            "tentang kesalahan validasi."
+        )
+    )
+    errors: dict[str, list[str]] = Field(
+        description="Sebuah kamus yang berisi kesalahan validasi untuk setiap field."
+    )

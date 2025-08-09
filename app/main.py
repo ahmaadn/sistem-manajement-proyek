@@ -11,7 +11,7 @@ from app.db import create_db_and_tables
 from app.db.models import load_all_models
 from app.middleware import middleware
 from app.utils import error_handler
-from app.utils.exceptions import AppException
+from app.utils.exceptions import AppException, ValidationErrorResponse
 
 
 @asynccontextmanager
@@ -31,6 +31,12 @@ def get_app() -> FastAPI:
         lifespan=lifespan,
         redoc_url=None,
         middleware=middleware,
+        responses={
+            422: {
+                "model": ValidationErrorResponse,
+                "description": "Kesalahan validasi.",
+            }
+        },
     )
     # Static files
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -48,7 +54,8 @@ def get_app() -> FastAPI:
     )
 
     app.add_exception_handler(
-        RequestValidationError, error_handler.validation_exception_handler
+        RequestValidationError,
+        error_handler.validation_exception_handler,  # type: ignore
     )
     app.add_exception_handler(Exception, error_handler.global_exception_handler)
     app.add_exception_handler(AppException, error_handler.app_exception_handler)  # type: ignore
