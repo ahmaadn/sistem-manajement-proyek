@@ -5,6 +5,7 @@ from fastapi import Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.utils.common import ErrorCode
 from app.utils.exceptions import AppException
@@ -50,4 +51,13 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
                 "errors": reformatted_message,
             }
         ),
+    )
+
+
+async def http_exception_handler(_: Request, exc: StarletteHTTPException):
+    """Menangani Kelasahan"""
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=jsonable_encoder(exc.detail),
     )

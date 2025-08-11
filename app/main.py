@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import api
 from app.core.config import settings
@@ -53,6 +54,11 @@ def get_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # exception
+    app.add_exception_handler(
+        StarletteHTTPException,
+        error_handler.http_exception_handler,  # type: ignore
+    )
     app.add_exception_handler(
         RequestValidationError,
         error_handler.validation_exception_handler,  # type: ignore
