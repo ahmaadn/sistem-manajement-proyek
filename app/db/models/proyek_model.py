@@ -1,7 +1,7 @@
 from enum import StrEnum
 
 from sqlalchemy import Enum, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
@@ -24,3 +24,7 @@ class Proyek(Base, TimeStampMixin, SoftDeleteMixin):
         Enum(StatusProyek), nullable=False, default=StatusProyek.TENDER
     )
     created_by_id: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Relationship
+    # one to many
+    tugas = relationship("Tugas", back_populates="proyek")
