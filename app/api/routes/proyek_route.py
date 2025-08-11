@@ -1,13 +1,9 @@
-import datetime
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.sessions import get_async_session
+from app.api.dependencies.proyek_manager import ProyekManager, get_proyek_manager
 from app.db.models.proyek_model import Proyek
 from app.schemas.proyek import ProyekCreate, ProyekResponse, ProyekUpdate
-from app.utils.common import ErrorCode
 from app.utils.exceptions import AppErrorResponse
 
 r = router = APIRouter(tags=["Proyek"])
@@ -15,7 +11,10 @@ r = router = APIRouter(tags=["Proyek"])
 
 @cbv(r)
 class _Proyek:
-    session: AsyncSession = Depends(get_async_session)
+    proyek_manager: ProyekManager = Depends(get_proyek_manager)
+
+    def __init__(self) -> None:
+        self.session = self.proyek_manager.session
 
     @r.post(
         "/proyek",
@@ -29,28 +28,8 @@ class _Proyek:
         },
     )
     async def create_proyek(self, proyek: ProyekCreate):
-        """buat proyek baru"""
-
-        proyek_item = Proyek(
-            nama=proyek.nama,
-            deskripsi=proyek.deskripsi,
-            status=proyek.status,
-            created_by_id=1,  # Ganti dengan ID pengguna yang sesuai
-        )
-
-        self.session.add(proyek_item)
-        await self.session.commit()
-        await self.session.refresh(proyek_item)
-
-        return ProyekResponse(
-            id=proyek_item.id,
-            nama=proyek_item.nama,
-            deskripsi=proyek_item.deskripsi,
-            status=proyek_item.status,
-            author_id=proyek_item.created_by_id,
-            created_at=proyek_item.created_at,
-            updated_at=proyek_item.updated_at,
-        )
+        proyek_item = await self.proyek_manager.create(1, proyek)
+        return self._map_proyek_to_response(proyek_item)
 
     @r.put(
         "/proyek/{proyek_id}",
@@ -69,43 +48,8 @@ class _Proyek:
     )
     async def update_proyek(self, proyek_id: int, proyek: ProyekUpdate):
         """memperbarui proyek"""
-
-        proyek_item = await self.session.get(Proyek, proyek_id)
-        if not proyek_item:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error_code": ErrorCode.PROYEK_NOT_FOUND,
-                    "message": "Proyek tidak ditemukan",
-                },
-            )
-
-        # Cek apakah sudah di delete
-        if proyek_item.deleted_at is not None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error_code": ErrorCode.PROYEK_NOT_FOUND,
-                    "message": "Proyek tidak ditemukan",
-                },
-            )
-
-        for key, value in proyek.dict(exclude_unset=True).items():
-            setattr(proyek_item, key, value)
-
-        self.session.add(proyek_item)
-        await self.session.commit()
-        await self.session.refresh(proyek_item)
-
-        return ProyekResponse(
-            id=proyek_item.id,
-            nama=proyek_item.nama,
-            deskripsi=proyek_item.deskripsi,
-            status=proyek_item.status,
-            author_id=proyek_item.created_by_id,
-            created_at=proyek_item.created_at,
-            updated_at=proyek_item.updated_at,
-        )
+        proyel_item = await self.proyek_manager.update(proyek_id, proyek)
+        return self._map_proyek_to_response(proyel_item)
 
     @r.delete(
         "/proyek/{proyek_id}",
@@ -123,18 +67,25 @@ class _Proyek:
     async def delete_proyek(self, proyek_id: int):
         """menghapus proyek"""
 
-        proyek_item = await self.session.get(Proyek, proyek_id)
-        if not proyek_item:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error_code": ErrorCode.PROYEK_NOT_FOUND,
-                    "message": "Proyek tidak ditemukan",
-                },
-            )
+        await self.proyek_manager.delete(proyek_id)
 
-        proyek_item.deleted_at = datetime.datetime.now(datetime.timezone.utc)
+    def _map_proyek_to_response(self, proyek: Proyek) -> ProyekResponse:
+        """
+        Mengonversi objek Proyek menjadi objek ProyekResponse.
 
-        self.session.add(proyek_item)
-        await self.session.commit()
-        await self.session.refresh(proyek_item)
+        Args:
+            proyek (Proyek): Objek proyek yang akan dikonversi.
+
+        Returns:
+            ProyekResponse: Objek response yang berisi data proyek.
+        """
+
+        return ProyekResponse(
+            id=proyek.id,
+            nama=proyek.nama,
+            deskripsi=proyek.deskripsi,
+            status=proyek.status,
+            author_id=proyek.created_by_id,
+            created_at=proyek.created_at,
+            updated_at=proyek.updated_at,
+        )
