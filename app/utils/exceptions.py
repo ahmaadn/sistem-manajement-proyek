@@ -31,6 +31,15 @@ class AppException(Exception):  # noqa: N818
         }
 
 
+class AppErrorResponse(BaseModel):
+    error_code: str = Field(
+        description="Kode kesalahan yang menunjukkan jenis kesalahan aplikasi."
+    )
+    message: str = Field(
+        description="Pesan kesalahan yang memberikan rincian lebih lanjut tentang kesalahan aplikasi."  # noqa: E501
+    )
+
+
 class ValidationErrorResponse(BaseModel):
     error_code: str = Field(
         description="Kode kesalahan yang menunjukkan jenis kesalahan validasi."

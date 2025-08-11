@@ -28,3 +28,9 @@ class TimeStampMixin:
                 default=datetime.datetime.now(datetime.UTC),
                 onupdate=func.now(),
             )
+
+
+class SoftDeleteMixin:
+    deleted_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(True), default=None
+    )
