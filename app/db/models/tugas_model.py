@@ -67,6 +67,7 @@ class Tugas(Base, TimeStampMixin, SoftDeleteMixin):
     proyek_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("proyek.id"), nullable=False
     )
+    ditugaskan_ke: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Relationship
     # many to one
