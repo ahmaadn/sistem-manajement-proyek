@@ -13,3 +13,6 @@ class ErrorCode(StrEnum):
     # Proyek
     PROYEK_NOT_FOUND = auto()
     PROYEK_ALREADY_EXISTS = auto()
+
+    # Auth
+    UNAUTHORIZED = auto()

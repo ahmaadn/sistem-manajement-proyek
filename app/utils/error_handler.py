@@ -56,8 +56,9 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
 
 async def http_exception_handler(_: Request, exc: StarletteHTTPException):
     """Menangani Kelasahan"""
+    detail = exc.detail if isinstance(exc.detail, dict) else {"message": exc.detail}
 
     return JSONResponse(
         status_code=exc.status_code,
-        content=jsonable_encoder(exc.detail),
+        content=jsonable_encoder(detail),
     )
