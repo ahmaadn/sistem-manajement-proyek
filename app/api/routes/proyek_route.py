@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 
+from app.api.dependencies.authentication import get_current_user
 from app.api.dependencies.proyek_manager import ProyekManager, get_proyek_manager
 from app.db.models.proyek_model import Proyek
 from app.schemas.proyek import ProyekCreate, ProyekResponse, ProyekUpdate
+from app.schemas.user import UserInfo
 from app.utils.exceptions import AppErrorResponse
 
 r = router = APIRouter(tags=["Proyek"])
@@ -12,6 +14,7 @@ r = router = APIRouter(tags=["Proyek"])
 @cbv(r)
 class _Proyek:
     proyek_manager: ProyekManager = Depends(get_proyek_manager)
+    user: UserInfo = Depends(get_current_user)
 
     def __init__(self) -> None:
         self.session = self.proyek_manager.session
