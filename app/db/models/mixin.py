@@ -34,3 +34,8 @@ class SoftDeleteMixin:
     deleted_at: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(True), default=None
     )
+
+    @property
+    def is_deleted(self) -> bool:
+        """Return True jika objek sudah dihapus (deleted_at tidak None)."""
+        return self.deleted_at is not None
