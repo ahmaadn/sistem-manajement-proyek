@@ -3,8 +3,10 @@ from app.schemas.base import BaseSchema
 
 class UserInfo(BaseSchema):
     user_id: int
-    data_pegawai_id: int
-    nama: str
+    name: str
     role: str
-    jabatan: str
-    unit_kerja: str
+    email: str
+    username: str
+    position: str
+    work_unit: str
+    address: str
