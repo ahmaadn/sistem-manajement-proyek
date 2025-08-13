@@ -4,39 +4,53 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 from app.schemas.user import UserInfo
-from app.services.pegawai_service import pegawai_service
+from app.services.pegawai_service import PegawaiService
 from app.utils.common import ErrorCode
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login", auto_error=False)
 
 
-async def validate_token(token: str = Depends(oauth2_scheme)):
+def unauthenticated_user_exception():
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={
+            "error_code": ErrorCode.UNAUTHORIZED,
+            "message": "Token tidak valid",
+        },
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+async def validate_token(
+    token: str = Depends(oauth2_scheme),
+    pegawai_service: PegawaiService = Depends(PegawaiService),
+):
     try:
         is_valid = await pegawai_service.validate_token(token)
 
         # validasi token ke service pegawai
         if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error_code": ErrorCode.UNAUTHORIZED,
-                    "message": "Token tidak valid",
-                },
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+            raise unauthenticated_user_exception()
         return token
 
     except Exception:
-        ...
+        raise unauthenticated_user_exception() from None
 
 
-async def get_current_user(token: str = Depends(validate_token)):
+async def get_current_user(
+    token: str = Depends(validate_token),
+    pegawai_service: PegawaiService = Depends(PegawaiService),
+):
     try:
-        user_info = await pegawai_service.get_user_info()
+        user_info = await pegawai_service.get_user_info_by_token(token)
 
-        return UserInfo(**user_info)
-    except Exception:
-        ...
+        if user_info is None:
+            raise unauthenticated_user_exception()
+
+        return user_info
+    except Exception as e:
+        print("Error getting current user:", str(e))
+        raise unauthenticated_user_exception() from None
 
 
 async def get_user_admin(user: UserInfo = Depends(get_current_user)):

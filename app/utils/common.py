@@ -16,3 +16,6 @@ class ErrorCode(StrEnum):
 
     # Auth
     UNAUTHORIZED = auto()
+
+    # User
+    USER_NOT_FOUND = auto()
