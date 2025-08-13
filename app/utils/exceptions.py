@@ -53,3 +53,16 @@ class ValidationErrorResponse(BaseModel):
     errors: dict[str, list[str]] = Field(
         description="Sebuah kamus yang berisi kesalahan validasi untuk setiap field."
     )
+
+
+class UnauthorizedError(AppException):
+    """Kesalahan otorisasi."""
+
+    def __init__(
+        self,
+        message: str = "username atau password salah",
+        /,
+        error_code: ErrorCode = ErrorCode.UNAUTHORIZED,
+        **extra: Any,
+    ):
+        super().__init__(message, error_code, **extra)

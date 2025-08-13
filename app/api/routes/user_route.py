@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_utils.cbv import cbv
 
-from app.api.dependencies.authentication import get_current_user, get_user_admin
-from app.schemas.user import UserInfo
+from app.api.dependencies.user import get_current_user, get_user_admin
+from app.schemas.user import UserProfile
 from app.services.pegawai_service import PegawaiService
 from app.utils.common import ErrorCode
 
@@ -12,14 +12,14 @@ r = router = APIRouter(tags=["users"])
 @cbv(router)
 class User:
     @r.get("/users/me")
-    async def me(self, user: UserInfo = Depends(get_current_user)):
+    async def me(self, user: UserProfile = Depends(get_current_user)):
         return user
 
     @r.get("/users/{user_id}")
     async def get_user_info(
         self,
         user_id: int,
-        admin: UserInfo = Depends(get_user_admin),
+        admin: UserProfile = Depends(get_user_admin),
         user_service: PegawaiService = Depends(PegawaiService),
     ):
         """
