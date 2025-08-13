@@ -2,12 +2,12 @@ from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.authentication import get_current_user
 from app.api.dependencies.project_manager import ProjectManager
 from app.api.dependencies.sessions import get_async_session
+from app.api.dependencies.user import get_current_user
 from app.db.models.project_model import Project
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
-from app.schemas.user import UserInfo
+from app.schemas.user import UserProfile
 from app.utils.exceptions import AppErrorResponse
 
 r = router = APIRouter(tags=["Project"])
@@ -16,7 +16,7 @@ r = router = APIRouter(tags=["Project"])
 @cbv(r)
 class _Project:
     session: AsyncSession = Depends(get_async_session)
-    user: UserInfo = Depends(get_current_user)
+    user: UserProfile = Depends(get_current_user)
 
     def __init__(self) -> None:
         self.project_manager = ProjectManager(self.session)
