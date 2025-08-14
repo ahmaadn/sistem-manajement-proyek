@@ -21,3 +21,7 @@ class ErrorCode(StrEnum):
 
     # User
     USER_NOT_FOUND = auto()
+
+    # Tugas
+    TASK_NOT_FOUND = auto()
+    TASK_ALREADY_EXISTS = auto()

@@ -50,17 +50,13 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     )
     """Tipe sumber daya tugas."""
 
-    status: Mapped[StatusTask] = mapped_column(
-        Enum(StatusTask, name="status_task"),
-        default=StatusTask.PENDING,
-        nullable=False,
+    status: Mapped[StatusTask | None] = mapped_column(
+        Enum(StatusTask, name="status_task"), nullable=True
     )
     """Status tugas."""
 
-    priority: Mapped[PriorityLevel] = mapped_column(
-        Enum(PriorityLevel, name="priority_level"),
-        default=PriorityLevel.MEDIUM,
-        nullable=False,
+    priority: Mapped[PriorityLevel | None] = mapped_column(
+        Enum(PriorityLevel, name="priority_level"), nullable=True
     )
     """Tipe sumber daya tugas."""
 

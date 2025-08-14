@@ -79,3 +79,16 @@ class ProjectNotFoundError(AppException):
         **extra: Any,
     ):
         super().__init__(message, error_code, **extra)
+
+
+class TaskNotFoundError(AppException):
+    """Kesalahan ketika tugas tidak ditemukan."""
+
+    def __init__(
+        self,
+        message: str,
+        /,
+        error_code: ErrorCode = ErrorCode.TASK_NOT_FOUND,
+        **extra: Any,
+    ):
+        super().__init__(message, error_code, **extra)
