@@ -274,7 +274,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             return getattr(instance, self.soft_delete_field) is not None
         return False
 
-    def _exception_not_found(self, **extra) -> HTTPException:
+    def _exception_not_found(self, **extra) -> Exception:
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
