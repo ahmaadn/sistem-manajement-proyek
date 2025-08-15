@@ -43,6 +43,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         *,
         allow_deleted: bool = False,
         return_none_if_not_found: bool = False,
+        options: list[Any] | None = None,
     ) -> Optional[ModelT]:
         """Mendapatkan objek berdasarkan ID.
 
@@ -52,6 +53,8 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
                 dihapus. Defaults to False.
             return_none_if_not_found (bool, optional): Mengembalikan None jika objek
                 tidak ditemukan. Defaults to False.
+            options (list[Any] | None, optional): Opsi tambahan untuk query.
+                Defaults to None.
 
         Raises:
             ValueError: Jika obj_id bukan int.
@@ -61,7 +64,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         Returns:
             Optional[ModelT]: Objek yang ditemukan atau None.
         """
-        instance = await self.session.get(self.model, obj_id)
+        instance = await self.session.get(self.model, obj_id, options=options)
 
         # Jika objek tidak ditemukan
         if instance is None:
