@@ -1,4 +1,5 @@
 import datetime
+from typing import List
 
 from pydantic import Field
 
@@ -9,6 +10,7 @@ from app.schemas.base import BaseSchema
 class TaskCreate(BaseSchema):
     """Class untuk membuat tugas baru."""
 
+    project_id: int = Field(..., description="ID proyek tempat tugas ini dibuat")
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
     resource_type: ResourceType = Field(default=ResourceType.TASK)
@@ -33,7 +35,7 @@ class TaskUpdate(BaseSchema):
     estimated_duration: int | None = Field(default=None)
 
 
-class TaskResponse(BaseSchema):
+class BaseTaskResponse(BaseSchema):
     id: int
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
@@ -45,7 +47,30 @@ class TaskResponse(BaseSchema):
     start_date: datetime.datetime | None = Field(default=None)
     estimated_duration: int | None = Field(default=None)
 
-    # subtask
-    subtask: list["TaskResponse"] = Field(
-        default_factory=list, description="Daftar subtask dari tugas ini."
+
+class SubSubTaskResponse(BaseTaskResponse):
+    """Response schema untuk sub-subtask."""
+
+
+class SubTaskResponse(BaseTaskResponse):
+    """Response schema untuk subtask."""
+
+    # subtask level 2
+    sub_tasks: List[SubSubTaskResponse] = Field(
+        default_factory=list,
+        description="Daftar subtask level 2 dari subtask ini.",
     )
+
+
+class TaskResponse(BaseTaskResponse):
+    """Response schema untuk tugas."""
+
+    # subtask level 1
+    sub_tasks: List[SubTaskResponse] = Field(
+        default_factory=list,
+        description="Daftar subtask dari tugas ini.",
+    )
+
+
+class SimpleTaskResponse(BaseTaskResponse):
+    """Response schema untuk tugas tanpa subtask."""
