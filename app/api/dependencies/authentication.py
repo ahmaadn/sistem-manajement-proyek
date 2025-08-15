@@ -1,10 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from app.api.dependencies.user_role_manager import (
-    UserRoleManager,
-    get_user_role_manager,
-)
 from app.services.pegawai_service import PegawaiService
 from app.utils.common import ErrorCode
 from app.utils.exceptions import UnauthorizedError
@@ -25,11 +21,8 @@ def unauthenticated_user_exception():
 
 
 class AuthHandler:
-    def __init__(
-        self, pegawai_service: PegawaiService, user_role_manager: UserRoleManager
-    ) -> None:
+    def __init__(self, pegawai_service: PegawaiService) -> None:
         self.pegawai_service = pegawai_service
-        self.user_role_manager = user_role_manager
 
     async def login(
         self,
@@ -60,10 +53,7 @@ class AuthHandler:
         if not user_info:
             raise UnauthorizedError
 
-        # buat user role jika belum ada
-        await self.user_role_manager.create(user_id, user_info)
-
-        return payload
+        return payload, user_info
 
 
 async def validate_token(
@@ -97,10 +87,7 @@ async def validate_token(
         raise unauthenticated_user_exception() from None
 
 
-async def auth_handler(
-    pegawai_service: PegawaiService = Depends(PegawaiService),
-    user_role_manager: UserRoleManager = Depends(get_user_role_manager),
-):
+async def auth_handler(pegawai_service: PegawaiService = Depends(PegawaiService)):
     """Dependency untuk menginisialisasi AuthHandler."""
 
-    return AuthHandler(pegawai_service, user_role_manager)
+    return AuthHandler(pegawai_service)

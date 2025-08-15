@@ -3,7 +3,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.authentication import AuthHandler, auth_handler
+from app.api.dependencies.user import get_user_service
 from app.schemas.token import TokenAuth
+from app.services.user_service import UserService
 from app.utils.exceptions import AppErrorResponse, UnauthorizedError
 
 r = router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,12 +31,15 @@ class _Auth:
         self,
         credentials: OAuth2PasswordRequestForm = Depends(),
         authenticate: AuthHandler = Depends(auth_handler),
+        user_service: UserService = Depends(get_user_service),
     ):
         try:
-            token = await authenticate.login(
+            token, user_info = await authenticate.login(
                 username_or_email=credentials.username,
                 password=credentials.password,
             )
+            await user_service.assign_role_to_user(token["user_id"], user_info)
+
             return TokenAuth(
                 access_token=token["access_token"],
             )

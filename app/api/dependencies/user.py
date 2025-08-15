@@ -1,23 +1,37 @@
 from fastapi import Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.authentication import (
     unauthenticated_user_exception,
     validate_token,
 )
-from app.api.dependencies.user_role_manager import (
-    UserRoleManager,
-    get_user_role_manager,
-)
+from app.api.dependencies.sessions import get_async_session
 from app.db.models.role_model import Role
 from app.schemas.user import UserRead
 from app.services.pegawai_service import PegawaiService
+from app.services.user_service import UserService
 from app.utils.common import ErrorCode
+
+
+async def get_user_service(
+    session: AsyncSession = Depends(get_async_session),
+) -> UserService:
+    """Mendapatkan instance UserService.
+
+    Args:
+        session (AsyncSession, optional): Session database. Defaults to
+            Depends(get_async_session).
+
+    Returns:
+        UserService: Instance UserService.
+    """
+    return UserService(session)
 
 
 async def get_current_user(
     token: str = Depends(validate_token),
     pegawai_service: PegawaiService = Depends(PegawaiService),
-    user_role_manager: UserRoleManager = Depends(get_user_role_manager),
+    user_service: UserService = Depends(get_user_service),
 ) -> UserRead:
     """Mendapatkan pengguna saat ini berdasarkan token yang diberikan.
 
@@ -26,8 +40,8 @@ async def get_current_user(
             Depends(validate_token).
         pegawai_service (PegawaiService, optional): Service pegawai. Defaults to
             Depends(PegawaiService).
-        user_role_manager (UserRoleManager, optional): Manager peran pengguna.
-            Defaults to Depends(get_user_role_manager).
+        user_service (UserService, optional): Service peran pengguna. Defaults to
+            Depends(get_user_service).
 
     Raises:
         unauthenticated_user_exception: Jika token tidak valid atau Jika pengguna
@@ -43,7 +57,7 @@ async def get_current_user(
         if user_info is None:
             raise unauthenticated_user_exception()
 
-        user_role = await user_role_manager.create(user_info.id, user_info)
+        user_role = await user_service.assign_role_to_user(user_info.id, user_info)
 
         return UserRead(**user_info.model_dump(), role=Role(user_role.role))
 
