@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Generic, Optional, Sequence, Type, TypeVar
+from typing import Any, Callable, Generic, Optional, Sequence, Type, TypeVar
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.base import Base as BaseModel
@@ -85,6 +85,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         include_deleted: bool = False,
         filters: dict[str, Any] | None = None,
         order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
     ) -> Sequence[ModelT]:
         """Mendapatkan daftar / list objek
 
@@ -97,6 +98,8 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
                 Defaults to None.
             order_by (Any | None, optional): Urutan pengambilan objek. Defaults to
                 None.
+            custom_query (Any, optional): Custom SQLAlchemy query untuk modifikasi
+                lebih lanjut.
 
         Returns:
             Sequence[ModelT]: Daftar objek yang ditemukan.
@@ -107,8 +110,6 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         # Tambahkan filter jika ada
         if filters:
             for attr, value in filters.items():
-                if value is None:
-                    continue
                 stmt = stmt.where(getattr(self.model, attr) == value)
 
         # Tambahkan filter untuk soft delete
@@ -118,6 +119,10 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         # Tambahkan urutan jika ada
         if order_by is not None:
             stmt = stmt.order_by(order_by)
+
+        # Tambahkan custom query jika ada
+        if custom_query is not None:
+            stmt = custom_query(stmt)
 
         # Tambahkan pagination
         stmt = stmt.offset(skip).limit(limit)
