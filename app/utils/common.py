@@ -9,6 +9,8 @@ class ErrorCode(StrEnum):
     APP_ERROR = auto()
     INTERNAL_SERVER_ERROR = auto()
     VALIDATION_ERROR = auto()
+    GENERIC_NOT_FOUND = auto()
+    ITEM_NOT_FOUND = auto()
 
     # Proyek
     PROYEK_NOT_FOUND = auto()
