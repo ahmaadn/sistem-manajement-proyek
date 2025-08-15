@@ -1,13 +1,16 @@
+from types import NoneType
+
 from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.project_manager import ProjectManager
+from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.user import get_current_user
 from app.db.models.project_model import Project
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.schemas.user import UserProfile
+from app.services.project_service import ProjectService
 from app.utils.exceptions import AppErrorResponse
 
 r = router = APIRouter(tags=["Project"])
@@ -17,9 +20,7 @@ r = router = APIRouter(tags=["Project"])
 class _Project:
     session: AsyncSession = Depends(get_async_session)
     user: UserProfile = Depends(get_current_user)
-
-    def __init__(self) -> None:
-        self.project_manager = ProjectManager(self.session)
+    project_service: ProjectService = Depends(get_project_service)
 
     @r.post(
         "/project",
@@ -33,8 +34,12 @@ class _Project:
         },
     )
     async def create_project(self, project: ProjectCreate):
-        project_item = await self.project_manager.create(1, project)
-        return self._map_project_to_response(project_item)
+        """membuat proyek baru"""
+
+        project_item = await self.project_service.create(
+            project, extra_fields={"created_by": self.user.id}
+        )
+        return self._cast_project_to_response(project_item)
 
     @r.put(
         "/project/{project_id}",
@@ -53,8 +58,8 @@ class _Project:
     )
     async def update_proyek(self, project_id: int, proyek: ProjectUpdate):
         """memperbarui proyek"""
-        proyel_item = await self.project_manager.update(project_id, proyek)
-        return self._map_project_to_response(proyel_item)
+        proyek_item = await self.project_service.update(project_id, proyek)
+        return self._cast_project_to_response(proyek_item)
 
     @r.delete(
         "/project/{project_id}",
@@ -69,12 +74,11 @@ class _Project:
             },
         },
     )
-    async def delete_proyek(self, project_id: int):
+    async def delete_proyek(self, project_id: int) -> NoneType:
         """menghapus proyek"""
+        await self.project_service.soft_delete(project_id)
 
-        await self.project_manager.delete(project_id)
-
-    def _map_project_to_response(self, proyek: Project) -> ProjectResponse:
+    def _cast_project_to_response(self, proyek: Project) -> ProjectResponse:
         """
         Mengonversi objek Proyek menjadi objek ProjectResponse.
 

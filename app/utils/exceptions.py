@@ -66,3 +66,16 @@ class UnauthorizedError(AppException):
         **extra: Any,
     ):
         super().__init__(message, error_code, **extra)
+
+
+class ProjectNotFoundError(AppException):
+    """Kesalahan proyek tidak ditemukan."""
+
+    def __init__(
+        self,
+        message: str = "Proyek tidak ditemukan",
+        /,
+        error_code: ErrorCode = ErrorCode.PROYEK_NOT_FOUND,
+        **extra: Any,
+    ):
+        super().__init__(message, error_code, **extra)
