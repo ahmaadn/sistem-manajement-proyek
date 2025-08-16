@@ -23,7 +23,7 @@ class _Project:
     project_service: ProjectService = Depends(get_project_service)
 
     @r.post(
-        "/project",
+        "/projects",
         status_code=status.HTTP_201_CREATED,
         response_model=ProjectResponse,
         responses={
@@ -42,7 +42,7 @@ class _Project:
         return self._cast_project_to_response(project_item)
 
     @r.put(
-        "/project/{project_id}",
+        "/projects/{project_id}",
         status_code=status.HTTP_200_OK,
         response_model=ProjectResponse,
         responses={
@@ -62,7 +62,7 @@ class _Project:
         return self._cast_project_to_response(proyek_item)
 
     @r.delete(
-        "/project/{project_id}",
+        "/projects/{project_id}",
         status_code=status.HTTP_202_ACCEPTED,
         responses={
             status.HTTP_202_ACCEPTED: {
