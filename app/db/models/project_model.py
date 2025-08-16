@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.project_member_model import ProjectMember
     from app.db.models.task_model import Task
 
 
@@ -53,4 +54,12 @@ class Project(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Daftar tugas yang terkait dengan proyek ini.
     relasi one to many (satu proyek memiliki banyak tugas)
+    """
+
+    members: Mapped[List["ProjectMember"]] = relationship(
+        "ProjectMember", back_populates="project", cascade="all, delete-orphan"
+    )
+    """
+    Daftar anggota proyek.
+    relasi one to many (satu proyek memiliki banyak anggota)
     """
