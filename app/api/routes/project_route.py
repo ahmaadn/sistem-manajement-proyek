@@ -11,7 +11,7 @@ from app.db.models.project_model import Project
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.schemas.user import UserProfile
 from app.services.project_service import ProjectService
-from app.utils.exceptions import AppErrorResponse
+from app.utils import exceptions
 
 r = router = APIRouter(tags=["Project"])
 
@@ -52,7 +52,7 @@ class _Project:
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Proyek tidak ditemukan",
-                "model": AppErrorResponse,
+                "model": exceptions.AppErrorResponse,
             },
         },
     )
@@ -70,7 +70,7 @@ class _Project:
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Proyek tidak ditemukan",
-                "model": AppErrorResponse,
+                "model": exceptions.AppErrorResponse,
             },
         },
     )

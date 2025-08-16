@@ -1,23 +1,10 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
 from app.services.pegawai_service import PegawaiService
-from app.utils.common import ErrorCode
-from app.utils.exceptions import UnauthorizedError
+from app.utils import exceptions
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login", auto_error=False)
-
-
-def unauthenticated_user_exception():
-    print("[INFO] Gagal otentikasi pengguna")
-    return HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail={
-            "error_code": ErrorCode.UNAUTHORIZED,
-            "message": "Token tidak valid",
-        },
-        headers={"WWW-Authenticate": "Bearer"},
-    )
 
 
 class AuthHandler:
@@ -42,7 +29,7 @@ class AuthHandler:
         payload = await self.pegawai_service.login(username_or_email, password)
 
         if not payload:
-            raise UnauthorizedError
+            raise exceptions.UnauthorizedError
 
         # get user info setelah mendapatkan token
         user_id = payload["user_id"]
@@ -51,7 +38,7 @@ class AuthHandler:
         # Tidak ada user info yang di dapatkan dari service
         # ini bisa jadi user telah dihapus atau dinonaktifkan
         if not user_info:
-            raise UnauthorizedError
+            raise exceptions.UnauthorizedError
 
         return payload, user_info
 
@@ -75,16 +62,14 @@ async def validate_token(
     Returns:
         str: Token yang telah diverifikasi.
     """
-    try:
-        is_valid = await pegawai_service.validate_token(token)
+    is_valid = await pegawai_service.validate_token(token)
 
-        # validasi token ke service pegawai
-        if not is_valid:
-            raise unauthenticated_user_exception()
-        return token
-
-    except Exception:
-        raise unauthenticated_user_exception() from None
+    # validasi token ke service pegawai
+    if not is_valid:
+        raise exceptions.UnauthorizedError(
+            "Token tidak valid", headers={"WWW-Authenticate": "Bearer"}
+        )
+    return token
 
 
 async def auth_handler(pegawai_service: PegawaiService = Depends(PegawaiService)):

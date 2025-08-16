@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
 
@@ -6,7 +6,7 @@ from app.api.dependencies.authentication import AuthHandler, auth_handler
 from app.api.dependencies.user import get_user_service
 from app.schemas.token import TokenAuth
 from app.services.user_service import UserService
-from app.utils.exceptions import AppErrorResponse, UnauthorizedError
+from app.utils import exceptions
 
 r = router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -23,7 +23,7 @@ class _Auth:
             },
             status.HTTP_401_UNAUTHORIZED: {
                 "description": "Kredensial tidak valid",
-                "model": AppErrorResponse,
+                "model": exceptions.AppErrorResponse,
             },
         },
     )
@@ -33,20 +33,12 @@ class _Auth:
         authenticate: AuthHandler = Depends(auth_handler),
         user_service: UserService = Depends(get_user_service),
     ):
-        try:
-            token, user_info = await authenticate.login(
-                username_or_email=credentials.username,
-                password=credentials.password,
-            )
-            await user_service.assign_role_to_user(token["user_id"], user_info)
+        token, user_info = await authenticate.login(
+            username_or_email=credentials.username,
+            password=credentials.password,
+        )
+        await user_service.assign_role_to_user(token["user_id"], user_info)
 
-            return TokenAuth(
-                access_token=token["access_token"],
-            )
-        except UnauthorizedError as e:
-            print("[INFO] Unauthorized access attempt")
-
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=e.dump(),
-            ) from None
+        return TokenAuth(
+            access_token=token["access_token"],
+        )

@@ -10,7 +10,7 @@ from app.schemas.task import SimpleTaskResponse, TaskCreate, TaskResponse
 from app.schemas.user import UserProfile
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
-from app.utils.exceptions import AppErrorResponse
+from app.utils import exceptions
 
 r = router = APIRouter(tags=["Task"])
 
@@ -48,7 +48,7 @@ class _Task:
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Project tidak ditemukan",
-                "model": AppErrorResponse,
+                "model": exceptions.AppErrorResponse,
             },
         },
     )
@@ -87,7 +87,7 @@ class _Task:
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Task not found",
-                "model": AppErrorResponse,
+                "model": exceptions.AppErrorResponse,
             },
         },
     )
