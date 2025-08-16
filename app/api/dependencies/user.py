@@ -1,16 +1,13 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.authentication import (
-    unauthenticated_user_exception,
-    validate_token,
-)
+from app.api.dependencies.authentication import validate_token
 from app.api.dependencies.sessions import get_async_session
 from app.db.models.role_model import Role
 from app.schemas.user import UserRead
 from app.services.pegawai_service import PegawaiService
 from app.services.user_service import UserService
-from app.utils.common import ErrorCode
+from app.utils import exceptions
 
 
 async def get_user_service(
@@ -44,26 +41,23 @@ async def get_current_user(
             Depends(get_user_service).
 
     Raises:
-        unauthenticated_user_exception: Jika token tidak valid atau Jika pengguna
+        UnauthorizedError: Jika token tidak valid atau Jika pengguna
             tidak ditemukan.
 
     Returns:
         UserRead: Pengguna yang saat ini terautentikasi.
     """
 
-    try:
-        user_info = await pegawai_service.get_user_info_by_token(token)
+    user_info = await pegawai_service.get_user_info_by_token(token)
 
-        if user_info is None:
-            raise unauthenticated_user_exception()
+    if user_info is None:
+        raise exceptions.UnauthorizedError(
+            "Pengguna tidak ditemukan atau token tidak valid."
+        )
 
-        user_role = await user_service.assign_role_to_user(user_info.id, user_info)
+    user_role = await user_service.assign_role_to_user(user_info.id, user_info)
 
-        return UserRead(**user_info.model_dump(), role=Role(user_role.role))
-
-    except Exception as e:
-        print("Error getting current user:", str(e))
-        raise unauthenticated_user_exception() from None
+    return UserRead(**user_info.model_dump(), role=Role(user_role.role))
 
 
 async def get_user_admin(user: UserRead = Depends(get_current_user)):
@@ -81,26 +75,14 @@ async def get_user_admin(user: UserRead = Depends(get_current_user)):
     """
 
     if user.role != Role.ADMIN:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error_code": ErrorCode.UNAUTHORIZED,
-                "message": "User tidak memiliki akses",
-            },
-        )
+        raise exceptions.UnauthorizedError("User tidak memiliki akses admin.")
     return user
 
 
 async def permission_required(roles: list[Role]):
     def dependency(user: UserRead = Depends(get_current_user)):
         if user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={
-                    "error_code": ErrorCode.UNAUTHORIZED,
-                    "message": "User tidak memiliki akses",
-                },
-            )
+            raise exceptions.UnauthorizedError("User tidak memiliki akses.")
         return user
 
     return dependency

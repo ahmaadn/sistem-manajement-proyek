@@ -90,7 +90,7 @@ class TaskManager:
         return HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={
-                "error_code": ErrorCode.PROYEK_NOT_FOUND,
+                "error_code": ErrorCode.PROJECT_NOT_FOUND,
                 "message": "Item tidak ditemukan.",
                 **extra,
             },

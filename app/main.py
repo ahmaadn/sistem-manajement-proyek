@@ -1,18 +1,16 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import api
 from app.core.config import settings
 from app.db import create_db_and_tables
 from app.db.models import load_all_models
 from app.middleware import middleware
-from app.utils import error_handler
-from app.utils.exceptions import AppException, ValidationErrorResponse
+from app.utils.error_handler import register_exception_handlers
+from app.utils.exceptions import ValidationErrorResponse
 
 
 @asynccontextmanager
@@ -54,17 +52,8 @@ def get_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # exception
-    app.add_exception_handler(
-        StarletteHTTPException,
-        error_handler.http_exception_handler,  # type: ignore
-    )
-    app.add_exception_handler(
-        RequestValidationError,
-        error_handler.validation_exception_handler,  # type: ignore
-    )
-    app.add_exception_handler(Exception, error_handler.global_exception_handler)
-    app.add_exception_handler(AppException, error_handler.app_exception_handler)  # type: ignore
+    # register exception handlers
+    register_exception_handlers(app)
     return app
 
 

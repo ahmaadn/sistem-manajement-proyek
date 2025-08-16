@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.user import get_current_user, get_user_admin
 from app.schemas.user import UserProfile
 from app.services.pegawai_service import PegawaiService
-from app.utils.common import ErrorCode
+from app.utils import exceptions
 
 r = router = APIRouter(tags=["users"])
 
@@ -27,11 +27,5 @@ class User:
         """
         user_info = await user_service.get_user_info(user_id)
         if not user_info:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail={
-                    "error_code": ErrorCode.USER_NOT_FOUND,
-                    "message": "User tidak ada",
-                },
-            )
+            raise exceptions.UserNotFoundError
         return user_info

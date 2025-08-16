@@ -2,7 +2,7 @@ from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
 from app.services.base_service import GenericCRUDService
-from app.utils.exceptions import ProjectNotFoundError
+from app.utils import exceptions
 
 
 class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
@@ -13,7 +13,7 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
         """
         Membuat exception jika proyek tidak ditemukan.
         """
-        return ProjectNotFoundError()
+        return exceptions.ProjectNotFoundError()
 
     async def add_member(
         self,
@@ -28,7 +28,7 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
         """
         member = await self.session.get(ProjectMember, (project_id, user_id))
         if member:
-            raise ProjectNotFoundError()
+            raise exceptions.MemberAlreadyExistsError
 
         member = ProjectMember(project_id=project_id, user_id=user_id, role=role)
         self.session.add(member)
@@ -43,14 +43,14 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
         """
         project = await self.get(project_id)
         if not project:
-            raise ProjectNotFoundError()
+            raise exceptions.MemberNotFoundError
 
         member = await self.session.get(ProjectMember, (project.id, user_id))
         if not member:
-            raise ProjectNotFoundError()
+            raise exceptions.MemberNotFoundError
 
         if project.created_by == user_id:
-            raise ValueError("Cannot remove the project creator from the project.")
+            raise exceptions.CannotRemoveMemberError('Tidak dapat menhapus owner dari project')
 
         await self.session.delete(member)
         await self.session.commit()

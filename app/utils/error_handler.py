@@ -1,7 +1,8 @@
 from collections import defaultdict
 from traceback import print_exception
+from typing import Any
 
-from fastapi import Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -11,23 +12,41 @@ from app.utils.common import ErrorCode
 from app.utils.exceptions import AppException
 
 
-async def global_exception_handler(_: Request, ext: Exception):
-    print_exception(ext)
-    return JSONResponse(
-        {
-            "error_code": ErrorCode.INTERNAL_SERVER_ERROR,
-            "message": "An internal server error occurred. Please try again later.",
-        },
-        status.HTTP_500_INTERNAL_SERVER_ERROR,
+def _response(
+    *,
+    status_code: int,
+    error_code: ErrorCode | str,
+    message: str,
+    **extra: Any,
+) -> JSONResponse:
+    payload = {
+        "error_code": str(error_code),
+        "message": message,
+        **extra,
+    }
+    return JSONResponse(status_code=status_code, content=jsonable_encoder(payload))
+
+
+def global_exception_handler(_: Request, exc: Exception):
+    print_exception(exc)
+    return _response(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        error_code=ErrorCode.INTERNAL_SERVER_ERROR,
+        message="Terjadi kesalahan pada server. Silakan coba beberapa saat lagi.",
     )
 
 
-async def app_exception_handler(_: Request, ext: AppException):
+def app_exception_handler(_: Request, exc: AppException):
     """Menangani kesalahan aplikasi."""
-    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content=ext.dump())
+    return _response(
+        status_code=getattr(exc, "status_code", status.HTTP_400_BAD_REQUEST),
+        error_code=exc.error_code,
+        message=exc.message,
+        **exc.extra,
+    )
 
 
-async def validation_exception_handler(_: Request, exc: RequestValidationError):
+def validation_exception_handler(_: Request, exc: RequestValidationError):
     """Menangani kesalahan validasi.."""
 
     reformatted_message = defaultdict(list)
@@ -42,23 +61,52 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError):
 
         reformatted_message[field_string].append(msg)
 
-    return JSONResponse(
+    return _response(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content=jsonable_encoder(
-            {
-                "error_code": ErrorCode.VALIDATION_ERROR,
-                "message": "Invalid request",
-                "errors": reformatted_message,
-            }
-        ),
+        error_code=ErrorCode.VALIDATION_ERROR,
+        message="Permintaan tidak valid",
+        errors=reformatted_message,
     )
 
 
-async def http_exception_handler(_: Request, exc: StarletteHTTPException):
+def http_exception_handler(_: Request, exc: StarletteHTTPException):
     """Menangani Kelasahan"""
-    detail = exc.detail if isinstance(exc.detail, dict) else {"message": exc.detail}
 
-    return JSONResponse(
+    if isinstance(exc.detail, dict):
+        message = (
+            exc.detail.get("message")
+            or exc.detail.get("detail")
+            or "Terjadi kesalahan."
+        )
+        error_code = exc.detail.get("error_code") or (
+            ErrorCode.GENERIC_NOT_FOUND
+            if exc.status_code == status.HTTP_404_NOT_FOUND
+            else ErrorCode.APP_ERROR
+        )
+        extra = {
+            k: v
+            for k, v in exc.detail.items()
+            if k not in ("message", "detail", "error_code")
+        }
+    else:
+        message = str(exc.detail)
+        error_code = (
+            ErrorCode.GENERIC_NOT_FOUND
+            if exc.status_code == status.HTTP_404_NOT_FOUND
+            else ErrorCode.APP_ERROR
+        )
+        extra = {}
+
+    return _response(
         status_code=exc.status_code,
-        content=jsonable_encoder(detail),
+        error_code=error_code,
+        message=message,
+        **extra,
     )
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    app.add_exception_handler(Exception, global_exception_handler)
+    app.add_exception_handler(AppException, app_exception_handler)  # type: ignore
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore
