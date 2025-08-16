@@ -13,8 +13,8 @@ class ErrorCode(StrEnum):
     ITEM_NOT_FOUND = auto()
 
     # Proyek
-    PROYEK_NOT_FOUND = auto()
-    PROYEK_ALREADY_EXISTS = auto()
+    PROJECT_NOT_FOUND = auto()
+    PROJECT_ALREADY_EXISTS = auto()
 
     # Auth
     UNAUTHORIZED = auto()
@@ -25,3 +25,8 @@ class ErrorCode(StrEnum):
     # Tugas
     TASK_NOT_FOUND = auto()
     TASK_ALREADY_EXISTS = auto()
+
+    # Member
+    MEMBER_ALREADY_JOIN = auto()
+    MEMBER_NOT_FOUND = auto()
+    MEMBER_CANNOT_REMOVE = auto()

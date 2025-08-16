@@ -3,8 +3,8 @@ from sqlalchemy import select
 from app.db.models.task_model import Task
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.services.base_service import GenericCRUDService
+from app.utils import exceptions
 from app.utils.common import ErrorCode
-from app.utils.exceptions import TaskNotFoundError
 
 
 class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
@@ -16,7 +16,7 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
         """
         Membuat exception jika tugas tidak ditemukan.
         """
-        return TaskNotFoundError("Task not found")
+        return exceptions.TaskNotFoundError("Task not found")
 
     async def next_display_order(self, project_id: int):
         """Mengambil urutan tampilan tugas berikutnya.
