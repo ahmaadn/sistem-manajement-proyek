@@ -21,6 +21,7 @@ class ErrorCode(StrEnum):
 
     # User
     USER_NOT_FOUND = auto()
+    INVALID_ROLE_ASSIGNMENT = auto()
 
     # Tugas
     TASK_NOT_FOUND = auto()

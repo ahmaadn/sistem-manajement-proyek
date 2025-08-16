@@ -50,7 +50,9 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
             raise exceptions.MemberNotFoundError
 
         if project.created_by == user_id:
-            raise exceptions.CannotRemoveMemberError('Tidak dapat menhapus owner dari project')
+            raise exceptions.CannotRemoveMemberError(
+                "Tidak dapat menhapus owner dari project"
+            )
 
         await self.session.delete(member)
         await self.session.commit()

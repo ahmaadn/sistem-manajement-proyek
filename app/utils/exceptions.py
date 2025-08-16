@@ -154,3 +154,16 @@ class UserNotFoundError(AppException):
         super().__init__(
             message, error_code, status_code=status.HTTP_404_NOT_FOUND, **extra
         )
+
+
+class InvalidRoleAssignmentError(AppException):
+    def __init__(
+        self,
+        message: str = "Peran tidak valid untuk pengguna",
+        /,
+        error_code: ErrorCode = ErrorCode.INVALID_ROLE_ASSIGNMENT,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_400_BAD_REQUEST, **extra
+        )

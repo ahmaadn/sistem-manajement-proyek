@@ -12,6 +12,7 @@ from app.utils import exceptions
 
 async def get_user_service(
     session: AsyncSession = Depends(get_async_session),
+    pegawai_service: PegawaiService = Depends(PegawaiService),
 ) -> UserService:
     """Mendapatkan instance UserService.
 
@@ -22,7 +23,7 @@ async def get_user_service(
     Returns:
         UserService: Instance UserService.
     """
-    return UserService(session)
+    return UserService(session, pegawai_service)
 
 
 async def get_current_user(
