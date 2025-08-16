@@ -91,7 +91,7 @@ async def get_user_admin(user: UserRead = Depends(get_current_user)):
     return user
 
 
-async def permission_required(roles):
+async def permission_required(roles: list[Role]):
     def dependency(user: UserRead = Depends(get_current_user)):
         if user.role not in roles:
             raise HTTPException(
