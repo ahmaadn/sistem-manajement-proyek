@@ -163,7 +163,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         await self.session.flush()
 
         # Panggil hook on_created
-        self.on_created(instance, **extra_fields or {})
+        await self.on_created(instance, **extra_fields or {})
 
         return await self._save(instance)
 
@@ -203,7 +203,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         self.session.add(instance)
 
         # Panggil hook on_updated
-        self.on_updated(instance, **changed)
+        await self.on_updated(instance, **changed)
 
         return await self._save(instance)
 
@@ -228,7 +228,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             await self.session.delete(instance)
 
         # Panggil hook on_soft_deleted
-        self.on_soft_deleted(instance)
+        await self.on_soft_deleted(instance)
 
         await self.session.commit()
 
@@ -244,7 +244,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         await self.session.delete(instance)
 
         # Panggil hook on_hard_deleted
-        self.on_hard_deleted(instance)
+        await self.on_hard_deleted(instance)
 
         await self.session.commit()
 
@@ -292,28 +292,28 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             },
         )
 
-    def on_created(self, instance: ModelT, **kwargs) -> None:
+    async def on_created(self, instance: ModelT, **kwargs) -> None:
         """Event handler yang dipanggil setelah objek dibuat.
 
         Args:
             instance (ModelT): Objek yang baru dibuat.
         """
 
-    def on_updated(self, instance: ModelT, **kwargs) -> None:
+    async def on_updated(self, instance: ModelT, **kwargs) -> None:
         """Event handler yang dipanggil setelah objek diperbarui.
 
         Args:
             instance (ModelT): Objek yang telah diperbarui.
         """
 
-    def on_soft_deleted(self, instance: ModelT, **kwargs) -> None:
+    async def on_soft_deleted(self, instance: ModelT, **kwargs) -> None:
         """Event handler yang dipanggil setelah objek dihapus secara soft delete.
 
         Args:
             instance (ModelT): Objek yang telah dihapus.
         """
 
-    def on_hard_deleted(self, instance: ModelT, **kwargs) -> None:
+    async def on_hard_deleted(self, instance: ModelT, **kwargs) -> None:
         """Event handler yang dipanggil setelah objek dihapus secara hard delete.
 
         Args:
