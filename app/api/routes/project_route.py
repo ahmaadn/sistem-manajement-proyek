@@ -107,7 +107,7 @@ class _Project:
     async def add_member(
         self,
         project_id: int,
-        member_id: int = Body(..., embed=True),
+        user_id: int = Body(..., embed=True),
         role: RoleProject = Body(default=RoleProject.CONTRIBUTOR, embed=True),
         member: UserService = Depends(get_user_service),
     ):
@@ -118,7 +118,7 @@ class _Project:
         if not project_info:
             raise exceptions.ProjectNotFoundError
 
-        member_info = await member.get(member_id)
+        member_info = await member.get(user_id)
         if not member_info:
             raise exceptions.UserNotFoundError
 
@@ -130,12 +130,12 @@ class _Project:
         if member_info.role == "team_member" and role == RoleProject.OWNER:
             raise exceptions.InvalidRoleAssignmentError
 
-        await self.project_service.add_member(project_id, member_id, role)
+        await self.project_service.add_member(project_id, user_id, role)
 
         return {"message": "Anggota berhasil ditambahkan ke proyek"}
 
     @r.delete(
-        "/projects/{project_id}/members/{member_id}",
+        "/projects/{project_id}/members/{user_id}",
         status_code=status.HTTP_202_ACCEPTED,
         responses={
             status.HTTP_202_ACCEPTED: {
@@ -151,7 +151,7 @@ class _Project:
             },
         },
     )
-    async def remove_member(self, member_id: int, project_id: int) -> NoneType:
+    async def remove_member(self, user_id: int, project_id: int) -> NoneType:
         """menghapus anggota dari proyek"""
 
         # validasi project id
@@ -159,7 +159,7 @@ class _Project:
         if not project_info:
             raise exceptions.ProjectNotFoundError
 
-        member_info = await self.project_service.get_member(project_id, member_id)
+        member_info = await self.project_service.get_member(project_id, user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 
@@ -167,10 +167,10 @@ class _Project:
         if member_info.user_id == self.user.id:
             raise exceptions.CannotRemoveMemberError
 
-        await self.project_service.remove_member(project_id, member_id)
+        await self.project_service.remove_member(project_id, user_id)
 
     @r.patch(
-        "/projects/{project_id}/members/{member_id}/role",
+        "/projects/{project_id}/members/{user_id}/role",
         status_code=status.HTTP_202_ACCEPTED,
         responses={
             status.HTTP_202_ACCEPTED: {
@@ -189,11 +189,11 @@ class _Project:
     async def change_role_project_member(
         self,
         project_id: int,
-        member_id: int,
+        user_id: int,
         role: RoleProject = Body(..., embed=True),
         user_service: UserService = Depends(get_user_service),
     ):
-        member_info = await user_service.get(member_id)
+        member_info = await user_service.get(user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 
