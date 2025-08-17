@@ -134,6 +134,71 @@ class _Project:
 
         return {"message": "Anggota berhasil ditambahkan ke proyek"}
 
+    @r.delete(
+        "/projects/{project_id}/members/{member_id}",
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={
+            status.HTTP_202_ACCEPTED: {
+                "description": "Anggota berhasil dihapus dari proyek",
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Anggota tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+            status.HTTP_406_NOT_ACCEPTABLE: {
+                "description": "Tidak dapat menghapus anggota proyek",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def remove_member(self, member_id: int, project_id: int) -> NoneType:
+        """menghapus anggota dari proyek"""
+
+        # validasi project id
+        project_info = await self.project_service.get(project_id)
+        if not project_info:
+            raise exceptions.ProjectNotFoundError
+
+        member_info = await self.project_service.get_member(project_id, member_id)
+        if not member_info:
+            raise exceptions.MemberNotFoundError
+
+        # tidak bisa menghapus diri sendiri
+        if member_info.user_id == self.user.id:
+            raise exceptions.CannotRemoveMemberError
+
+        await self.project_service.remove_member(project_id, member_id)
+
+    @r.patch(
+        "/projects/{project_id}/members/{member_id}/role",
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={
+            status.HTTP_202_ACCEPTED: {
+                "description": "Peran anggota proyek berhasil diubah",
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Anggota tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+            status.HTTP_406_NOT_ACCEPTABLE: {
+                "description": "Peran tidak valid untuk pengguna",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def change_role_project_member(
+        self,
+        project_id: int,
+        member_id: int,
+        role: RoleProject = Body(..., embed=True),
+        user_service: UserService = Depends(get_user_service),
+    ):
+        member_info = await user_service.get(member_id)
+        if not member_info:
+            raise exceptions.MemberNotFoundError
+
+        await self.project_service.change_role_member(project_id, member_info, role)
+
     def _cast_project_to_response(self, proyek: Project) -> ProjectResponse:
         """
         Mengonversi objek Proyek menjadi objek ProjectResponse.

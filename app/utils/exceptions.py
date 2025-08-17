@@ -126,7 +126,7 @@ class CannotRemoveMemberError(AppException):
         **extra: Any,
     ):
         super().__init__(
-            message, error_code, status_code=status.HTTP_404_NOT_FOUND, **extra
+            message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
         )
 
 
@@ -165,5 +165,5 @@ class InvalidRoleAssignmentError(AppException):
         **extra: Any,
     ):
         super().__init__(
-            message, error_code, status_code=status.HTTP_400_BAD_REQUEST, **extra
+            message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
         )
