@@ -1,11 +1,15 @@
+from types import NoneType
+
 from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies.project import get_project_service
+from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
 from app.api.dependencies.user import get_current_user
-from app.db.models.task_model import Task
+from app.db.models.task_model import ResourceType, Task
 from app.schemas.task import (
     SimpleTaskResponse,
     SubTaskResponse,
@@ -25,6 +29,7 @@ class _Task:
     user: UserProfile = Depends(get_current_user)
     task_service: TaskService = Depends(get_task_service)
     project_service: ProjectService = Depends(get_project_service)
+    session: AsyncSession = Depends(get_async_session)
 
     @r.get(
         "/projects/{project_id}/tasks",
@@ -114,3 +119,38 @@ class _Task:
             order_by=Task.display_order,
             custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
         )
+
+    @r.delete(
+        "/tasks/{task_id}",
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={
+            status.HTTP_202_ACCEPTED: {
+                "description": "task berhasil dihapus",
+                "model": NoneType,
+            }
+        },
+    )
+    async def delete_task(self, task_id: int) -> NoneType:
+        """Menghapus tugas tertentu."""
+
+        task = await self.task_service.get(
+            task_id, options=[selectinload(Task.sub_tasks)]
+        )
+        if not task:
+            return
+
+        await self.task_service.soft_delete(task_id)
+
+        if task.resource_type == ResourceType.SECTION:
+            tasks = []
+            for sub_task in task.sub_tasks:
+                sub_task.parent_id = None
+                tasks.append(sub_task)
+
+            self.session.add_all(tasks)
+        else:
+            # TODO: Implement logic for non-section tasks
+
+            pass
+
+        return
