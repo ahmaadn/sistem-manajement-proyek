@@ -15,7 +15,7 @@ from app.services.project_service import ProjectService
 from app.services.user_service import UserService
 from app.utils import exceptions
 
-r = router = APIRouter(tags=["Project"])
+r = router = APIRouter(tags=["Projects"])
 
 
 @cbv(r)
