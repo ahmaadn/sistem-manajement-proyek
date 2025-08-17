@@ -170,7 +170,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
     async def update(
         self,
         obj_id: int,
-        obj_in: UpdateSchemaT,
+        obj_in: UpdateSchemaT | dict[str, Any],
     ) -> ModelT:
         """Memperbarui objek yang ada.
 
@@ -186,7 +186,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         assert instance is not None  # get() sudah raise kalau None
         update_data = (
             obj_in.model_dump(exclude_unset=True)
-            if hasattr(obj_in, "model_dump")
+            if not isinstance(obj_in, dict)
             else dict(obj_in)
         )
         # simpan data perubahan

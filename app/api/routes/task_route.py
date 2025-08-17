@@ -1,6 +1,6 @@
 from types import NoneType
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -9,12 +9,13 @@ from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
 from app.api.dependencies.user import get_current_user
-from app.db.models.task_model import ResourceType, Task
+from app.db.models.task_model import ResourceType, StatusTask, Task
 from app.schemas.task import (
     SimpleTaskResponse,
     SubTaskResponse,
     TaskCreate,
     TaskResponse,
+    TaskUpdate,
 )
 from app.schemas.user import UserProfile
 from app.services.project_service import ProjectService
@@ -159,3 +160,45 @@ class _Task:
             pass
 
         return
+
+    @r.put(
+        "/tasks/{task_id}",
+        response_model=SimpleTaskResponse,
+        status_code=status.HTTP_200_OK,
+        responses={
+            status.HTTP_200_OK: {
+                "description": "Task berhasil diupdate",
+                "model": SimpleTaskResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Task tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def update_task(self, task_id: int, payload: TaskUpdate):
+        """Mengupdate tugas tertentu."""
+
+        return await self.task_service.update(task_id, payload)
+
+    @r.patch(
+        "/tasks/{task_id}/status",
+        response_model=SimpleTaskResponse,
+        status_code=status.HTTP_200_OK,
+        responses={
+            status.HTTP_200_OK: {
+                "description": "Status Task berhasil diupdate",
+                "model": SimpleTaskResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Task tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def update_task_status(
+        self, task_id: int, status: StatusTask = Body(..., embed=True)
+    ):
+        """Mengupdate status tugas tertentu."""
+
+        return await self.task_service.update(task_id, {"status": status})
