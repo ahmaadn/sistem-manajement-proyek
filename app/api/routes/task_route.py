@@ -6,7 +6,12 @@ from app.api.dependencies.project import get_project_service
 from app.api.dependencies.task import get_task_service
 from app.api.dependencies.user import get_current_user
 from app.db.models.task_model import Task
-from app.schemas.task import SimpleTaskResponse, TaskCreate, TaskResponse
+from app.schemas.task import (
+    SimpleTaskResponse,
+    SubTaskResponse,
+    TaskCreate,
+    TaskResponse,
+)
 from app.schemas.user import UserProfile
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
@@ -96,3 +101,16 @@ class _Task:
 
         task = await self.task_service.get(task_id)
         return SimpleTaskResponse.model_validate(task)
+
+    @r.get(
+        "/tasks/{task_id}/subtasks",
+        response_model=list[SubTaskResponse],
+    )
+    async def get_subtasks(self, task_id: int):
+        """Mendapatkan daftar sub-tugas untuk tugas tertentu."""
+
+        return await self.task_service.list(
+            filters={"parent_id": task_id},
+            order_by=Task.display_order,
+            custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
+        )
