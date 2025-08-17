@@ -9,6 +9,7 @@ from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.user import get_current_user, get_user_service
 from app.db.models.project_member_model import RoleProject
 from app.db.models.project_model import Project
+from app.db.models.role_model import Role
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 from app.schemas.user import UserProfile
 from app.services.project_service import ProjectService
@@ -87,19 +88,19 @@ class _Project:
             status.HTTP_201_CREATED: {
                 "description": "Anggota berhasil ditambahkan ke proyek",
             },
-            status.HTTP_400_BAD_REQUEST: {
-                "description": (
-                    "Peran tidak valid untuk pengguna. admin hanya bisa menjadi "
-                    "owner dan member tidak dapat diangkat menjadi owner."
-                ),
-                "model": exceptions.AppErrorResponse,
-            },
             status.HTTP_404_NOT_FOUND: {
                 "description": "User tidak ditemukan",
                 "model": exceptions.AppErrorResponse,
             },
             status.HTTP_406_NOT_ACCEPTABLE: {
                 "description": "Anggota sudah terdaftar di proyek",
+                "model": exceptions.AppErrorResponse,
+            },
+            status.HTTP_406_NOT_ACCEPTABLE: {
+                "description": (
+                    "Anggota sudah terdaftar di proyek atau Peran tidak valid untuk pengguna. "
+                    "admin hanya bisa menjadi owner dan member tidak dapat diangkat menjadi owner."
+                ),
                 "model": exceptions.AppErrorResponse,
             },
         },
@@ -123,12 +124,19 @@ class _Project:
             raise exceptions.UserNotFoundError
 
         # admin tidak dapat diangkat selain menjadi owner
-        if member_info.role == "admin" and role != RoleProject.OWNER:
-            raise exceptions.InvalidRoleAssignmentError
+        if (
+            member_info.role in (Role.ADMIN, Role.MANAGER)
+            and role != RoleProject.OWNER
+        ):
+            raise exceptions.InvalidRoleAssignmentError(
+                "admin dan manager hanya bisa menjadi owner."
+            )
 
         # Member tidak dapat diangkat menjadi owner
-        if member_info.role == "team_member" and role == RoleProject.OWNER:
-            raise exceptions.InvalidRoleAssignmentError
+        if member_info.role == Role.TEAM_MEMBER and role == RoleProject.OWNER:
+            raise exceptions.InvalidRoleAssignmentError(
+                "Member tidak dapat diangkat menjadi owner."
+            )
 
         await self.project_service.add_member(project_id, user_id, role)
 
