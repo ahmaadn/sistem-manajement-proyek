@@ -127,7 +127,11 @@ class _Task:
             status.HTTP_202_ACCEPTED: {
                 "description": "task berhasil dihapus",
                 "model": NoneType,
-            }
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "task tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
         },
     )
     async def delete_task(self, task_id: int) -> NoneType:
@@ -137,7 +141,7 @@ class _Task:
             task_id, options=[selectinload(Task.sub_tasks)]
         )
         if not task:
-            return
+            raise exceptions.TaskNotFoundError
 
         await self.task_service.soft_delete(task_id)
 
@@ -148,6 +152,7 @@ class _Task:
                 tasks.append(sub_task)
 
             self.session.add_all(tasks)
+            await self.session.commit()
         else:
             # TODO: Implement logic for non-section tasks
 
