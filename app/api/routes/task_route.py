@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
-from app.api.dependencies.user import get_current_user
+from app.api.dependencies.user import get_current_user, get_user_service
 from app.db.models.task_model import ResourceType, StatusTask, Task
 from app.schemas.task import (
     SimpleTaskResponse,
@@ -20,6 +20,7 @@ from app.schemas.task import (
 from app.schemas.user import UserProfile
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
+from app.services.user_service import UserService
 from app.utils import exceptions
 
 r = router = APIRouter(tags=["Task"])
@@ -202,3 +203,18 @@ class _Task:
         """Mengupdate status tugas tertentu."""
 
         return await self.task_service.update(task_id, {"status": status})
+
+    @r.post("/tasks/{task_id}/assign")
+    async def assign_task(
+        self,
+        task_id: int,
+        user_id: int = Body(..., embed=True),
+        user_service: UserService = Depends(get_user_service),
+    ):
+        """Menugaskan pengguna untuk tugas tertentu."""
+
+        user = await user_service.get(user_id)
+        if user is None:
+            raise exceptions.UserNotFoundError
+
+        return await self.task_service.assign_user(task_id, user)

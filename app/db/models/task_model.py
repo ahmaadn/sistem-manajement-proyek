@@ -10,6 +10,7 @@ from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.project_model import Project
+    from app.db.models.task_assigne_model import TaskAssignee
 
 
 class ResourceType(StrEnum):
@@ -82,9 +83,6 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     created_by: Mapped[int] = mapped_column(Integer, nullable=False)
     """ID pengguna yang membuat tugas."""
 
-    assigned_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    """ID pengguna yang ditugaskan untuk tugas."""
-
     project_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("project.id"), nullable=False
     )
@@ -117,4 +115,13 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     Relasi ke sub-tugas jika tugas ini merupakan tugas induk,
     relasi ini bersifat one to many (satu tugas induk dapat memiliki
     banyak sub-tugas)
+    """
+
+    assignees: Mapped[List["TaskAssignee"]] = relationship(
+        "TaskAssignee", back_populates="task"
+    )
+    """
+    Relasi ke pengguna yang ditugaskan untuk tugas ini,
+    relasi ini bersifat one to many (satu tugas dapat ditugaskan kepada banyak
+    pengguna)
     """

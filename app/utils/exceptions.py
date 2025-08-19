@@ -167,3 +167,16 @@ class InvalidRoleAssignmentError(AppException):
         super().__init__(
             message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
         )
+
+
+class UserNotInProjectError(AppException):
+    def __init__(
+        self,
+        message: str = "Pengguna tidak terdaftar di proyek",
+        /,
+        error_code: ErrorCode = ErrorCode.USER_NOT_IN_PROJECT,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
+        )

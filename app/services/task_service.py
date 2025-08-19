@@ -1,7 +1,10 @@
 from sqlalchemy import select
 
+from app.db.models.project_member_model import ProjectMember
+from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import Task
 from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.user import UserRead
 from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
 from app.utils.common import ErrorCode
@@ -66,3 +69,35 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
             display_order = await self.next_display_order(project_id)
 
         return display_order
+
+    async def assign_user(self, task_id: int, user_info: UserRead):
+        """Menugaskan pengguna ke tugas tertentu."""
+        task = await self.get(task_id)
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
+
+        # cek user telah terdaftar
+        assign_task = await self.session.get(TaskAssignee, (task.id, user_info.id))
+        if assign_task:
+            return assign_task
+
+        # Cek user ada di project members
+        project_members = await self.session.execute(
+            select(ProjectMember).where(
+                ProjectMember.project_id == task.project_id,
+                ProjectMember.user_id == user_info.id,
+            )
+        )
+
+        # Cek apakah user terdaftar di project members
+        if user_info.id not in [
+            member.user_id for member in project_members.scalars()
+        ]:
+            raise exceptions.UserNotInProjectError
+
+        assign_task = TaskAssignee(task_id=task.id, user_id=user_info.id)
+        self.session.add(assign_task)
+
+        await self.session.commit()
+        await self.session.refresh(assign_task)
+        return assign_task
