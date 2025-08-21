@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class StatusProject(StrEnum):
     TENDER = "tender"
     ACTIVE = "active"
-    FINISH = "completed"
+    COMPLETED = "completed"
     CANCEL = "cancel"
 
 
