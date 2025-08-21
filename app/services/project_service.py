@@ -127,8 +127,14 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
                     )
                 ).label("project_completed"),
             )
-            .join(ProjectMember)
-            .where(ProjectMember.user_id == user_id)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(
+                ProjectMember.user_id == user_id,
+                # hanya proyek yang aktif atau selesai
+                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
+                # tidak termasuk proyek yang dihapus
+                Project.deleted_at.is_(None),
+            )
         )
         result = await self.session.execute(stmt)
         row = result.first()
@@ -156,7 +162,13 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
                 ProjectMember.role.label("user_role"),
             )
             .join(Project, Project.id == ProjectMember.project_id)
-            .where(ProjectMember.user_id == user_id)
+            .where(
+                ProjectMember.user_id == user_id,
+                # hanya proyek yang aktif atau selesai
+                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
+                # tidak termasuk proyek yang dihapus
+                Project.deleted_at.is_(None),
+            )
             .order_by(Project.id)
         )
         projects_res = await self.session.execute(projects_stmt)

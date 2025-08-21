@@ -120,7 +120,18 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
                 ).label("task_cancelled"),
             )
             .join(TaskAssignee, TaskAssignee.task_id == Task.id)
-            .where(TaskAssignee.user_id == user_id)
+            .join(Project, Project.id == Task.project_id)
+            .where(
+                TaskAssignee.user_id == user_id,
+                # Task tidak termasuk delete
+                Task.deleted_at.is_(None),
+                # Task tidak boleh pending
+                Task.status.not_in([StatusTask.PENDING]),
+                # hanya proyek yang aktif atau selesai
+                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
+                # tidak termasuk proyek yang dihapus
+                Project.deleted_at.is_(None),
+            )
         )
         task_stats_res = await self.session.execute(task_stats_stmt)
         ts = task_stats_res.first()
