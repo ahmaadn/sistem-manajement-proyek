@@ -14,7 +14,7 @@ class TaskCreate(BaseSchema):
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
     resource_type: ResourceType = Field(default=ResourceType.TASK)
-    status: StatusTask | None = Field(default=None)
+    status: StatusTask | None = Field(default=StatusTask.IN_PROGRESS)
     priority: PriorityLevel | None = Field(default=None)
     display_order: int = Field(default=0)
     due_date: datetime.datetime | None = Field(default=None)
