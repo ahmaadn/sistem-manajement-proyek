@@ -17,7 +17,7 @@ from app.schemas.task import (
     TaskResponse,
     TaskUpdate,
 )
-from app.schemas.user import UserProfile
+from app.schemas.user import User
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
 from app.services.user_service import UserService
@@ -28,7 +28,7 @@ r = router = APIRouter(tags=["Task"])
 
 @cbv(r)
 class _Task:
-    user: UserProfile = Depends(get_current_user)
+    user: User = Depends(get_current_user)
     task_service: TaskService = Depends(get_task_service)
     project_service: ProjectService = Depends(get_project_service)
     session: AsyncSession = Depends(get_async_session)

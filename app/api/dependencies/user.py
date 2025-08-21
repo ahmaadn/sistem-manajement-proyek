@@ -1,10 +1,12 @@
+from typing import Callable
+
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.authentication import validate_token
 from app.api.dependencies.sessions import get_async_session
 from app.db.models.role_model import Role
-from app.schemas.user import UserRead
+from app.schemas.user import User
 from app.services.pegawai_service import PegawaiService
 from app.services.user_service import UserService
 from app.utils import exceptions
@@ -30,7 +32,7 @@ async def get_current_user(
     token: str = Depends(validate_token),
     pegawai_service: PegawaiService = Depends(PegawaiService),
     user_service: UserService = Depends(get_user_service),
-) -> UserRead:
+) -> User:
     """Mendapatkan pengguna saat ini berdasarkan token yang diberikan.
 
     Args:
@@ -58,10 +60,10 @@ async def get_current_user(
 
     user_role = await user_service.assign_role_to_user(user_info.id, user_info)
 
-    return UserRead(**user_info.model_dump(), role=Role(user_role.role))
+    return User(**user_info.model_dump(), role=Role(user_role.role))
 
 
-async def get_user_admin(user: UserRead = Depends(get_current_user)):
+async def get_user_admin(user: User = Depends(get_current_user)) -> User:
     """Mendapatkan pengguna dengan peran admin.
 
     Args:
@@ -80,8 +82,8 @@ async def get_user_admin(user: UserRead = Depends(get_current_user)):
     return user
 
 
-async def permission_required(roles: list[Role]):
-    def dependency(user: UserRead = Depends(get_current_user)):
+async def permission_required(roles: list[Role]) -> Callable[..., User]:
+    def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             raise exceptions.UnauthorizedError("User tidak memiliki akses.")
         return user

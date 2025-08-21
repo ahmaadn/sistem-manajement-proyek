@@ -4,7 +4,7 @@ from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
 from app.schemas.project import ProjectCreate, ProjectUpdate
-from app.schemas.user import ProjectParticipant, UserRead
+from app.schemas.user import ProjectParticipant, User
 from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
 
@@ -71,7 +71,7 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
         return member
 
     async def change_role_member(
-        self, project_id: int, user: UserRead, role: RoleProject
+        self, project_id: int, user: User, role: RoleProject
     ):
         """
         Mengubah peran anggota proyek.

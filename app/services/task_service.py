@@ -4,7 +4,7 @@ from app.db.models.project_member_model import ProjectMember
 from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
 from app.schemas.task import TaskCreate, TaskUpdate
-from app.schemas.user import UserRead
+from app.schemas.user import User
 from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
 from app.utils.common import ErrorCode
@@ -70,7 +70,7 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
 
         return display_order
 
-    async def assign_user(self, task_id: int, user_info: UserRead):
+    async def assign_user(self, task_id: int, user_info: User):
         """Menugaskan pengguna ke tugas tertentu."""
         task = await self.get(task_id)
         if not task:

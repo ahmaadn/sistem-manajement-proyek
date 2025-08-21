@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.role_model import Role, UserRole
-from app.schemas.user import UserDetail, UserProfile, UserProjectSummary, UserRead
+from app.schemas.user import PegawaiInfo, ProjectSummary, User, UserDetail
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -34,7 +34,7 @@ class UserService:
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def assign_role_to_user(self, user_id: int, user: UserProfile):
+    async def assign_role_to_user(self, user_id: int, user: PegawaiInfo):
         """Menetapkan peran kepada pengguna."""
 
         # dapatkan role user
@@ -52,7 +52,7 @@ class UserService:
         await self.session.commit()
         return user_role
 
-    async def get(self, user_id: int) -> UserRead | None:
+    async def get(self, user_id: int) -> User | None:
         """Mendapatkan informasi pengguna berdasarkan ID.
 
         Args:
@@ -71,12 +71,12 @@ class UserService:
 
         user_role = await self.assign_role_to_user(user_id, user_profile)
 
-        return UserRead(**user_profile.model_dump(), role=user_role.role)
+        return User(**user_profile.model_dump(), role=user_role.role)
 
     async def get_user_detail(
         self,
         user_id: int | None = None,
-        user_data: UserRead | None = None,
+        user_data: User | None = None,
         *,
         task_service: "TaskService",
         project_service: "ProjectService",
@@ -103,7 +103,7 @@ class UserService:
         task_stats = await task_service.get_user_task_statistics(user_id)
 
         # Merge statistics
-        statistics = UserProjectSummary(
+        statistics = ProjectSummary(
             total_project=project_stats["total_project"],
             project_active=project_stats["project_active"],
             project_completed=project_stats["project_completed"],

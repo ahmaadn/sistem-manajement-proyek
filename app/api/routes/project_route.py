@@ -21,7 +21,7 @@ from app.schemas.project import (
     ProjectStatsResponse,
     ProjectUpdate,
 )
-from app.schemas.user import UserProfile
+from app.schemas.user import User
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
 from app.services.user_service import UserService
@@ -33,7 +33,7 @@ r = router = APIRouter(tags=["Projects"])
 @cbv(r)
 class _Project:
     session: AsyncSession = Depends(get_async_session)
-    user: UserProfile = Depends(get_current_user)
+    user: User = Depends(get_current_user)
     project_service: ProjectService = Depends(get_project_service)
 
     @r.post(

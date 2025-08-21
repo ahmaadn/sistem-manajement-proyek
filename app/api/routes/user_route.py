@@ -8,7 +8,7 @@ from app.api.dependencies.user import (
     get_user_admin,
     get_user_service,
 )
-from app.schemas.user import UserDetail, UserProfile, UserRead
+from app.schemas.user import User, UserDetail
 from app.services.pegawai_service import PegawaiService
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
@@ -19,7 +19,7 @@ r = router = APIRouter(tags=["users"])
 
 
 @cbv(router)
-class User:
+class _User:
     user_service: UserService = Depends(get_user_service)
     project_service: ProjectService = Depends(get_project_service)
     task_service: TaskService = Depends(get_task_service)
@@ -41,7 +41,7 @@ class User:
     )
     async def me(
         self,
-        user: UserRead = Depends(get_current_user),
+        user: User = Depends(get_current_user),
     ) -> UserDetail:
         """
         Mengambil Detail user
@@ -70,7 +70,7 @@ class User:
     async def get_user_info(
         self,
         user_id: int,
-        admin: UserProfile = Depends(get_user_admin),
+        admin: User = Depends(get_user_admin),
         user_service: PegawaiService = Depends(PegawaiService),
     ) -> UserDetail:
         """

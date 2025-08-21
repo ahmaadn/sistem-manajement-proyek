@@ -2,7 +2,7 @@
 # implementasi service pegawai akan di kerjakan setalah
 # api dari sistem pegawai siap digunakan
 
-from app.schemas.user import UserProfile
+from app.schemas.user import PegawaiInfo
 
 FAKE_USERS = [
     {
@@ -97,7 +97,7 @@ class PegawaiService:
         return {"access_token": user["access_token"], "user_id": user["user_id"]}
 
     def _cast_to_user_info(self, data):
-        return UserProfile(
+        return PegawaiInfo(
             id=data.get("user_id"),
             name=data.get("nama"),
             employee_role=data.get("role"),
