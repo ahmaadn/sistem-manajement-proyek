@@ -11,7 +11,6 @@ FAKE_USERS = [
         "nama": "Admin",
         "role": "admin",
         "email": "admin@example.com",
-        "username": "admin",
         "jabatan": "Kepala Admin",
         "unit_kerja": "Manajemen",
         "alamat": "Jl. Admin No. 1",
@@ -22,7 +21,6 @@ FAKE_USERS = [
         "nama": "HRD",
         "role": "hrd",
         "email": "hrd@example.com",
-        "username": "hrd",
         "jabatan": "HRD Manager",
         "unit_kerja": "HRD",
         "alamat": "Jl. HRD No. 2",
@@ -33,7 +31,6 @@ FAKE_USERS = [
         "nama": "Pegawai Satu",
         "role": "pegawai",
         "email": "pegawai1@example.com",
-        "username": "pegawai1",
         "jabatan": "Staff",
         "unit_kerja": "Operasional",
         "alamat": "Jl. Pegawai No. 3",
@@ -44,7 +41,6 @@ FAKE_USERS = [
         "nama": "Pegawai Dua",
         "role": "pegawai",
         "email": "pegawai2@example.com",
-        "username": "pegawai2",
         "jabatan": "Staff",
         "unit_kerja": "Operasional",
         "alamat": "Jl. Pegawai No. 4",
@@ -55,7 +51,6 @@ FAKE_USERS = [
         "nama": "Pegawai Tiga",
         "role": "pegawai",
         "email": "pegawai3@example.com",
-        "username": "pegawai3",
         "jabatan": "Staff",
         "unit_kerja": "Operasional",
         "alamat": "Jl. Pegawai No. 5",
@@ -85,16 +80,11 @@ class PegawaiService:
             return None
         return self._cast_to_user_info(user.copy())
 
-    async def login(self, username_or_email: str, password: str):
-        """Login: cek username/email dan password, return access_token jika cocok."""
-        # Untuk dummy, password diabaikan, hanya cek username/email
+    async def login(self, email: str, password: str):
+        """Login: cek email dan password, return access_token jika cocok."""
+        # Untuk dummy, password diabaikan, hanya cek email
         user = next(
-            (
-                u
-                for u in FAKE_USERS
-                if u["username"] == username_or_email
-                or u["email"] == username_or_email
-            ),
+            (u for u in FAKE_USERS if u["email"] == email),
             None,
         )
         if not user:
@@ -107,7 +97,6 @@ class PegawaiService:
             name=data.get("nama"),
             employee_role=data.get("role"),
             email=data.get("email"),
-            username=data.get("username"),
             position=data.get("jabatan"),
             work_unit=data.get("unit_kerja"),
             address=data.get("alamat"),

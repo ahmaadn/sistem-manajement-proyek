@@ -68,7 +68,7 @@ class AppException(Exception):  # noqa: N818
 class UnauthorizedError(AppException):
     def __init__(
         self,
-        message: str = "Username atau password salah",
+        message: str = "email atau password salah",
         /,
         error_code: ErrorCode = ErrorCode.UNAUTHORIZED,
         **extra: Any,
