@@ -50,6 +50,6 @@ class ProjectParticipant(BaseSchema):
 
 class UserDetail(User):
     statistics: ProjectSummary = Field(..., description="Statistik proyek pengguna")
-    projects: list[ProjectParticipant] = Field(
-        default_factory=list, description="Daftar proyek yang diikuti pengguna"
-    )
+    # projects: list[ProjectParticipant] = Field(
+    #     default_factory=list, description="Daftar proyek yang diikuti pengguna"
+    # )

@@ -121,11 +121,11 @@ class UserService:
             task_cancelled=task_stats["task_cancelled"],
         )
 
-        projects = await project_service.get_user_project_participants(user_id)
+        # projects = await project_service.get_user_project_participants(user_id)
         return UserDetail(
             **user_data.model_dump(),
             statistics=statistics,
-            projects=projects,
+            # projects=projects,
         )
 
     @property
