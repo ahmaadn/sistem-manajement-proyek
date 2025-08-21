@@ -34,8 +34,16 @@ class UserService:
         result = await self.session.execute(statement)
         return result.scalar_one_or_none()
 
-    async def assign_role_to_user(self, user_id: int, user: PegawaiInfo):
-        """Menetapkan peran kepada pengguna."""
+    async def assign_role_to_user(self, user_id: int, user: PegawaiInfo) -> UserRole:
+        """Menetapkan peran kepada pengguna.
+
+        Args:
+            user_id (int): ID pengguna yang akan ditetapkan perannya.
+            user (PegawaiInfo): Informasi pegawai yang akan digunakan untuk menetapkan peran.
+
+        Returns:
+            UserRole: Objek UserRole yang berhasil dibuat atau diperbarui.
+        """
 
         # dapatkan role user
         user_role = await self.get_user_role(user_id)

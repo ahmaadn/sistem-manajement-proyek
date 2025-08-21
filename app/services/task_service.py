@@ -1,6 +1,7 @@
 from sqlalchemy import case, func, select
 
 from app.db.models.project_member_model import ProjectMember
+from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
 from app.schemas.task import TaskCreate, TaskUpdate
@@ -70,8 +71,22 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
 
         return display_order
 
-    async def assign_user(self, task_id: int, user_info: User):
-        """Menugaskan pengguna ke tugas tertentu."""
+    async def assign_user(self, task_id: int, user_info: User) -> TaskAssignee:
+        """Menugaskan pengguna ke tugas tertentu.
+
+        Args:
+            task_id (int): ID tugas yang akan ditugaskan.
+            user_info (User): Informasi pengguna yang akan ditugaskan.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.UserNotInProjectError: Jika pengguna tidak terdaftar di proyek.
+
+        Returns:
+            TaskAssignee: Objek penugasan tugas yang berhasil dibuat.
+        """
+
+        # mendapatkan tugas
         task = await self.get(task_id)
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
@@ -103,6 +118,15 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
         return assign_task
 
     async def get_user_task_statistics(self, user_id: int) -> dict:
+        """Mengambil statistik tugas untuk pengguna tertentu.
+
+        Args:
+            user_id (int): ID pengguna yang akan diambil statistik tugasnya.
+
+        Returns:
+            dict: Statistik tugas untuk pengguna tertentu.
+        """
+
         task_stats_stmt = (
             select(
                 func.count().label("total_task"),
