@@ -44,8 +44,8 @@ class UserService:
         if user_role:
             return user_role
 
-        # cast role jika employee_role admin maka dia akan manjadi adamin
-        role = Role.ADMIN if user.employee_role == "admin" else Role.TEAM_MEMBER
+        # cast role jika employee_role admin maka dia akan manjadi admin
+        role = self.mapping_role.get(user.employee_role, Role.TEAM_MEMBER)
 
         user_role = UserRole(user_id=user_id, role=role)
         self.session.add(user_role)
@@ -119,3 +119,11 @@ class UserService:
             statistics=statistics,
             projects=projects,
         )
+
+    @property
+    def mapping_role(self):
+        return {
+            "admin": Role.ADMIN,
+            "team_member": Role.TEAM_MEMBER,
+            "hrd": Role.MANAGER,
+        }
