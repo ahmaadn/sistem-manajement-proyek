@@ -13,6 +13,7 @@ class UserProfile(BaseSchema):
     position: str = Field(..., description="Posisi pengguna")
     work_unit: str = Field(..., description="Unit kerja pengguna")
     address: str = Field(..., description="Alamat pengguna")
+    profile_url: str = Field(..., description="URL profil pengguna")
 
 
 class UserRead(UserProfile):

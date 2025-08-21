@@ -14,6 +14,7 @@ FAKE_USERS = [
         "jabatan": "Kepala Admin",
         "unit_kerja": "Manajemen",
         "alamat": "Jl. Admin No. 1",
+        "profile_url": "https://randomuser.me/api/portraits/lego/6.jpg",
     },
     {
         "access_token": "dummy_access_token_2",
@@ -24,6 +25,7 @@ FAKE_USERS = [
         "jabatan": "HRD Manager",
         "unit_kerja": "HRD",
         "alamat": "Jl. HRD No. 2",
+        "profile_url": "https://randomuser.me/api/portraits/lego/4.jpg",
     },
     {
         "access_token": "dummy_access_token_3",
@@ -34,6 +36,7 @@ FAKE_USERS = [
         "jabatan": "Staff",
         "unit_kerja": "Operasional",
         "alamat": "Jl. Pegawai No. 3",
+        "profile_url": "https://randomuser.me/api/portraits/lego/0.jpg",
     },
     {
         "access_token": "dummy_access_token_4",
@@ -44,6 +47,7 @@ FAKE_USERS = [
         "jabatan": "Staff",
         "unit_kerja": "Operasional",
         "alamat": "Jl. Pegawai No. 4",
+        "profile_url": "https://randomuser.me/api/portraits/lego/2.jpg",
     },
     {
         "access_token": "dummy_access_token_5",
@@ -54,6 +58,7 @@ FAKE_USERS = [
         "jabatan": "Staff",
         "unit_kerja": "Operasional",
         "alamat": "Jl. Pegawai No. 5",
+        "profile_url": "https://randomuser.me/api/portraits/lego/8.jpg",
     },
 ]
 
@@ -100,4 +105,5 @@ class PegawaiService:
             position=data.get("jabatan"),
             work_unit=data.get("unit_kerja"),
             address=data.get("alamat"),
+            profile_url=data.get("profile_url"),
         )
