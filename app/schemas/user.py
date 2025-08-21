@@ -1,5 +1,6 @@
 from pydantic import Field
 
+from app.db.models.project_member_model import RoleProject
 from app.db.models.role_model import Role
 from app.schemas.base import BaseSchema
 
@@ -17,4 +18,39 @@ class UserProfile(BaseSchema):
 class UserRead(UserProfile):
     role: Role = Field(
         ..., description="Peran pengguna di aplikasi sistem manajemen proyek"
+    )
+
+
+class UserProjectSummary(BaseSchema):
+    total_project: int = Field(0, description="Total proyek yang diikuti pengguna")
+    project_active: int = Field(
+        0, description="Jumlah proyek aktif yang diikuti pengguna"
+    )
+    project_completed: int = Field(
+        0, description="Jumlah proyek selesai yang diikuti pengguna"
+    )
+    total_task: int = Field(0, description="Total tugas yang diikuti pengguna")
+    task_in_progress: int = Field(
+        0, description="Jumlah tugas aktif yang diikuti pengguna"
+    )
+    task_completed: int = Field(
+        0, description="Jumlah tugas selesai yang diikuti pengguna"
+    )
+    task_cancelled: int = Field(
+        0, description="Jumlah tugas dibatalkan yang diikuti pengguna"
+    )
+
+
+class ProjectParticipant(BaseSchema):
+    project_id: int
+    project_name: str
+    user_role: RoleProject
+
+
+class UserDetail(UserRead):
+    statistics: UserProjectSummary = Field(
+        ..., description="Statistik proyek pengguna"
+    )
+    projects: list[ProjectParticipant] = Field(
+        default_factory=list, description="Daftar proyek yang diikuti pengguna"
     )

@@ -1,8 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from app.db.models.project_member_model import ProjectMember
 from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import Task
+from app.db.models.task_model import StatusTask, Task
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.user import UserRead
 from app.services.base_service import GenericCRUDService
@@ -101,3 +101,40 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
         await self.session.commit()
         await self.session.refresh(assign_task)
         return assign_task
+
+    async def get_user_task_statistics(self, user_id: int) -> dict:
+        task_stats_stmt = (
+            select(
+                func.count().label("total_task"),
+                func.sum(
+                    case((Task.status == StatusTask.IN_PROGRESS, 1), else_=0)
+                ).label("task_in_progress"),
+                func.sum(
+                    case((Task.status == StatusTask.COMPLETED, 1), else_=0)
+                ).label("task_completed"),
+                func.sum(
+                    case(
+                        (Task.status == StatusTask.CANCELLED, 1),
+                        else_=0,
+                    )
+                ).label("task_cancelled"),
+            )
+            .join(TaskAssignee, TaskAssignee.task_id == Task.id)
+            .where(TaskAssignee.user_id == user_id)
+        )
+        task_stats_res = await self.session.execute(task_stats_stmt)
+        ts = task_stats_res.first()
+        if not ts:
+            return {
+                "total_task": 0,
+                "task_in_progress": 0,
+                "task_completed": 0,
+                "task_cancelled": 0,
+            }
+
+        return {
+            "total_task": ts.total_task or 0,
+            "task_in_progress": ts.task_in_progress or 0,
+            "task_completed": ts.task_completed or 0,
+            "task_cancelled": ts.task_cancelled or 0,
+        }

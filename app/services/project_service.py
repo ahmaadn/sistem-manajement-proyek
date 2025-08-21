@@ -1,8 +1,10 @@
+from sqlalchemy import case, func, select
+
 from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.project_model import Project
+from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
 from app.schemas.project import ProjectCreate, ProjectUpdate
-from app.schemas.user import UserRead
+from app.schemas.user import ProjectParticipant, UserRead
 from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
 
@@ -103,3 +105,66 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
         await self.add_member(
             instance.id, instance.created_by, RoleProject.OWNER, commit=False
         )
+
+    async def get_user_project_statistics(self, user_id: int):
+        """
+        Menghitung total proyek, proyek aktif, dan proyek selesai berdasarkan
+        user_id.
+        """
+        stmt = (
+            select(
+                func.count().label("total_project"),
+                func.sum(
+                    case(
+                        (Project.status == StatusProject.ACTIVE, 1),
+                        else_=0,
+                    )
+                ).label("project_active"),
+                func.sum(
+                    case(
+                        (Project.status == StatusProject.COMPLETED, 1),
+                        else_=0,
+                    )
+                ).label("project_completed"),
+            )
+            .join(ProjectMember)
+            .where(ProjectMember.user_id == user_id)
+        )
+        result = await self.session.execute(stmt)
+        row = result.first()
+
+        if not row:
+            return {
+                "total_project": 0,
+                "project_active": 0,
+                "project_completed": 0,
+            }
+
+        return {
+            "total_project": row.total_project or 0,
+            "project_active": row.project_active or 0,
+            "project_completed": row.project_completed or 0,
+        }
+
+    async def get_user_project_participants(
+        self, user_id: int
+    ) -> list[ProjectParticipant]:
+        projects_stmt = (
+            select(
+                Project.id.label("project_id"),
+                Project.title.label("project_name"),
+                ProjectMember.role.label("user_role"),
+            )
+            .join(Project, Project.id == ProjectMember.project_id)
+            .where(ProjectMember.user_id == user_id)
+            .order_by(Project.id)
+        )
+        projects_res = await self.session.execute(projects_stmt)
+        return [
+            ProjectParticipant(
+                project_id=row.project_id,
+                project_name=row.project_name,
+                user_role=row.user_role,
+            )
+            for row in projects_res
+        ]
