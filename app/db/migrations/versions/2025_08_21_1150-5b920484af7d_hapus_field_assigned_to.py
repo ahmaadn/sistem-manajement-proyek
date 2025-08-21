@@ -1,4 +1,4 @@
-"""ganti status project dari finish ke completed
+"""hapus_field_assigned_to
 
 Revision ID: 5b920484af7d
 Revises: 4e9b83e11c72
@@ -7,9 +7,8 @@ Create Date: 2025-08-21 11:50:27.004485
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '5b920484af7d'
