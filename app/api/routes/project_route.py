@@ -126,7 +126,9 @@ class _Project:
     )
     async def update_proyek(self, project_id: int, proyek: ProjectUpdate):
         """memperbarui proyek"""
-        proyek_item = await self.project_service.update(project_id, proyek)
+        project = await self.project_service.get(project_id)
+        assert project is not None
+        proyek_item = await self.project_service.update(project, proyek)
         return self._cast_project_to_response(proyek_item)
 
     @r.delete(

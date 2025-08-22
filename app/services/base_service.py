@@ -220,21 +220,19 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
 
     async def update(
         self,
-        obj_id: int,
+        obj: ModelT,
         obj_in: UpdateSchemaT | dict[str, Any],
     ) -> ModelT:
         """Memperbarui objek yang ada.
 
         Args:
-            obj_id (int): ID objek yang akan diperbarui.
+            obj (int): Objek yang akan diperbarui.
             obj_in (UpdateSchemaT): Data yang akan diperbarui.
 
         Returns:
             ModelT: Objek yang telah diperbarui.
         """
 
-        instance = await self.get(obj_id)
-        assert instance is not None  # get() sudah raise kalau None
         update_data = (
             obj_in.model_dump(exclude_unset=True)
             if not isinstance(obj_in, dict)
@@ -245,18 +243,18 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
 
         # Perbarui field yang ada. diasumsukan semua field sama
         for k, v in update_data.items():
-            old_v = getattr(instance, k, None)
+            old_v = getattr(obj, k, None)
             # Membandingkan nilai lama dan baru
             if old_v != v:
                 changed[k] = {"from": old_v, "to": v}
-                setattr(instance, k, v)
+                setattr(obj, k, v)
 
-        self.session.add(instance)
+        self.session.add(obj)
 
         # Panggil hook on_updated
-        await self.on_updated(instance, **changed)
+        await self.on_updated(obj, **changed)
 
-        return await self._save(instance)
+        return await self._save(obj)
 
     async def soft_delete(self, obj_id: int) -> None:
         """Menghapus objek secara soft delete.

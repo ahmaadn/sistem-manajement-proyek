@@ -180,7 +180,10 @@ class _Task:
     async def update_task(self, task_id: int, payload: TaskUpdate):
         """Mengupdate tugas tertentu."""
 
-        return await self.task_service.update(task_id, payload)
+        task = await self.task_service.get(task_id)
+        assert task is not None
+
+        return await self.task_service.update(task, payload)
 
     @r.patch(
         "/tasks/{task_id}/status",
@@ -202,7 +205,9 @@ class _Task:
     ):
         """Mengupdate status tugas tertentu."""
 
-        return await self.task_service.update(task_id, {"status": status})
+        task: Task | NoneType = await self.task_service.get(task_id)
+        assert task is not None
+        return await self.task_service.update(task, {"status": status})
 
     @r.post("/tasks/{task_id}/assign")
     async def assign_task(
