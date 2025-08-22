@@ -82,6 +82,25 @@ async def get_user_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+async def get_user_pm(user: User = Depends(get_current_user)) -> User:
+    """Mendapatkan pengguna dengan peran PM.
+
+    Args:
+        user (UserRead, optional): Pengguna yang saat ini terautentikasi. Defaults to
+            Depends(get_current_user).
+
+    Raises:
+        HTTPException: Jika pengguna tidak memiliki akses PM.
+
+    Returns:
+        UserRead: Pengguna dengan peran PM.
+    """
+
+    if user.role != Role.PROJECT_MANAGER:
+        raise exceptions.UnauthorizedError("User tidak memiliki akses PM.")
+    return user
+
+
 async def permission_required(roles: list[Role]) -> Callable[..., User]:
     def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:

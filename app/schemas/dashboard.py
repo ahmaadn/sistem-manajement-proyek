@@ -1,8 +1,30 @@
+from datetime import datetime
+
 from app.db.models.role_model import Role
 from app.schemas.base import BaseSchema
+from app.schemas.project import ProjectResponse
 from app.schemas.user import User
 
 
 class AdminDashboardResponse(BaseSchema):
     top_users: list[User]
     role_counts: dict[Role, int]
+
+
+class ProjectStatusSummary(BaseSchema):
+    total_project: int
+    active_projects: int
+    completed_projects: int
+    new_this_month: int
+
+
+class YearlySummary(BaseSchema):
+    month: datetime
+    created_count: int
+    completed_count: int
+
+
+class PMDashboardResponse(BaseSchema):
+    project_summary: ProjectStatusSummary
+    yearly_summary: list[YearlySummary]
+    upcoming_deadlines: list[ProjectResponse]
