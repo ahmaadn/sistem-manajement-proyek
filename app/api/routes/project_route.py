@@ -116,6 +116,41 @@ class _ProjectUser:
         **Akses** : Project Manajer (Owner), Admin (Owner)
 
         """
+
+        return await self.project_service.update(
+            await self._get_project(project_id), payload
+        )
+
+    @r.delete(
+        "/projects/{project_id}",
+        status_code=status.HTTP_202_ACCEPTED,
+        responses={
+            status.HTTP_202_ACCEPTED: {
+                "description": "Proyek berhasil dihapus",
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Proyek tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def delete_proyek(
+        self,
+        project_id: int,
+        user: User = Depends(
+            permission_required([Role.PROJECT_MANAGER, Role.ADMIN])
+        ),
+    ) -> NoneType:
+        """
+        Menghapus Proyek
+
+        **Akses** :  Project Manajer (Owner), Admin (Owner)
+        """
+        await self.project_service.soft_delete(
+            obj=await self._get_project(project_id)
+        )
+
+    async def _get_project(self, project_id: int) -> Project:
         project = await self.project_service.fetch_one(
             filters={"id": project_id},
             condition=[
@@ -133,8 +168,7 @@ class _ProjectUser:
 
         if not project:
             raise exceptions.ProjectNotFoundError
-
-        return await self.project_service.update(project, payload)
+        return project
 
 
 @cbv(r)
@@ -161,45 +195,6 @@ class _Project:
         **Akses** : Project Manajer
         """
 
-        project_item = await self.project_service.create(
+        return await self.project_service.create(
             project, extra_fields={"created_by": self.user.id}
-        )
-        return self._cast_project_to_response(project_item)
-
-    @r.delete(
-        "/projects/{project_id}",
-        status_code=status.HTTP_202_ACCEPTED,
-        responses={
-            status.HTTP_202_ACCEPTED: {
-                "description": "Proyek berhasil dihapus",
-            },
-            status.HTTP_404_NOT_FOUND: {
-                "description": "Proyek tidak ditemukan",
-                "model": exceptions.AppErrorResponse,
-            },
-        },
-    )
-    async def delete_proyek(self, project_id: int) -> NoneType:
-        """menghapus proyek"""
-        await self.project_service.soft_delete(project_id)
-
-    def _cast_project_to_response(self, proyek: Project) -> ProjectResponse:
-        """
-        Mengonversi objek Proyek menjadi objek ProjectResponse.
-
-        Args:
-            proyek (Proyek): Objek proyek yang akan dikonversi.
-
-        Returns:
-            ProjectResponse: Objek response yang berisi data proyek.
-        """
-
-        return ProjectResponse(
-            id=proyek.id,
-            title=proyek.title,
-            description=proyek.description,
-            status=proyek.status,
-            created_by=proyek.created_by,
-            start_date=proyek.start_date,
-            end_date=proyek.end_date,
         )

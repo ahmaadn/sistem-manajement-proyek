@@ -322,15 +322,24 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
 
         return await self._save(obj)
 
-    async def soft_delete(self, obj_id: int) -> None:
+    async def soft_delete(
+        self, obj_id: int | None = None, obj: ModelT | None = None
+    ) -> None:
         """Menghapus objek secara soft delete.
 
         Args:
             obj_id (int): ID objek yang akan dihapus.
         """
 
-        instance = await self.get(obj_id)
-        assert instance is not None
+        if obj_id is None and obj is None:
+            raise ValueError("Either obj_id or obj must be provided")
+
+        if obj_id:
+            instance = await self.get(obj_id)
+
+        else:
+            instance = obj
+
         if hasattr(instance, self.soft_delete_field):
             setattr(
                 instance,
@@ -343,23 +352,32 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             await self.session.delete(instance)
 
         # Panggil hook on_soft_deleted
-        await self.on_soft_deleted(instance)
+        await self.on_soft_deleted(instance)  # type: ignore
 
         await self.session.commit()
 
-    async def hard_delete(self, obj_id: int) -> None:
+    async def hard_delete(
+        self, obj_id: int | None = None, obj: ModelT | None = None
+    ) -> None:
         """Menghapus objek secara hard delete.
 
         Args:
-            obj_id (int): ID objek yang akan dihapus.
+            obj_id (int | None): ID objek yang akan dihapus.
+            obj (ModelT | None): Objek yang akan dihapus.
         """
 
-        instance = await self.get(obj_id, allow_deleted=True)
-        assert instance is not None
+        if obj_id is None and obj is None:
+            raise ValueError("Either obj_id or obj must be provided")
+
+        if obj_id:
+            instance = await self.get(obj_id)
+        else:
+            instance = obj
+
         await self.session.delete(instance)
 
         # Panggil hook on_hard_deleted
-        await self.on_hard_deleted(instance)
+        await self.on_hard_deleted(instance)  # type: ignore
 
         await self.session.commit()
 
