@@ -81,6 +81,72 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
 
         return instance
 
+    async def fetch_one(
+        self,
+        *,
+        allow_deleted: bool = False,
+        return_none_if_not_found: bool = True,
+        filters: dict[str, Any] | None = None,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> Optional[ModelT]:
+        """Mendapatkan objek berdasarkan ID.
+
+        Args:
+            allow_deleted (bool, optional): Mengizinkan pengambilan objek yang
+                dihapus (soft delete).
+            return_none_if_not_found (bool, optional): Jika True, kembalikan None
+                alih-alih raise.
+            filters (dict[str, Any] | None, optional): Tambahan filter kolom exact
+                match.
+            options (list[Any] | None, optional): SQLAlchemy loader options
+                (selectinload, joinedload, dll).
+            condition (list[Any] | None, optional): Daftar ekspresi SQLAlchemy
+                tambahan untuk where().
+            order_by (Any | None, optional): Ekspresi order_by untuk query.
+            custom_query (Callable[[Select], Select] | None, optional): Hook untuk
+                memodifikasi stmt.
+        """
+        # Bangun stmt agar parameter di atas dapat dipakai
+        stmt: Select = select(self.model)
+
+        if options:
+            stmt = stmt.options(*options)
+
+        # Tambah filters dict
+        if filters:
+            for attr, value in filters.items():
+                stmt = stmt.where(getattr(self.model, attr) == value)
+
+        # Tambah condition list
+        if condition:
+            stmt = stmt.where(*condition)
+
+        if order_by is not None:
+            stmt = stmt.order_by(order_by)
+
+        if custom_query is not None:
+            stmt = custom_query(stmt)
+
+        res = await self.session.execute(stmt)
+        instance: Optional[ModelT] = res.scalars().first()
+
+        # Jika objek tidak ditemukan
+        if instance is None:
+            if return_none_if_not_found:
+                return None
+            raise self._exception_not_found()
+
+        # Jika objek ditemukan namun soft-deleted dan tidak diizinkan
+        if (not allow_deleted) and self._is_deleted(instance):
+            if return_none_if_not_found:
+                return None
+            raise self._exception_not_found()
+
+        return instance
+
     async def list(
         self,
         *,

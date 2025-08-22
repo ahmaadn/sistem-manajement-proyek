@@ -2,13 +2,21 @@ from types import NoneType
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
-from app.api.dependencies.user import get_current_user, get_user_pm, get_user_service
+from app.api.dependencies.user import (
+    get_current_user,
+    get_user_pm,
+    get_user_service,
+    permission_required,
+)
+from app.db.models.project_member_model import ProjectMember
 from app.db.models.project_model import Project
+from app.db.models.role_model import Role
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
     ProjectCreate,
@@ -79,6 +87,55 @@ class _ProjectUser:
             self.user, project_id, task_service, user_service
         )
 
+    @r.put(
+        "/projects/{project_id}",
+        status_code=status.HTTP_200_OK,
+        response_model=ProjectResponse,
+        responses={
+            status.HTTP_200_OK: {
+                "description": "Proyek berhasil diperbarui",
+                "model": ProjectResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Proyek tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def update_project(
+        self,
+        project_id: int,
+        payload: ProjectUpdate,
+        user: User = Depends(
+            permission_required([Role.PROJECT_MANAGER, Role.ADMIN])
+        ),
+    ):
+        """
+        Memperbarui project
+
+        **Akses** : Project Manajer (Owner), Admin (Owner)
+
+        """
+        project = await self.project_service.fetch_one(
+            filters={"id": project_id},
+            condition=[
+                exists(
+                    select(1)
+                    .select_from(ProjectMember)
+                    .where(
+                        ProjectMember.project_id == project_id,
+                        ProjectMember.user_id == self.user.id,
+                    )
+                ),
+                Project.deleted_at.is_(None),
+            ],
+        )
+
+        if not project:
+            raise exceptions.ProjectNotFoundError
+
+        return await self.project_service.update(project, payload)
+
 
 @cbv(r)
 class _Project:
@@ -108,28 +165,6 @@ class _Project:
             project, extra_fields={"created_by": self.user.id}
         )
         return self._cast_project_to_response(project_item)
-
-    @r.put(
-        "/projects/{project_id}",
-        status_code=status.HTTP_200_OK,
-        response_model=ProjectResponse,
-        responses={
-            status.HTTP_200_OK: {
-                "description": "Proyek berhasil diperbarui",
-                "model": ProjectResponse,
-            },
-            status.HTTP_404_NOT_FOUND: {
-                "description": "Proyek tidak ditemukan",
-                "model": exceptions.AppErrorResponse,
-            },
-        },
-    )
-    async def update_proyek(self, project_id: int, proyek: ProjectUpdate):
-        """memperbarui proyek"""
-        project = await self.project_service.get(project_id)
-        assert project is not None
-        proyek_item = await self.project_service.update(project, proyek)
-        return self._cast_project_to_response(proyek_item)
 
     @r.delete(
         "/projects/{project_id}",
