@@ -6,15 +6,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
+from app.db.models.task_assigne_model import TaskAssignee
+from app.db.models.task_model import StatusTask, Task
 from app.schemas.dashboard import (
     AdminDashboardResponse,
     PMDashboardResponse,
     ProjectStatusSummary,
+    UserDashboardResponse,
     YearlySummary,
 )
+from app.schemas.user import ProjectSummary
 
 if TYPE_CHECKING:
     from app.services.project_service import ProjectService
+    from app.services.task_service import TaskService
     from app.services.user_service import UserService
 
 
@@ -129,4 +134,66 @@ class DashboardService:
                 for row in yearly_summary
             ],
             upcoming_deadlines=upcoming_deadlines,
+        )
+
+    async def user_dashboard(
+        self,
+        user_id: int,
+        task_service: "TaskService",
+        project_service: "ProjectService",
+        limit_tasks: int = 5,
+    ):
+        """
+        Dashboard User:
+        - jumlah project aktif & selesai yang user ikuti
+        - statistik tugas milik user
+        - top-N tugas dengan deadline terdekat/terlewat
+        """
+        # Ringkasan project user (aktif/selesai) yang diikuti
+        project_stats = await project_service.get_user_project_statistics(user_id)
+
+        # Statistik tugas milik user
+        task_stats = await task_service.get_user_task_statistics(user_id)
+
+        project_summary = ProjectSummary(
+            total_project=project_stats.get("total_project", 0),
+            project_active=project_stats.get("project_active", 0),
+            project_completed=project_stats.get("project_completed", 0),
+            total_task=task_stats.get("total_task", 0),
+            task_in_progress=task_stats.get("task_in_progress", 0),
+            task_completed=task_stats.get("task_completed", 0),
+            task_cancelled=task_stats.get("task_cancelled", 0),
+        )
+
+        # Top-N tugas dengan deadline terdekat/terlewat (overdue dulu, lalu terdekat)
+        upcoming_stmt = (
+            select(Task)
+            .join(TaskAssignee, TaskAssignee.task_id == Task.id)
+            .join(Project, Project.id == Task.project_id)
+            .where(
+                # Tugas yang diberikan
+                TaskAssignee.user_id == user_id,
+                # Task tidak didelete
+                Task.deleted_at.is_(None),
+                # Project tidak didelete
+                Project.deleted_at.is_(None),
+                # Project Masih Active
+                Project.status.in_([StatusProject.ACTIVE]),
+                # Ada tanggal tenggat
+                Task.due_date.is_not(None),
+                # fokus ke tugas yang belum selesai/dibatalkan
+                Task.status.not_in([StatusTask.COMPLETED, StatusTask.CANCELLED]),
+            )
+            .order_by(
+                case((Task.due_date < func.now(), 0), else_=1),
+                Task.due_date.asc(),
+            )
+            .limit(limit_tasks)
+        )
+        upcoming_res = await self.session.execute(upcoming_stmt)
+        upcoming_tasks = list(upcoming_res.scalars().all())
+
+        return UserDashboardResponse(
+            project_summary=project_summary,
+            upcoming_tasks=upcoming_tasks,
         )

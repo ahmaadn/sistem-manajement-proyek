@@ -101,6 +101,25 @@ async def get_user_pm(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+async def get_user_member(user: User = Depends(get_current_user)) -> User:
+    """Mendapatkan pengguna dengan peran anggota.
+
+    Args:
+        user (UserRead, optional): Pengguna yang saat ini terautentikasi. Defaults to
+            Depends(get_current_user).
+
+    Raises:
+        HTTPException: Jika pengguna tidak memiliki akses anggota.
+
+    Returns:
+        UserRead: Pengguna dengan peran anggota.
+    """
+
+    if user.role != Role.TEAM_MEMBER:
+        raise exceptions.UnauthorizedError("User tidak memiliki akses.")
+    return user
+
+
 def permission_required(roles: list[Role]) -> Callable[..., User]:
     def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:

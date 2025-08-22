@@ -3,7 +3,8 @@ from datetime import datetime
 from app.db.models.role_model import Role
 from app.schemas.base import BaseSchema
 from app.schemas.project import ProjectResponse
-from app.schemas.user import User
+from app.schemas.task import SimpleTaskResponse
+from app.schemas.user import ProjectSummary, User
 
 
 class AdminDashboardResponse(BaseSchema):
@@ -28,3 +29,8 @@ class PMDashboardResponse(BaseSchema):
     project_summary: ProjectStatusSummary
     yearly_summary: list[YearlySummary]
     upcoming_deadlines: list[ProjectResponse]
+
+
+class UserDashboardResponse(BaseSchema):
+    project_summary: ProjectSummary
+    upcoming_tasks: list[SimpleTaskResponse]
