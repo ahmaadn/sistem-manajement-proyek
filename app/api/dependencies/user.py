@@ -101,7 +101,7 @@ async def get_user_pm(user: User = Depends(get_current_user)) -> User:
     return user
 
 
-async def permission_required(roles: list[Role]) -> Callable[..., User]:
+def permission_required(roles: list[Role]) -> Callable[..., User]:
     def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role not in roles:
             raise exceptions.UnauthorizedError("User tidak memiliki akses.")
