@@ -133,5 +133,5 @@ class UserService:
         return {
             "admin": Role.ADMIN,
             "team_member": Role.TEAM_MEMBER,
-            "hrd": Role.MANAGER,
+            "hrd": Role.PROJECT_MANAGER,
         }

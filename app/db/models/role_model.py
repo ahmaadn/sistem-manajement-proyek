@@ -9,7 +9,7 @@ from app.db.models.mixin import TimeStampMixin
 
 class Role(StrEnum):
     ADMIN = "admin"
-    MANAGER = "manager"
+    PROJECT_MANAGER = "project_manager"
     TEAM_MEMBER = "team_member"
 
 

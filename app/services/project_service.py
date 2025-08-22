@@ -86,7 +86,10 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
             return member
 
         # get detail user
-        if user.role in (Role.ADMIN, Role.MANAGER) and role != RoleProject.OWNER:
+        if (
+            user.role in (Role.ADMIN, Role.PROJECT_MANAGER)
+            and role != RoleProject.OWNER
+        ):
             raise exceptions.InvalidRoleAssignmentError(
                 "admin dan manager hanya bisa sebagai owner."
             )

@@ -212,7 +212,7 @@ class _Project:
 
         # admin tidak dapat diangkat selain menjadi owner
         if (
-            member_info.role in (Role.ADMIN, Role.MANAGER)
+            member_info.role in (Role.ADMIN, Role.PROJECT_MANAGER)
             and role != RoleProject.OWNER
         ):
             raise exceptions.InvalidRoleAssignmentError(
