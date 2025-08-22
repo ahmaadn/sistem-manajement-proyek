@@ -107,3 +107,11 @@ class PegawaiService:
             address=data.get("alamat"),
             profile_url=data.get("profile_url"),
         )
+
+    async def list_user(self) -> list[PegawaiInfo]:
+        """Mendapatkan daftar semua pengguna.
+
+        Returns:
+            list[PegawaiInfo]: Daftar informasi pegawai.
+        """
+        return [self._cast_to_user_info(user) for user in FAKE_USERS]

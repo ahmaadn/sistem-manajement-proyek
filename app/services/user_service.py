@@ -135,3 +135,36 @@ class UserService:
             "team_member": Role.TEAM_MEMBER,
             "hrd": Role.PROJECT_MANAGER,
         }
+
+    async def list_user(self) -> list[User]:
+        """
+        Mendapatkan daftar semua pengguna.
+        """
+        pegawai_list = await self.pegawai_service.list_user()
+        if not pegawai_list:
+            return []
+
+        user_ids = [p.id for p in pegawai_list]
+
+        # Ambil role yang sudah ada dalam satu query
+        res = await self.session.execute(
+            select(UserRole).where(UserRole.user_id.in_(user_ids))
+        )
+        existing_roles = {ur.user_id: ur.role for ur in res.scalars()}
+
+        # Siapkan insert bulk untuk yang belum punya role
+        to_create: list[UserRole] = []
+        for p in pegawai_list:
+            if p.id not in existing_roles:
+                role = self.mapping_role.get(p.employee_role, Role.TEAM_MEMBER)
+                to_create.append(UserRole(user_id=p.id, role=role))
+                existing_roles[p.id] = role  # agar return konsisten
+
+        if to_create:
+            self.session.add_all(to_create)
+            await self.session.commit()
+
+        # Bangun hasil akhir
+        return [
+            User(**p.model_dump(), role=existing_roles[p.id]) for p in pegawai_list
+        ]
