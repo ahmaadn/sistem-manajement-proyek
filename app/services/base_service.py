@@ -138,7 +138,7 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
     async def pagination(
         self,
         *,
-        page: int = 0,
+        page: int = 1,
         per_page: int = 10,
         include_deleted: bool = False,
         filters: dict[str, Any] | None = None,
@@ -183,7 +183,6 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             stmt = custom_query(stmt)
 
         # Tambahkan pagination
-        stmt = stmt
         return await paginate(self.session, stmt, page=page, per_page=per_page)
 
     async def create(

@@ -1,6 +1,6 @@
 from types import NoneType
 
-from fastapi import APIRouter, Body, Depends, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +13,7 @@ from app.db.models.project_member_model import RoleProject
 from app.db.models.project_model import Project
 from app.db.models.role_model import Role
 from app.db.models.task_model import ResourceType, StatusTask
+from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetailResponse,
@@ -58,12 +59,15 @@ class _Project:
     @r.get(
         "/projects",
         status_code=status.HTTP_200_OK,
-        response_model=list[ProjectResponse],
+        response_model=PaginationSchema[ProjectResponse],
     )
-    async def list_projects(self, skip: int = 0, limit: int = 10):
+    async def list_projects(
+        self,
+        page: int = Query(default=1, ge=1),
+        per_page: int = Query(default=10, ge=10),
+    ):  # -> dict[Any, Any]:
         """mengambil daftar proyek"""
-        projects = await self.project_service.list(skip=skip, limit=limit)
-        return [self._cast_project_to_response(p) for p in projects]
+        return await self.project_service.pagination(page=page, per_page=per_page)
 
     @r.get(
         "/projects/{project_id}",
