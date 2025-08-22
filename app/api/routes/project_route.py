@@ -3,22 +3,18 @@ from types import NoneType
 from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
 from app.api.dependencies.user import get_current_user, get_user_pm, get_user_service
 from app.db.models.project_model import Project
-from app.db.models.task_model import ResourceType, StatusTask
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetailResponse,
-    ProjectMemberResponse,
     ProjectPublicResponse,
     ProjectResponse,
-    ProjectStatsResponse,
     ProjectUpdate,
 )
 from app.schemas.user import User
@@ -57,6 +53,32 @@ class _ProjectUser:
             self.user, page, per_page
         )
 
+    @r.get(
+        "/projects/{project_id}",
+        response_model=ProjectDetailResponse,
+        status_code=status.HTTP_200_OK,
+        responses={
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Proyek tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            }
+        },
+    )
+    async def get_detail_project(
+        self,
+        project_id: int,
+        task_service: TaskService = Depends(get_task_service),
+        user_service: UserService = Depends(get_user_service),
+    ):
+        """
+        Mengambil detail project, bedasarkan project yang di ikuti
+
+        **Akses** : User, Project Manajer, Admin
+        """
+        return await self.project_service.get_project_detail(
+            self.user, project_id, task_service, user_service
+        )
+
 
 @cbv(r)
 class _Project:
@@ -76,88 +98,16 @@ class _Project:
         },
     )
     async def create_project(self, project: ProjectCreate):
-        """membuat proyek baru"""
+        """
+        Membuat proyek baru
+
+        **Akses** : Project Manajer
+        """
 
         project_item = await self.project_service.create(
             project, extra_fields={"created_by": self.user.id}
         )
         return self._cast_project_to_response(project_item)
-
-    @r.get(
-        "/projects/{project_id}",
-        response_model=ProjectDetailResponse,
-        status_code=status.HTTP_200_OK,
-        responses={
-            status.HTTP_404_NOT_FOUND: {
-                "description": "Proyek tidak ditemukan",
-                "model": exceptions.AppErrorResponse,
-            }
-        },
-    )
-    async def get_project(
-        self,
-        project_id: int,
-        task_service: TaskService = Depends(get_task_service),
-        user_service: UserService = Depends(get_user_service),
-    ):
-        """mengambil detail proyek"""
-        project = await self.project_service.get(
-            project_id,
-            options=[selectinload(Project.members)],
-        )
-        if not project:
-            raise exceptions.ProjectNotFoundError
-
-        tasks = await task_service.list(
-            filters={"project_id": project_id, "resource_type": ResourceType.TASK},
-        )
-
-        milestones = await task_service.list(
-            filters={
-                "project_id": project_id,
-                "resource_type": ResourceType.MILESTONE,
-            },
-        )
-
-        total_tasks = len(tasks)
-        total_completed_tasks = sum(
-            1 for t in tasks if t.status == StatusTask.COMPLETED
-        )
-        total_milestones = len(milestones)
-        task_milestones_completed = sum(
-            1 for m in milestones if m.status == StatusTask.COMPLETED
-        )
-
-        # get members
-        members = []
-        for member in project.members:
-            user = await user_service.get(member.user_id)
-            if user:
-                members.append(
-                    ProjectMemberResponse(
-                        user_id=user.id,
-                        name=user.name,
-                        email=user.email,
-                        project_role=member.role,
-                    )
-                )
-
-        return ProjectDetailResponse(
-            id=project.id,
-            title=project.title,
-            description=project.description,
-            start_date=project.start_date,
-            end_date=project.end_date,
-            status=project.status,
-            created_by=project.created_by,
-            members=members,
-            stats=ProjectStatsResponse(
-                total_tasks=total_tasks,
-                total_completed_tasks=total_completed_tasks,
-                total_milestones=total_milestones,
-                task_milestones_completed=task_milestones_completed,
-            ),
-        )
 
     @r.put(
         "/projects/{project_id}",

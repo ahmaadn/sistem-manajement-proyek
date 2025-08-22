@@ -1,15 +1,28 @@
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import case, exists, func, select
+from sqlalchemy.orm import selectinload
 
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
+from app.db.models.task_model import ResourceType, StatusTask
 from app.schemas.pagination import PaginationSchema
-from app.schemas.project import ProjectCreate, ProjectPublicResponse, ProjectUpdate
+from app.schemas.project import (
+    ProjectCreate,
+    ProjectDetailResponse,
+    ProjectMemberResponse,
+    ProjectPublicResponse,
+    ProjectStatsResponse,
+    ProjectUpdate,
+)
 from app.schemas.user import ProjectParticipant, User
 from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
+
+if TYPE_CHECKING:
+    from app.services.task_service import TaskService
+    from app.services.user_service import UserService
 
 
 class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
@@ -234,7 +247,7 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
                 ProjectMember.project_id.in_(project_ids) if project_ids else False,  # type: ignore
             )
         )
-        role_map = dict(role_rows.all())
+        role_map = dict(role_rows.all()) # type: ignore
 
         # Cast ke ProjectPublicResponse
         items = []
@@ -253,3 +266,123 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
             )
         paginate.update({"items": items})
         return PaginationSchema[ProjectPublicResponse](**paginate)
+
+    async def get_project_detail(
+        self,
+        user: User,
+        project_id: int,
+        task_service: "TaskService",
+        user_service: "UserService",
+    ):
+        """Get project detail.
+        Filter akses berdasarkan role:
+        - PM/Admin: semua project yang tidak dihapus
+        - Member: hanya project ACTIVE/COMPLETED dan user harus menjadi member
+
+        Args:
+            user (User): The user requesting the project details.
+            project_id (int): The ID of the project to retrieve.
+            task_service (TaskService): The task service instance.
+            user_service (UserService): The user service instance.
+
+        Raises:
+            exceptions.ProjectNotFoundError: If the project is not found or the user
+                does not have access.
+
+        Returns:
+            ProjectDetailResponse: The detailed project information.
+        """
+
+        conditions: list[Any] = [
+            Project.id == project_id,  # ID proyek yang diminta
+            Project.deleted_at.is_(None),  # Proyek yang tidak dihapus
+            exists(
+                select(1)
+                .select_from(ProjectMember)
+                .where(
+                    ProjectMember.project_id == Project.id,
+                    ProjectMember.user_id == user.id,
+                )
+            ),  # Memastikan user adalah anggota proyek
+        ]
+
+        if user.role not in (Role.PROJECT_MANAGER, Role.ADMIN):
+            conditions.extend(
+                [
+                    Project.status.in_(
+                        [StatusProject.ACTIVE, StatusProject.COMPLETED]
+                    ),  # Hanya proyek yang aktif atau selesai
+                ]
+            )
+
+        stmt = (
+            select(Project).options(selectinload(Project.members)).where(*conditions)
+        )
+        res = await self.session.execute(stmt)
+        project = res.scalars().first()
+
+        # mengembalikan error jika projek tidak ditemukan atau
+        # user tidak memiliki akses
+        if not project:
+            raise exceptions.ProjectNotFoundError
+
+        # dapatkan task
+        tasks = await task_service.list(
+            filters={"project_id": project_id, "resource_type": ResourceType.TASK},
+        )
+
+        milestones = await task_service.list(
+            filters={
+                "project_id": project_id,
+                "resource_type": ResourceType.MILESTONE,
+            },
+        )
+
+        total_tasks = len(tasks)
+        total_completed_tasks = sum(
+            1 for t in tasks if t.status == StatusTask.COMPLETED
+        )
+        total_milestones = len(milestones)
+        task_milestones_completed = sum(
+            1 for m in milestones if m.status == StatusTask.COMPLETED
+        )
+
+        # get members
+        members = []
+        users = await user_service.list_user()
+        for team_member in project.members:
+            # dapatkan detail member
+            detail_member = next(
+                (u for u in users if u.id == team_member.user_id), None
+            )
+            if detail_member:
+                members.append(
+                    ProjectMemberResponse(
+                        user_id=detail_member.id,
+                        name=detail_member.name,
+                        email=detail_member.email,
+                        project_role=team_member.role,
+                    )
+                )
+            else:
+                print(
+                    f"WARNING : User with ID {team_member.user_id} not found in ",
+                    f"project {project_id}",
+                )
+
+        return ProjectDetailResponse(
+            id=project.id,
+            title=project.title,
+            description=project.description,
+            start_date=project.start_date,
+            end_date=project.end_date,
+            status=project.status,
+            created_by=project.created_by,
+            members=members,
+            stats=ProjectStatsResponse(
+                total_tasks=total_tasks,
+                total_completed_tasks=total_completed_tasks,
+                total_milestones=total_milestones,
+                task_milestones_completed=task_milestones_completed,
+            ),
+        )
