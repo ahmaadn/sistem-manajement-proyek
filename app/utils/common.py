@@ -23,6 +23,7 @@ class ErrorCode(StrEnum):
     USER_NOT_FOUND = auto()
     INVALID_ROLE_ASSIGNMENT = auto()
     USER_NOT_IN_PROJECT = auto()
+    CANNOT_CHANGE_ROLE_PROJECT = auto()
 
     # Tugas
     TASK_NOT_FOUND = auto()

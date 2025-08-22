@@ -247,7 +247,7 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
                 ProjectMember.project_id.in_(project_ids) if project_ids else False,  # type: ignore
             )
         )
-        role_map = dict(role_rows.all()) # type: ignore
+        role_map = dict(role_rows.all())  # type: ignore
 
         # Cast ke ProjectPublicResponse
         items = []
@@ -386,3 +386,34 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
                 task_milestones_completed=task_milestones_completed,
             ),
         )
+
+    async def get_project_by_owner(self, user_id: int, project_id: int):
+        """Mendaptkan project bedasarkan owener
+
+        Args:
+            user_id (int): ID unique user
+            project_id (int): ID unique Project
+
+        Raises:
+            exceptions.ProjectNotFoundError: Project tidak ditemukan
+
+        """
+        project = await self.fetch_one(
+            filters={"id": project_id},
+            condition=[
+                exists(
+                    select(1)
+                    .select_from(ProjectMember)
+                    .where(
+                        ProjectMember.project_id == project_id,
+                        ProjectMember.user_id == user_id,
+                        ProjectMember.role == RoleProject.OWNER,
+                    )
+                ),
+                Project.deleted_at.is_(None),
+            ],
+        )
+
+        if not project:
+            raise exceptions.ProjectNotFoundError
+        return project

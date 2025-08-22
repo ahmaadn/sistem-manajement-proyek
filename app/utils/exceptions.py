@@ -180,3 +180,16 @@ class UserNotInProjectError(AppException):
         super().__init__(
             message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
         )
+
+
+class CannotChangeRoleError(AppException):
+    def __init__(
+        self,
+        message: str = "Tidak bisa mwwerubah role",
+        /,
+        error_code: ErrorCode = ErrorCode.CANNOT_CHANGE_ROLE_PROJECT,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
+        )

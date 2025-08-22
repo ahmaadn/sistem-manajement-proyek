@@ -2,7 +2,6 @@ from types import NoneType
 
 from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
-from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.project import get_project_service
@@ -14,8 +13,6 @@ from app.api.dependencies.user import (
     get_user_service,
     permission_required,
 )
-from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.project_model import Project
 from app.db.models.role_model import Role
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
@@ -118,7 +115,8 @@ class _Project:
         """
 
         return await self.project_service.update(
-            await self._get_project(project_id), payload
+            await self.project_service.get_project_by_owner(user.id, project_id),
+            payload,
         )
 
     @r.delete(
@@ -147,29 +145,8 @@ class _Project:
         **Akses** :  Project Manajer (Owner), Admin (Owner)
         """
         await self.project_service.soft_delete(
-            obj=await self._get_project(project_id)
+            obj=await self.project_service.get_project_by_owner(user.id, project_id),
         )
-
-    async def _get_project(self, project_id: int) -> Project:
-        project = await self.project_service.fetch_one(
-            filters={"id": project_id},
-            condition=[
-                exists(
-                    select(1)
-                    .select_from(ProjectMember)
-                    .where(
-                        ProjectMember.project_id == project_id,
-                        ProjectMember.user_id == self.user.id,
-                        ProjectMember.role == RoleProject.OWNER,
-                    )
-                ),
-                Project.deleted_at.is_(None),
-            ],
-        )
-
-        if not project:
-            raise exceptions.ProjectNotFoundError
-        return project
 
     @r.post(
         "/projects",
