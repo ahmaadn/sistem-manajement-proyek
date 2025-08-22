@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.project import get_project_service
@@ -8,6 +8,7 @@ from app.api.dependencies.user import (
     get_user_admin,
     get_user_service,
 )
+from app.schemas.pagination import SimplePaginationSchema
 from app.schemas.user import User, UserDetail
 from app.services.pegawai_service import PegawaiService
 from app.services.project_service import ProjectService
@@ -81,4 +82,19 @@ class _User:
             user_id=user_id,
             project_service=self.project_service,
             task_service=self.task_service,
+        )
+
+    @r.get("/users", response_model=SimplePaginationSchema[User])
+    async def list_users(
+        self,
+        page: int = Query(default=1, ge=1),
+        per_page: int = Query(default=10, ge=1),
+    ) -> SimplePaginationSchema[User]:
+        """
+        List users with pagination.
+        """
+        users = await self.user_service.list_user()
+        return SimplePaginationSchema[User](
+            count=len(users),
+            items=users,
         )
