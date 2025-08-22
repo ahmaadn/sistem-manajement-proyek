@@ -46,7 +46,7 @@ class ProjectResponse(BaseSchema):
     status: StatusProject = Field(
         default=StatusProject.TENDER, description="Status proyek"
     )
-    owner_id: int = Field(..., description="ID pembuat proyek")
+    created_by: int = Field(..., description="ID pembuat proyek")
 
 
 class ProjectStatsResponse(BaseSchema):

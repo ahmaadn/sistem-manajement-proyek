@@ -121,7 +121,7 @@ class _Project:
             start_date=project.start_date,
             end_date=project.end_date,
             status=project.status,
-            owner_id=project.created_by,
+            created_by=project.created_by,
             members=members,
             stats=ProjectStatsResponse(
                 total_tasks=total_tasks,
@@ -310,7 +310,7 @@ class _Project:
             title=proyek.title,
             description=proyek.description,
             status=proyek.status,
-            owner_id=proyek.created_by,
+            created_by=proyek.created_by,
             start_date=proyek.start_date,
             end_date=proyek.end_date,
         )
