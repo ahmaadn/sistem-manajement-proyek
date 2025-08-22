@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.base import Base as BaseModel
 from app.schemas.base import BaseSchema
 from app.utils.common import ErrorCode
+from app.utils.pagination import paginate
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 CreateSchemaT = TypeVar("CreateSchemaT", bound=BaseSchema)
@@ -133,6 +134,57 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         # Eksekusi query
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def pagination(
+        self,
+        *,
+        page: int = 0,
+        per_page: int = 10,
+        include_deleted: bool = False,
+        filters: dict[str, Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ):
+        """Mendapatkan daftar / list objek
+
+        Args:
+            skip (int, optional): Jumlah objek yang dilewati. Defaults to 0.
+            limit (int, optional): Jumlah objek yang diambil. Defaults to 100.
+            include_deleted (bool, optional): Mengizinkan pengambilan objek yang
+                dihapus. Defaults to False.
+            filters (dict[str, Any] | None, optional): Filter untuk pencarian objek.
+                Defaults to None.
+            order_by (Any | None, optional): Urutan pengambilan objek. Defaults to
+                None.
+            custom_query (Any, optional): Custom SQLAlchemy query untuk modifikasi
+                lebih lanjut.
+
+        Returns:
+            Sequence[ModelT]: Daftar objek yang ditemukan.
+        """
+
+        stmt = select(self.model)
+
+        # Tambahkan filter jika ada
+        if filters:
+            for attr, value in filters.items():
+                stmt = stmt.where(getattr(self.model, attr) == value)
+
+        # Tambahkan filter untuk soft delete
+        if not include_deleted and hasattr(self.model, self.soft_delete_field):
+            stmt = stmt.where(getattr(self.model, self.soft_delete_field).is_(None))
+
+        # Tambahkan urutan jika ada
+        if order_by is not None:
+            stmt = stmt.order_by(order_by)
+
+        # Tambahkan custom query jika ada
+        if custom_query is not None:
+            stmt = custom_query(stmt)
+
+        # Tambahkan pagination
+        stmt = stmt
+        return await paginate(self.session, stmt, page=page, per_page=per_page)
 
     async def create(
         self,

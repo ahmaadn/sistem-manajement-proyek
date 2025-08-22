@@ -61,8 +61,6 @@ class Paginator:
         return count
 
 
-async def paginate(
-    session: AsyncSession, query: Select, page: int, per_page: int
-) -> dict:
+async def paginate(session: AsyncSession, query: Select, page: int, per_page: int):
     paginator = Paginator(session, query, page, per_page)
     return await paginator.get_response()
