@@ -35,7 +35,7 @@ r = router = APIRouter(tags=["Projects"])
 
 
 @cbv(r)
-class _ProjectUser:
+class _Project:
     session: AsyncSession = Depends(get_async_session)
     user: User = Depends(get_current_user)
     project_service: ProjectService = Depends(get_project_service)
@@ -170,13 +170,6 @@ class _ProjectUser:
             raise exceptions.ProjectNotFoundError
         return project
 
-
-@cbv(r)
-class _Project:
-    session: AsyncSession = Depends(get_async_session)
-    user: User = Depends(get_user_pm)
-    project_service: ProjectService = Depends(get_project_service)
-
     @r.post(
         "/projects",
         status_code=status.HTTP_201_CREATED,
@@ -188,7 +181,9 @@ class _Project:
             }
         },
     )
-    async def create_project(self, project: ProjectCreate):
+    async def create_project(
+        self, project: ProjectCreate, user: User = Depends(get_user_pm)
+    ):
         """
         Membuat proyek baru
 
