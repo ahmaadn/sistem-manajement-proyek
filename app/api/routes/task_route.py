@@ -9,7 +9,7 @@ from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
 from app.api.dependencies.user import get_current_user, get_user_pm, get_user_service
-from app.db.models.project_member_model import ProjectMember
+from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.task_model import ResourceType, StatusTask, Task
 from app.schemas.task import (
     SimpleTaskResponse,
@@ -43,7 +43,7 @@ class _Task:
 
     async def _ensure_project_owner(self, project_id: int) -> ProjectMember:
         project_member = await self._ensure_project_member(project_id)
-        if project_member.role != ProjectMember.role.OWNER:
+        if project_member.role != RoleProject.OWNER:
             raise exceptions.ForbiddenError
         return project_member
 
