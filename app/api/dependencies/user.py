@@ -97,7 +97,7 @@ async def get_user_pm(user: User = Depends(get_current_user)) -> User:
     """
 
     if user.role != Role.PROJECT_MANAGER:
-        raise exceptions.UnauthorizedError("User tidak memiliki akses PM.")
+        raise exceptions.UnauthorizedError("User tidak memiliki akses.")
     return user
 
 
