@@ -14,7 +14,7 @@ from app.api.dependencies.user import (
     get_user_service,
     permission_required,
 )
-from app.db.models.project_member_model import ProjectMember
+from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project
 from app.db.models.role_model import Role
 from app.schemas.pagination import PaginationSchema
@@ -160,6 +160,7 @@ class _Project:
                     .where(
                         ProjectMember.project_id == project_id,
                         ProjectMember.user_id == self.user.id,
+                        ProjectMember.role == RoleProject.OWNER,
                     )
                 ),
                 Project.deleted_at.is_(None),
