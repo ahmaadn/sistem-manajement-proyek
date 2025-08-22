@@ -1,9 +1,12 @@
-from sqlalchemy import case, func, select
+from typing import Any, cast
+
+from sqlalchemy import case, exists, func, select
 
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
-from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.schemas.pagination import PaginationSchema
+from app.schemas.project import ProjectCreate, ProjectPublicResponse, ProjectUpdate
 from app.schemas.user import ProjectParticipant, User
 from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
@@ -183,3 +186,70 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
             )
             for row in projects_res
         ]
+
+    async def get_user_projects(self, user: User, page: int = 1, per_page: int = 10):
+        """Mengambil daftar proyek yang diikuti oleh pengguna.
+
+        Args:
+            user (User): Pengguna yang ingin mengambil proyek.
+            page (int, optional): Halaman yang ingin diambil. Defaults to 1.
+            per_page (int, optional): Jumlah proyek per halaman. Defaults to 10.
+        """
+
+        # PM/Admin: semua project yang diikuti (kecuali terhapus)
+        # User biasa: hanya project yang diikuti dgn status ACTIVE/COMPLETED
+        conditions: list[Any] = [
+            exists(
+                select(1)
+                .select_from(ProjectMember)
+                .where(
+                    ProjectMember.project_id == Project.id,
+                    ProjectMember.user_id == user.id,
+                )
+            ),
+            Project.deleted_at.is_(None),
+        ]
+
+        # project yang diikuti dgn status ACTIVE/COMPLETED
+        if user.role not in (Role.PROJECT_MANAGER, Role.ADMIN):
+            conditions.append(
+                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
+            )
+
+        # Fetch project
+        paginate = await self.pagination(
+            page=page,
+            per_page=per_page,
+            custom_query=lambda q: q.where(*conditions).order_by(
+                Project.start_date.desc()
+            ),
+        )
+
+        # Cast ke ProjectPublicResponse
+        # Ambil role user untuk proyek yang sedang dipaginasi (1 query)
+        project_ids = [p.id for p in paginate["items"]]
+        role_rows = await self.session.execute(
+            select(ProjectMember.project_id, ProjectMember.role).where(
+                ProjectMember.user_id == user.id,
+                ProjectMember.project_id.in_(project_ids) if project_ids else False,  # type: ignore
+            )
+        )
+        role_map = dict(role_rows.all())
+
+        # Cast ke ProjectPublicResponse
+        items = []
+        for item in paginate["items"]:
+            items.append(
+                ProjectPublicResponse(
+                    id=item.id,
+                    title=item.title,
+                    description=item.description,
+                    start_date=item.start_date,
+                    end_date=item.end_date,
+                    status=item.status,
+                    created_by=item.created_by,
+                    project_role=cast(RoleProject, role_map.get(item.id)),
+                )
+            )
+        paginate.update({"items": items})
+        return PaginationSchema[ProjectPublicResponse](**paginate)

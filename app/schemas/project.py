@@ -77,3 +77,7 @@ class ProjectDetailResponse(ProjectResponse):
     )
 
     stats: ProjectStatsResponse = Field(..., description="Statistik proyek")
+
+
+class ProjectPublicResponse(ProjectResponse):
+    project_role: RoleProject = Field(..., description="Peran dalam proyek")

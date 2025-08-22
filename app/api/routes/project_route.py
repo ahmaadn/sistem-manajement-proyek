@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies.project import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
-from app.api.dependencies.user import get_current_user, get_user_service
+from app.api.dependencies.user import get_current_user, get_user_pm, get_user_service
 from app.db.models.project_model import Project
 from app.db.models.task_model import ResourceType, StatusTask
 from app.schemas.pagination import PaginationSchema
@@ -16,6 +16,7 @@ from app.schemas.project import (
     ProjectCreate,
     ProjectDetailResponse,
     ProjectMemberResponse,
+    ProjectPublicResponse,
     ProjectResponse,
     ProjectStatsResponse,
     ProjectUpdate,
@@ -30,9 +31,37 @@ r = router = APIRouter(tags=["Projects"])
 
 
 @cbv(r)
-class _Project:
+class _ProjectUser:
     session: AsyncSession = Depends(get_async_session)
     user: User = Depends(get_current_user)
+    project_service: ProjectService = Depends(get_project_service)
+
+    @r.get(
+        "/projects",
+        status_code=status.HTTP_200_OK,
+        response_model=PaginationSchema[ProjectPublicResponse],
+    )
+    async def list_projects(
+        self,
+        page: int = Query(default=1, ge=1),
+        per_page: int = Query(default=10, ge=10),
+    ):
+        """
+        Mengambil daftar project yang terkait. **PM/Admin**: semua project yang
+        diikuti (kecuali terhapus), ***User***: hanya project yang diikuti dgn
+        status ACTIVE/COMPLETED
+
+        **Akses** : User, Project Manajer, Admin
+        """
+        return await self.project_service.get_user_projects(
+            self.user, page, per_page
+        )
+
+
+@cbv(r)
+class _Project:
+    session: AsyncSession = Depends(get_async_session)
+    user: User = Depends(get_user_pm)
     project_service: ProjectService = Depends(get_project_service)
 
     @r.post(
@@ -53,19 +82,6 @@ class _Project:
             project, extra_fields={"created_by": self.user.id}
         )
         return self._cast_project_to_response(project_item)
-
-    @r.get(
-        "/projects",
-        status_code=status.HTTP_200_OK,
-        response_model=PaginationSchema[ProjectResponse],
-    )
-    async def list_projects(
-        self,
-        page: int = Query(default=1, ge=1),
-        per_page: int = Query(default=10, ge=10),
-    ):  # -> dict[Any, Any]:
-        """mengambil daftar proyek"""
-        return await self.project_service.pagination(page=page, per_page=per_page)
 
     @r.get(
         "/projects/{project_id}",
