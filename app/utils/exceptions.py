@@ -193,3 +193,16 @@ class CannotChangeRoleError(AppException):
         super().__init__(
             message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
         )
+
+
+class ForbiddenError(AppException):
+    def __init__(
+        self,
+        message: str = "Akses ditolak",
+        /,
+        error_code: ErrorCode = ErrorCode.FORBIDDEN,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
+        )

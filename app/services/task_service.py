@@ -71,7 +71,7 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
 
         return display_order
 
-    async def assign_user(self, task_id: int, user_info: User) -> TaskAssignee:
+    async def assign_user(self, task: Task, user_info: User) -> TaskAssignee:
         """Menugaskan pengguna ke tugas tertentu.
 
         Args:
@@ -85,11 +85,6 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
         Returns:
             TaskAssignee: Objek penugasan tugas yang berhasil dibuat.
         """
-
-        # mendapatkan tugas
-        task = await self.get(task_id)
-        if not task:
-            raise exceptions.TaskNotFoundError("Task not found")
 
         # cek user telah terdaftar
         assign_task = await self.session.get(TaskAssignee, (task.id, user_info.id))

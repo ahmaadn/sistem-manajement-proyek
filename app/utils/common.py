@@ -11,6 +11,7 @@ class ErrorCode(StrEnum):
     VALIDATION_ERROR = auto()
     GENERIC_NOT_FOUND = auto()
     ITEM_NOT_FOUND = auto()
+    FORBIDDEN = auto()
 
     # Proyek
     PROJECT_NOT_FOUND = auto()
