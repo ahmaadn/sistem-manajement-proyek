@@ -56,6 +56,16 @@ class _Project:
         return self._cast_project_to_response(project_item)
 
     @r.get(
+        "/projects",
+        status_code=status.HTTP_200_OK,
+        response_model=list[ProjectResponse],
+    )
+    async def list_projects(self, skip: int = 0, limit: int = 10):
+        """mengambil daftar proyek"""
+        projects = await self.project_service.list(skip=skip, limit=limit)
+        return [self._cast_project_to_response(p) for p in projects]
+
+    @r.get(
         "/projects/{project_id}",
         response_model=ProjectDetailResponse,
         status_code=status.HTTP_200_OK,
