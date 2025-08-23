@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import api
 from app.core.config import settings
+from app.core.events.register_events import register_event_handlers
 from app.db import create_db_and_tables
 from app.db.models import load_all_models
 from app.middleware import middleware
@@ -37,6 +38,10 @@ def get_app() -> FastAPI:
             }
         },
     )
+
+    # Event Bus
+    register_event_handlers()
+
     # Static files
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

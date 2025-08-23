@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import case, exists, func, select
 from sqlalchemy.orm import selectinload
 
+from app.core.events.audit_events import ProjectCreatedEvent
+from app.core.events.bus import enqueue_event
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
@@ -123,6 +125,16 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
     async def on_created(self, instance: Project, **kwargs) -> None:
         await self.add_member(
             instance.id, instance.created_by, RoleProject.OWNER, commit=False
+        )
+
+        # Entri Event
+        enqueue_event(
+            self.session,
+            ProjectCreatedEvent(
+                user_id=instance.created_by,
+                project_id=instance.id,
+                project_name=instance.title,
+            ),
         )
 
     async def get_user_project_statistics(self, user_id: int):

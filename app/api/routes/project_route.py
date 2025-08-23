@@ -13,6 +13,7 @@ from app.api.dependencies.user import (
     get_user_service,
     permission_required,
 )
+from app.core.events.bus import dispatch_pending_events
 from app.db.models.role_model import Role
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
@@ -167,7 +168,9 @@ class _Project:
 
         **Akses** : Project Manajer
         """
-
-        return await self.project_service.create(
+        item = await self.project_service.create(
             project, extra_fields={"created_by": self.user.id}
         )
+
+        await dispatch_pending_events(self.session)
+        return item

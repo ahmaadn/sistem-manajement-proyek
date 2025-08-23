@@ -5,10 +5,9 @@ from sqlalchemy import DateTime, func
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 
-class TimeStampMixin:
+class CreateStampMixin:
     if TYPE_CHECKING:
         created_at: Mapped[datetime.datetime]
-        updated_at: Mapped[datetime.datetime]
     else:
 
         @declared_attr
@@ -20,6 +19,12 @@ class TimeStampMixin:
                 server_default=func.now(),
             )
 
+
+class UpdateStampMixin:
+    if TYPE_CHECKING:
+        updated_at: Mapped[datetime.datetime]
+    else:
+
         @declared_attr
         def updated_at(cls) -> Mapped[datetime.datetime]:  # noqa: N805
             return mapped_column(
@@ -28,6 +33,10 @@ class TimeStampMixin:
                 default=datetime.datetime.now(datetime.UTC),
                 onupdate=func.now(),
             )
+
+
+class TimeStampMixin(CreateStampMixin, UpdateStampMixin):
+    pass
 
 
 class SoftDeleteMixin:
