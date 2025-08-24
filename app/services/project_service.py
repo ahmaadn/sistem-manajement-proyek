@@ -1,6 +1,11 @@
 from typing import TYPE_CHECKING
 
 from app.core.domain.events.project import ProjectCreatedEvent
+from app.core.domain.policies.project_member import (
+    ensure_actor_can_remove_member,
+    ensure_can_assign_member_role,
+    ensure_can_change_member_role,
+)
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project
 from app.db.models.role_model import Role
@@ -347,3 +352,87 @@ class ProjectService:
         if not project:
             raise exceptions.ProjectNotFoundError
         return project
+
+    async def add_member_by_actor(
+        self, project_id: int, actor: User, member: User, role: RoleProject
+    ) -> ProjectMember:
+        """Menambahkan anggota ke proyek.
+
+        Args:
+            project_id (int): ID proyek
+            actor (User): Pengguna yang melakukan aksi
+            member (User): Anggota yang akan ditambahkan
+            role (RoleProject): Peran anggota yang akan ditambahkan
+
+        Raises:
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan
+            exceptions.MemberAlreadyExistsError: Jika anggota sudah terdaftar
+            exceptions.InvalidRoleAssignmentError: Jika peran anggota tidak valid
+
+        Returns:
+            ProjectMember: Anggota proyek yang baru ditambahkan
+        """
+
+        # pastikan actor adalah owner project
+        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        if not project:
+            # samakan response dengan "tidak ditemukan/akses"
+            raise exceptions.ProjectNotFoundError
+
+        # validasi aturan role
+        ensure_can_assign_member_role(member.role, role)
+
+        # tidak boleh duplikat member
+        if await self.repo.get_member(project_id, member.id):
+            raise exceptions.MemberAlreadyExistsError
+
+        created = await self.repo.add_member(project_id, member.id, role)
+        # TODO: self.uow.add_event(MemberAdded(...)) jika event sudah disiapkan
+        return created
+
+    async def remove_member_by_actor(
+        self, project_id: int, actor: User, target_user_id: int
+    ) -> None:
+        # pastikan actor owner (dan dapatkan owner id)
+        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        if not project:
+            raise exceptions.ProjectNotFoundError
+
+        # validasi aturan penghapusan
+        ensure_actor_can_remove_member(
+            project_owner_id=project.created_by,
+            actor_user_id=actor.id,
+            target_user_id=target_user_id,
+        )
+
+        # pastikan member ada
+        if not await self.repo.get_member(project_id, target_user_id):
+            raise exceptions.MemberNotFoundError
+
+        await self.repo.remove_member(project_id, target_user_id)
+        # TODO: self.uow.add_event(MemberRemoved(...))
+
+    async def change_role_member_by_actor(
+        self, project_id: int, actor: User, member: User, new_role: RoleProject
+    ) -> ProjectMember:
+        # pastikan actor owner
+        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        if not project:
+            raise exceptions.ProjectNotFoundError
+
+        current = await self.repo.get_member(project_id, member.id)
+        if not current:
+            raise exceptions.MemberNotFoundError
+
+        ensure_can_change_member_role(
+            member_system_role=member.role,
+            target_user_id=member.id,
+            project_owner_id=project.created_by,
+            actor_user_id=actor.id,
+            new_role=new_role,
+            current_role=current.role,
+        )
+
+        updated = await self.repo.update_member_role(current, project_id, new_role)
+        # TODO: self.uow.add_event(MemberRoleChanged(...))
+        return updated
