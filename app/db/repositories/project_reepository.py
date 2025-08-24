@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any
+from typing import Any, Sequence
 
-from sqlalchemy import case, exists, func, select
+from sqlalchemy import Row, case, exists, func, select
 from sqlalchemy.orm import selectinload
 
 from app.db.models.project_member_model import ProjectMember, RoleProject
@@ -50,7 +50,9 @@ class ProjectRepository(
         """Statistik proyek pengguna."""
 
     @abstractmethod
-    async def list_user_project_participants_rows(self, user_id: int) -> Any:
+    async def list_user_project_participants_rows(
+        self, user_id: int
+    ) -> Sequence[Row[tuple[int, str, RoleProject]]]:
         """Daftar partisipasi proyek pengguna."""
 
     @abstractmethod
@@ -185,7 +187,9 @@ class ProjectSQLAlchemyRepository(ProjectRepository):
             "project_completed": row.project_completed or 0,
         }
 
-    async def list_user_project_participants_rows(self, user_id: int):
+    async def list_user_project_participants_rows(
+        self, user_id: int
+    ) -> Sequence[Row[tuple[int, str, RoleProject]]]:
         stmt = (
             select(
                 Project.id.label("project_id"),
