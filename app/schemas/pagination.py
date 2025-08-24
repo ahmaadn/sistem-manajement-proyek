@@ -12,7 +12,7 @@ class SimplePaginationSchema(BaseSchema, Generic[_T]):
     items: list[_T]
 
 
-class PaginationSchema(SimplePaginationSchema, Generic[_T]):
+class PaginationSchema(SimplePaginationSchema[_T], Generic[_T]):
     """Base schema for pagination."""
 
     curr_page: int

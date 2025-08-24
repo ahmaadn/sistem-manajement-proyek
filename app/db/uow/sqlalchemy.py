@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, List, Protocol, runtime_checkable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class UnitOfWork(Protocol):
     session: AsyncSession
 
-    def add_event(self, event: Any) -> None: ...
+    def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...
     async def __aenter__(self) -> "UnitOfWork": ...

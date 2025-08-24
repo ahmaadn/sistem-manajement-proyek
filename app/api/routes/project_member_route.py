@@ -4,11 +4,13 @@ from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.project import get_project_service
+from app.api.dependencies.events import inject_event_background
+from app.api.dependencies.services import get_project_service
 from app.api.dependencies.sessions import get_async_session
+from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_user_service, permission_required
-from app.db.models.project_member_model import RoleProject
 from app.db.models.role_model import Role
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.base import MessageSuccessSchema
 from app.schemas.project_member import AddMemberProject, ChangeRoleProject
 from app.schemas.user import User
@@ -16,13 +18,16 @@ from app.services.project_service import ProjectService
 from app.services.user_service import UserService
 from app.utils import exceptions
 
-r = router = APIRouter(tags=["Project Members"])
+r = router = APIRouter(
+    tags=["Project Members"], dependencies=[Depends(inject_event_background)]
+)
 
 
 @cbv(r)
 class _Project:
     session: AsyncSession = Depends(get_async_session)
     user: User = Depends(permission_required([Role.PROJECT_MANAGER, Role.ADMIN]))
+    uow: UnitOfWork = Depends(get_uow)
     project_service: ProjectService = Depends(get_project_service)
     user_service: UserService = Depends(get_user_service)
 
@@ -58,36 +63,16 @@ class _Project:
 
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
-
-        # Mendapatkan project berdasarkan owner
-        await self.project_service.get_project_by_owner(self.user.id, project_id)
-
-        # validasi member yang akan dimasukkan
+        # Ambil info user yang akan ditambahkan (tanpa logika bisnis di router)
         member_info = await self.user_service.get(user_id=payload.user_id)
         if not member_info:
             raise exceptions.UserNotFoundError
 
-        # admin tidak dapat diangkat selain menjadi owner
-        if (
-            member_info.role in (Role.ADMIN, Role.PROJECT_MANAGER)
-            and payload.role != RoleProject.OWNER
-        ):
-            raise exceptions.InvalidRoleAssignmentError(
-                "admin dan manager hanya bisa menjadi owner."
+        async with self.uow:
+            await self.project_service.add_member_by_actor(
+                project_id, self.user, member_info, payload.role
             )
-
-        # Member tidak dapat diangkat menjadi owner
-        if (
-            member_info.role == Role.TEAM_MEMBER
-            and payload.role == RoleProject.OWNER
-        ):
-            raise exceptions.InvalidRoleAssignmentError(
-                "Member tidak dapat diangkat menjadi owner."
-            )
-
-        await self.project_service.add_member(
-            project_id, payload.user_id, payload.role
-        )
+            await self.uow.commit()
 
         return {"message": "Anggota berhasil ditambahkan ke proyek"}
 
@@ -112,7 +97,7 @@ class _Project:
             },
         },
     )
-    async def remove_member(self, user_id: int, project_id: int) -> NoneType:
+    async def remove_member(self, project_id: int, user_id: int) -> NoneType:
         """
         Menghapus anggota dari proyek
         - tidak bisa menghapus diri sendiri
@@ -120,23 +105,15 @@ class _Project:
 
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
-
-        # validasi project id
-        project = await self.project_service.get_project_by_owner(
-            self.user.id, project_id
-        )
-
-        # validasi member yang akan dihapus
-        member_info = await self.project_service.get_member(project_id, user_id)
+        member_info = await self.user_service.get(user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 
-        # tidak bisa menghapus diri sendiri
-        # tidak bisa menghapus creator proyek
-        if member_info.user_id in (self.user.id, project.created_by):
-            raise exceptions.CannotRemoveMemberError
-
-        await self.project_service.remove_member(project_id, user_id)
+        async with self.uow:
+            await self.project_service.remove_member_by_actor(
+                project_id, self.user, member_info, user_id
+            )
+            await self.uow.commit()
 
     @r.patch(
         "/projects/{project_id}/members/{user_id}/role",
@@ -165,18 +142,12 @@ class _Project:
 
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
-        project = await self.project_service.get_project_by_owner(
-            self.user.id, project_id
-        )
-
-        # Tidak dapat mengganti role creator
-        if user_id in (project.created_by, self.user.id):
-            raise exceptions.CannotChangeRoleError
-
         member_info = await self.user_service.get(user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 
-        await self.project_service.change_role_member(
-            project_id, member_info, payload.role
-        )
+        async with self.uow:
+            await self.project_service.change_role_member_by_actor(
+                project_id, self.user, member_info, payload.role
+            )
+            await self.uow.commit()
