@@ -1,14 +1,22 @@
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
-from sqlalchemy import case, exists, func, select
-from sqlalchemy.orm import selectinload
-
-from app.core.domain.bus import enqueue_event
 from app.core.domain.events.project import ProjectCreatedEvent
+from app.core.domain.events.project_member import (
+    ProjectMemberAddedEvent,
+    ProjectMemberRemovedEvent,
+    ProjectMemberUpdatedEvent,
+)
+from app.core.domain.policies.project_member import (
+    ensure_actor_can_remove_member,
+    ensure_can_assign_member_role,
+    ensure_can_change_member_role,
+)
 from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.project_model import Project, StatusProject
+from app.db.models.project_model import Project
 from app.db.models.role_model import Role
 from app.db.models.task_model import ResourceType, StatusTask
+from app.db.repositories.project_reepository import ProjectRepository
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
     ProjectCreate,
@@ -19,7 +27,6 @@ from app.schemas.project import (
     ProjectUpdate,
 )
 from app.schemas.user import ProjectParticipant, User
-from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
 
 if TYPE_CHECKING:
@@ -27,255 +34,243 @@ if TYPE_CHECKING:
     from app.services.user_service import UserService
 
 
-class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
-    model = Project
-    audit_entity_name = "project"
+class ProjectService:
+    def __init__(self, uow: UnitOfWork, repo: ProjectRepository) -> None:
+        self.uow = uow
+        self.repo = repo
 
-    def _exception_not_found(self, **extra):
-        """
-        Membuat exception jika proyek tidak ditemukan.
-        """
-        return exceptions.ProjectNotFoundError()
+    async def create_project(
+        self, project_create: ProjectCreate, user: User
+    ) -> Project:
+        result = await self.repo.create(
+            project_create, extra_fields={"created_by": user.id}
+        )
+        # auto set owner
+        await self.repo.add_member(result.id, user.id, RoleProject.OWNER)
 
-    async def add_member(
+        self.uow.add_event(
+            ProjectCreatedEvent(
+                user_id=user.id,
+                project_id=result.id,
+                project_title=result.title,
+            )
+        )
+        return result
+
+    async def delete_project(
         self,
-        project_id: int,
-        user_id: int,
-        role: RoleProject,
-        *,
-        commit: bool = True,
+        obj_id: int | None = None,
+        obj: Project | None = None,
+        soft_delete: bool = True,
     ):
         """
-        Menambahkan anggota baru ke proyek.
+        Menghapus Project
+
+        Args:
+            obj_id (int | None, optional): ID proyek. Defaults to None.
+            obj (Project | None, optional): Proyek yang akan dihapus.
+                Defaults to None.
+            soft_delete (bool, optional): Apakah akan dihapus secara lembut.
+                Defaults to True.
+
+        Raises:
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan.
         """
-        member = await self.session.get(ProjectMember, (project_id, user_id))
+        try:
+            if soft_delete:
+                await self.repo.soft_delete(obj_id, obj)
+            else:
+                await self.repo.hard_delete(obj_id, obj)
+        except ValueError as e:
+            raise exceptions.ProjectNotFoundError from e
+        finally:
+            # TODO: disini bisa ditambahkan event delete project
+            # Event bisa berbentuk audit atau pemberitahuan email
+            # untuk sementara tidak di implementasikan
+            pass
+
+    async def update_project(
+        self, project: Project, project_update: ProjectUpdate
+    ) -> Project:
+        """Memperbarui proyek bedasarkan kepemilikan jika user owner dari project
+        maka dia berhak mengedit project. akses yang diberikan hanya owener saja
+
+        Args:
+            project (Project): Proyek yang akan diperbarui.
+            project_update (ProjectUpdate): Data pembaruan proyek.
+
+        Returns:
+            Project: Proyek yang diperbarui.
+        """
+
+        return await self.repo.update(project, project_update)
+
+    async def add_member(
+        self, project_id: int, user_id: int, role: RoleProject
+    ) -> ProjectMember:
+        """Menambahkan anggota baru ke proyek.
+
+        Args:
+            project_id (int): ID proyek.
+            user_id (int): ID pengguna.
+            role (RoleProject): Peran anggota dalam proyek.
+
+        Raises:
+            exceptions.MemberAlreadyExistsError: Jika anggota sudah ada.
+
+        Returns:
+            ProjectMember: Anggota proyek yang baru ditambahkan.
+        """
+        member = await self.repo.get_member(project_id, user_id)
         if member:
             raise exceptions.MemberAlreadyExistsError
+        return await self.repo.add_member(project_id, user_id, role)
 
-        member = ProjectMember(project_id=project_id, user_id=user_id, role=role)
-        self.session.add(member)
-        if commit:
-            await self.session.commit()
-            await self.session.refresh(member)
-        return member
+    async def remove_member(self, project_id: int, user_id: int) -> None:
+        """Menghapus anggota dari proyek.
 
-    async def remove_member(self, project_id: int, user_id: int):
+        Args:
+            project_id (int): ID proyek.
+            user_id (int): ID pengguna.
+
+        Raises:
+            exceptions.MemberNotFoundError: Jika anggota tidak ditemukan.
+            exceptions.CannotRemoveMemberError: Jika anggota adalah pemilik proyek.
         """
-        Menghapus anggota dari proyek.
-        """
-        project = await self.get(project_id)
+        project = await self.repo.get_by_id(
+            project_id, return_none_if_not_found=True
+        )
         if not project:
             raise exceptions.MemberNotFoundError
-
-        member = await self.session.get(ProjectMember, (project.id, user_id))
-        if not member:
-            raise exceptions.MemberNotFoundError
-
         if project.created_by == user_id:
             raise exceptions.CannotRemoveMemberError(
-                "Tidak dapat menhapus owner dari project"
+                "Tidak dapat menghapus owner dari proyek"
             )
-
-        await self.session.delete(member)
-        await self.session.commit()
+        await self.repo.remove_member(project_id, user_id)
 
     async def get_member(self, project_id: int, member_id: int) -> ProjectMember:
+        """Mengambil informasi anggota proyek.
+
+        Args:
+            project_id (int): ID proyek.
+            member_id (int): ID anggota.
+
+        Raises:
+            exceptions.MemberNotFoundError: Jika anggota tidak ditemukan.
+
+        Returns:
+            ProjectMember: Informasi anggota proyek.
         """
-        Mendapatkan anggota proyek berdasarkan ID proyek dan ID anggota.
-        """
-        member = await self.session.get(ProjectMember, (project_id, member_id))
+        member = await self.repo.get_member(project_id, member_id)
         if not member:
             raise exceptions.MemberNotFoundError
         return member
 
     async def change_role_member(
         self, project_id: int, user: User, role: RoleProject
-    ):
-        """
-        Mengubah peran anggota proyek.
-        """
-        member = await self.get_member(project_id, user.id)
+    ) -> ProjectMember:
+        """Mengubah peran anggota proyek.
 
+        Args:
+            project_id (int): ID proyek.
+            user (User): Pengguna yang perannya akan diubah.
+            role (RoleProject): Peran baru untuk anggota.
+
+        Raises:
+            exceptions.MemberNotFoundError: Jika anggota tidak ditemukan.
+            exceptions.InvalidRoleAssignmentError: Jika peran tidak valid.
+
+        Returns:
+            ProjectMember: Anggota proyek dengan peran yang diperbarui.
+        """
+        member = await self.repo.get_member(project_id, user.id)
         if not member:
             raise exceptions.MemberNotFoundError
 
-        # Jika role masih sama tidak di peroses
         if member.role == role:
             return member
 
-        # get detail user
         if (
             user.role in (Role.ADMIN, Role.PROJECT_MANAGER)
-            and role != RoleProject.OWNER
-        ):
+        ) and role != RoleProject.OWNER:
             raise exceptions.InvalidRoleAssignmentError(
                 "admin dan manager hanya bisa sebagai owner."
             )
-
-        if user.role == Role.TEAM_MEMBER and role == RoleProject.OWNER:
+        if (user.role == Role.TEAM_MEMBER) and role == RoleProject.OWNER:
             raise exceptions.InvalidRoleAssignmentError(
                 "team member tidak bisa sebagai owner project"
             )
 
-        member.role = role
-        await self.session.commit()
-        await self.session.refresh(member)
-        return member
+        return await self.repo.update_member_role(member, project_id, role)
 
-    async def on_created(self, instance: Project, **kwargs) -> None:
-        await self.add_member(
-            instance.id, instance.created_by, RoleProject.OWNER, commit=False
-        )
+    async def get_user_project_statistics(self, user_id: int) -> dict[str, int]:
+        """Mengambil statistik proyek untuk pengguna.
 
-        # Entri Event
-        enqueue_event(
-            self.session,
-            ProjectCreatedEvent(
-                user_id=instance.created_by,
-                project_id=instance.id,
-                project_name=instance.title,
-            ),
-        )
+        Args:
+            user_id (int): ID pengguna.
 
-    async def get_user_project_statistics(self, user_id: int):
+        Returns:
+            dict[str, int]: Statistik proyek untuk pengguna.
         """
-        Menghitung total proyek, proyek aktif, dan proyek selesai berdasarkan
-        user_id.
-        """
-        stmt = (
-            select(
-                func.count().label("total_project"),
-                func.sum(
-                    case(
-                        (Project.status == StatusProject.ACTIVE, 1),
-                        else_=0,
-                    )
-                ).label("project_active"),
-                func.sum(
-                    case(
-                        (Project.status == StatusProject.COMPLETED, 1),
-                        else_=0,
-                    )
-                ).label("project_completed"),
-            )
-            .join(ProjectMember, ProjectMember.project_id == Project.id)
-            .where(
-                ProjectMember.user_id == user_id,
-                # hanya proyek yang aktif atau selesai
-                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
-                # tidak termasuk proyek yang dihapus
-                Project.deleted_at.is_(None),
-            )
-        )
-        result = await self.session.execute(stmt)
-        row = result.first()
-
-        if not row:
-            return {
-                "total_project": 0,
-                "project_active": 0,
-                "project_completed": 0,
-            }
-
-        return {
-            "total_project": row.total_project or 0,
-            "project_active": row.project_active or 0,
-            "project_completed": row.project_completed or 0,
-        }
+        return await self.repo.get_user_project_statistics(user_id)
 
     async def get_user_project_participants(
         self, user_id: int
     ) -> list[ProjectParticipant]:
-        projects_stmt = (
-            select(
-                Project.id.label("project_id"),
-                Project.title.label("project_name"),
-                ProjectMember.role.label("user_role"),
-            )
-            .join(Project, Project.id == ProjectMember.project_id)
-            .where(
-                ProjectMember.user_id == user_id,
-                # hanya proyek yang aktif atau selesai
-                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
-                # tidak termasuk proyek yang dihapus
-                Project.deleted_at.is_(None),
-            )
-            .order_by(Project.id)
-        )
-        projects_res = await self.session.execute(projects_stmt)
+        """Mengambil daftar partisipan proyek untuk pengguna.
+
+        Args:
+            user_id (int): ID pengguna.
+
+        Returns:
+            list[ProjectParticipant]: Daftar partisipan proyek untuk pengguna.
+        """
+        rows = await self.repo.list_user_project_participants_rows(user_id)
         return [
             ProjectParticipant(
                 project_id=row.project_id,
                 project_name=row.project_name,
                 user_role=row.user_role,
             )
-            for row in projects_res
+            for row in rows
         ]
 
-    async def get_user_projects(self, user: User, page: int = 1, per_page: int = 10):
-        """Mengambil daftar proyek yang diikuti oleh pengguna.
+    async def get_user_projects(
+        self, user: User, page: int = 1, per_page: int = 10
+    ) -> PaginationSchema[ProjectPublicResponse]:
+        """Mengambil daftar proyek untuk pengguna.
 
         Args:
-            user (User): Pengguna yang ingin mengambil proyek.
-            page (int, optional): Halaman yang ingin diambil. Defaults to 1.
+            user (User): Pengguna yang proyeknya akan diambil.
+            page (int, optional): Halaman yang akan diambil. Defaults to 1.
             per_page (int, optional): Jumlah proyek per halaman. Defaults to 10.
+
+        Returns:
+            PaginationSchema[ProjectPublicResponse]: Daftar proyek untuk pengguna.
         """
-
-        # PM/Admin: semua project yang diikuti (kecuali terhapus)
-        # User biasa: hanya project yang diikuti dgn status ACTIVE/COMPLETED
-        conditions: list[Any] = [
-            exists(
-                select(1)
-                .select_from(ProjectMember)
-                .where(
-                    ProjectMember.project_id == Project.id,
-                    ProjectMember.user_id == user.id,
-                )
-            ),
-            Project.deleted_at.is_(None),
-        ]
-
-        # project yang diikuti dgn status ACTIVE/COMPLETED
-        if user.role not in (Role.PROJECT_MANAGER, Role.ADMIN):
-            conditions.append(
-                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
-            )
-
-        # Fetch project
-        paginate = await self.pagination(
-            page=page,
-            per_page=per_page,
-            custom_query=lambda q: q.where(*conditions).order_by(
-                Project.start_date.desc()
-            ),
+        is_admin_or_pm = user.role in (Role.PROJECT_MANAGER, Role.ADMIN)
+        paginate = await self.repo.paginate_user_projects(
+            user.id, is_admin_or_pm, page, per_page
         )
 
-        # Cast ke ProjectPublicResponse
-        # Ambil role user untuk proyek yang sedang dipaginasi (1 query)
         project_ids = [p.id for p in paginate["items"]]
-        role_rows = await self.session.execute(
-            select(ProjectMember.project_id, ProjectMember.role).where(
-                ProjectMember.user_id == user.id,
-                ProjectMember.project_id.in_(project_ids) if project_ids else False,  # type: ignore
-            )
+        role_map = await self.repo.get_roles_map_for_user_in_projects(
+            user.id, project_ids
         )
-        role_map = dict(role_rows.all())  # type: ignore
 
-        # Cast ke ProjectPublicResponse
-        items = []
-        for item in paginate["items"]:
-            items.append(
-                ProjectPublicResponse(
-                    id=item.id,
-                    title=item.title,
-                    description=item.description,
-                    start_date=item.start_date,
-                    end_date=item.end_date,
-                    status=item.status,
-                    created_by=item.created_by,
-                    project_role=cast(RoleProject, role_map.get(item.id)),
-                )
+        items: list[ProjectPublicResponse] = [
+            ProjectPublicResponse(
+                id=item.id,
+                title=item.title,
+                description=item.description,
+                start_date=item.start_date,
+                end_date=item.end_date,
+                status=item.status,
+                created_by=item.created_by,
+                project_role=role_map[item.id],
             )
+            for item in paginate["items"]
+        ]
         paginate.update({"items": items})
         return PaginationSchema[ProjectPublicResponse](**paginate)
 
@@ -285,64 +280,17 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
         project_id: int,
         task_service: "TaskService",
         user_service: "UserService",
-    ):
-        """Get project detail.
-        Filter akses berdasarkan role:
-        - PM/Admin: semua project yang tidak dihapus
-        - Member: hanya project ACTIVE/COMPLETED dan user harus menjadi member
-
-        Args:
-            user (User): The user requesting the project details.
-            project_id (int): The ID of the project to retrieve.
-            task_service (TaskService): The task service instance.
-            user_service (UserService): The user service instance.
-
-        Raises:
-            exceptions.ProjectNotFoundError: If the project is not found or the user
-                does not have access.
-
-        Returns:
-            ProjectDetailResponse: The detailed project information.
-        """
-
-        conditions: list[Any] = [
-            Project.id == project_id,  # ID proyek yang diminta
-            Project.deleted_at.is_(None),  # Proyek yang tidak dihapus
-            exists(
-                select(1)
-                .select_from(ProjectMember)
-                .where(
-                    ProjectMember.project_id == Project.id,
-                    ProjectMember.user_id == user.id,
-                )
-            ),  # Memastikan user adalah anggota proyek
-        ]
-
-        if user.role not in (Role.PROJECT_MANAGER, Role.ADMIN):
-            conditions.extend(
-                [
-                    Project.status.in_(
-                        [StatusProject.ACTIVE, StatusProject.COMPLETED]
-                    ),  # Hanya proyek yang aktif atau selesai
-                ]
-            )
-
-        stmt = (
-            select(Project).options(selectinload(Project.members)).where(*conditions)
+    ) -> ProjectDetailResponse:
+        is_admin_or_pm = user.role in (Role.PROJECT_MANAGER, Role.ADMIN)
+        project = await self.repo.get_project_detail_for_user(
+            user.id, is_admin_or_pm, project_id
         )
-        res = await self.session.execute(stmt)
-        project = res.scalars().first()
-
-        # mengembalikan error jika projek tidak ditemukan atau
-        # user tidak memiliki akses
         if not project:
             raise exceptions.ProjectNotFoundError
 
-        # dapatkan task
         tasks = await task_service.list(
             filters={"project_id": project_id, "resource_type": ResourceType.TASK},
         )
-
         milestones = await task_service.list(
             filters={
                 "project_id": project_id,
@@ -359,11 +307,9 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
             1 for m in milestones if m.status == StatusTask.COMPLETED
         )
 
-        # get members
-        members = []
+        members: list[ProjectMemberResponse] = []
         users = await user_service.list_user()
         for team_member in project.members:
-            # dapatkan detail member
             detail_member = next(
                 (u for u in users if u.id == team_member.user_id), None
             )
@@ -375,11 +321,6 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
                         email=detail_member.email,
                         project_role=team_member.role,
                     )
-                )
-            else:
-                print(
-                    f"WARNING : User with ID {team_member.user_id} not found in ",
-                    f"project {project_id}",
                 )
 
         return ProjectDetailResponse(
@@ -399,33 +340,131 @@ class ProjectService(GenericCRUDService[Project, ProjectCreate, ProjectUpdate]):
             ),
         )
 
-    async def get_project_by_owner(self, user_id: int, project_id: int):
-        """Mendaptkan project bedasarkan owener
+    async def get_project_by_owner(self, user_id: int, project_id: int) -> Project:
+        """Mendapatkan project bedasarkan owner
 
         Args:
-            user_id (int): ID unique user
-            project_id (int): ID unique Project
+            user_id (int): ID pengguna
+            project_id (int): ID proyek
 
         Raises:
-            exceptions.ProjectNotFoundError: Project tidak ditemukan
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan
 
+        Returns:
+            Project: Proyek yang ditemukan
         """
-        project = await self.fetch_one(
-            filters={"id": project_id},
-            condition=[
-                exists(
-                    select(1)
-                    .select_from(ProjectMember)
-                    .where(
-                        ProjectMember.project_id == project_id,
-                        ProjectMember.user_id == user_id,
-                        ProjectMember.role == RoleProject.OWNER,
-                    )
-                ),
-                Project.deleted_at.is_(None),
-            ],
-        )
-
+        project = await self.repo.get_project_by_owner(user_id, project_id)
         if not project:
             raise exceptions.ProjectNotFoundError
         return project
+
+    async def add_member_by_actor(
+        self, project_id: int, actor: User, member: User, role: RoleProject
+    ) -> ProjectMember:
+        """Menambahkan anggota ke proyek.
+
+        Args:
+            project_id (int): ID proyek
+            actor (User): Pengguna yang melakukan aksi
+            member (User): Anggota yang akan ditambahkan
+            role (RoleProject): Peran anggota yang akan ditambahkan
+
+        Raises:
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan
+            exceptions.MemberAlreadyExistsError: Jika anggota sudah terdaftar
+            exceptions.InvalidRoleAssignmentError: Jika peran anggota tidak valid
+
+        Returns:
+            ProjectMember: Anggota proyek yang baru ditambahkan
+        """
+
+        # pastikan actor adalah owner project
+        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        if not project:
+            # samakan response dengan "tidak ditemukan/akses"
+            raise exceptions.ProjectNotFoundError
+
+        # validasi aturan role
+        ensure_can_assign_member_role(member.role, role)
+
+        # tidak boleh duplikat member
+        if await self.repo.get_member(project_id, member.id):
+            raise exceptions.MemberAlreadyExistsError
+
+        created = await self.repo.add_member(project_id, member.id, role)
+
+        self.uow.add_event(
+            ProjectMemberAddedEvent(
+                performed_by=actor.id,
+                project_id=project.id,
+                member_id=member.id,
+                member_name=member.name,
+                new_role=role,
+            )
+        )
+        return created
+
+    async def remove_member_by_actor(
+        self, project_id: int, actor: User, member: User, target_user_id: int
+    ) -> None:
+        # pastikan actor owner (dan dapatkan owner id)
+        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        if not project:
+            raise exceptions.ProjectNotFoundError
+
+        # validasi aturan penghapusan
+        ensure_actor_can_remove_member(
+            project_owner_id=project.created_by,
+            actor_user_id=actor.id,
+            target_user_id=target_user_id,
+        )
+
+        # pastikan member ada
+        if not await self.repo.get_member(project_id, target_user_id):
+            raise exceptions.MemberNotFoundError
+
+        await self.repo.remove_member(project_id, target_user_id)
+
+        self.uow.add_event(
+            ProjectMemberRemovedEvent(
+                performed_by=actor.id,
+                project_id=project.id,
+                member_id=target_user_id,
+                member_name=member.name,
+            )
+        )
+
+    async def change_role_member_by_actor(
+        self, project_id: int, actor: User, member: User, new_role: RoleProject
+    ) -> ProjectMember:
+        # pastikan actor owner
+        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        if not project:
+            raise exceptions.ProjectNotFoundError
+
+        current = await self.repo.get_member(project_id, member.id)
+        if not current:
+            raise exceptions.MemberNotFoundError
+
+        ensure_can_change_member_role(
+            member_system_role=member.role,
+            target_user_id=member.id,
+            project_owner_id=project.created_by,
+            actor_user_id=actor.id,
+            new_role=new_role,
+            current_role=current.role,
+        )
+
+        updated = await self.repo.update_member_role(current, project_id, new_role)
+        self.uow.add_event(
+            ProjectMemberUpdatedEvent(
+                performed_by=actor.id,
+                project_id=project_id,
+                member_id=member.id,
+                member_name=member.name,
+                after=new_role,
+                before=current.role,
+            )
+        )
+
+        return updated

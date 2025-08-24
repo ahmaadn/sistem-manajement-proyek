@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 
-from app.api.dependencies.project import get_project_service
+from app.api.dependencies.services import get_project_service
 from app.api.dependencies.task import get_task_service
 from app.api.dependencies.user import (
     get_current_user,

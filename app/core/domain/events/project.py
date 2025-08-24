@@ -7,4 +7,4 @@ from app.core.domain.bus import DomainEvent
 class ProjectCreatedEvent(DomainEvent):
     user_id: int
     project_id: int
-    project_name: str
+    project_title: str

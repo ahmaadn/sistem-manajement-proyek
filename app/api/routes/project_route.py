@@ -4,17 +4,18 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.project import get_project_service
+from app.api.dependencies.services import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.task import get_task_service
+from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import (
     get_current_user,
     get_user_pm,
     get_user_service,
     permission_required,
 )
-from app.core.domain.bus import dispatch_pending_events
 from app.db.models.role_model import Role
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
     ProjectCreate,
@@ -36,6 +37,7 @@ r = router = APIRouter(tags=["Projects"])
 class _Project:
     session: AsyncSession = Depends(get_async_session)
     user: User = Depends(get_current_user)
+    uow: UnitOfWork = Depends(get_uow)
     project_service: ProjectService = Depends(get_project_service)
 
     @r.get(
@@ -64,10 +66,14 @@ class _Project:
         response_model=ProjectDetailResponse,
         status_code=status.HTTP_200_OK,
         responses={
+            status.HTTP_200_OK: {
+                "description": "Proyek ditemukan",
+                "model": ProjectDetailResponse,
+            },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Proyek tidak ditemukan",
                 "model": exceptions.AppErrorResponse,
-            }
+            },
         },
     )
     async def get_detail_project(
@@ -81,9 +87,17 @@ class _Project:
 
         **Akses** : User, Project Manajer, Admin
         """
-        return await self.project_service.get_project_detail(
-            self.user, project_id, task_service, user_service
-        )
+
+        # terpaksa menggunakan uow karena dimungkinkan beberaapa pegawai belum
+        # mendapatkan role atau ada pegawai yang dinonaktifkan
+        async with self.uow:
+            project = await self.project_service.get_project_detail(
+                self.user, project_id, task_service, user_service
+            )
+
+            await self.uow.commit()
+
+        return project
 
     @r.put(
         "/projects/{project_id}",
@@ -94,19 +108,23 @@ class _Project:
                 "description": "Proyek berhasil diperbarui",
                 "model": ProjectResponse,
             },
+            status.HTTP_401_UNAUTHORIZED: {
+                "description": "User tidak memiliki akses.",
+                "model": exceptions.AppErrorResponse,
+            },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Proyek tidak ditemukan",
                 "model": exceptions.AppErrorResponse,
             },
         },
+        dependencies=[
+            Depends(permission_required([Role.PROJECT_MANAGER, Role.ADMIN]))
+        ],
     )
     async def update_project(
         self,
         project_id: int,
         payload: ProjectUpdate,
-        user: User = Depends(
-            permission_required([Role.PROJECT_MANAGER, Role.ADMIN])
-        ),
     ):
         """
         Memperbarui project
@@ -114,11 +132,12 @@ class _Project:
         **Akses** : Project Manajer (Owner), Admin (Owner)
 
         """
-
-        return await self.project_service.update(
-            await self.project_service.get_project_by_owner(user.id, project_id),
-            payload,
-        )
+        async with self.uow:
+            project = await self.project_service.get_project_by_owner(
+                self.user.id, project_id
+            )
+            await self.project_service.update_project(project, payload)
+            await self.uow.commit()
 
     @r.delete(
         "/projects/{project_id}",
@@ -132,22 +151,22 @@ class _Project:
                 "model": exceptions.AppErrorResponse,
             },
         },
+        dependencies=[
+            Depends(permission_required([Role.PROJECT_MANAGER, Role.ADMIN]))
+        ],
     )
-    async def delete_proyek(
-        self,
-        project_id: int,
-        user: User = Depends(
-            permission_required([Role.PROJECT_MANAGER, Role.ADMIN])
-        ),
-    ) -> NoneType:
+    async def delete_proyek(self, project_id: int) -> NoneType:
         """
         Menghapus Proyek
 
         **Akses** :  Project Manajer (Owner), Admin (Owner)
         """
-        await self.project_service.soft_delete(
-            obj=await self.project_service.get_project_by_owner(user.id, project_id),
-        )
+        async with self.uow:
+            project = await self.project_service.get_project_by_owner(
+                self.user.id, project_id
+            )
+            await self.project_service.delete_project(obj=project, soft_delete=True)
+            await self.uow.commit()
 
     @r.post(
         "/projects",
@@ -159,18 +178,16 @@ class _Project:
                 "model": ProjectResponse,
             }
         },
+        dependencies=[Depends(get_user_pm)],
     )
-    async def create_project(
-        self, project: ProjectCreate, user: User = Depends(get_user_pm)
-    ):
+    async def create_project(self, project: ProjectCreate):
         """
         Membuat proyek baru
 
         **Akses** : Project Manajer
         """
-        item = await self.project_service.create(
-            project, extra_fields={"created_by": self.user.id}
-        )
+        async with self.uow:
+            result = await self.project_service.create_project(project, self.user)
+            await self.uow.commit()
 
-        await dispatch_pending_events(self.session)
-        return item
+        return result
