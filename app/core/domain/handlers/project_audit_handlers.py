@@ -8,6 +8,6 @@ async def on_create_project(ev: ProjectCreatedEvent):
         action_type=AuditEventType.PROJECT_CREATED,
         performed_by=ev.user_id,
         project_id=ev.project_id,
-        details={"project_name": ev.project_name},
+        details={"project_title": ev.project_title},
     )
-    print(f"[INFO] Audit log created for project creation: {ev.project_name}")
+    print(f"[INFO] Audit log created for project creation: {ev.project_title}")
