@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.core.events.bus import DomainEvent
+from app.core.domain.bus import DomainEvent
 
 
 @dataclass(frozen=True)

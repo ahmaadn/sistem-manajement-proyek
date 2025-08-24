@@ -1,5 +1,5 @@
-from app.core.events.audit_events import ProjectCreatedEvent
-from app.core.events.handlers.audit_handlers import write_audit
+from app.core.domain.events.project import ProjectCreatedEvent
+from app.core.domain.handlers.audit_handlers import write_audit
 from app.db.models.audit_model import AuditEventType
 
 

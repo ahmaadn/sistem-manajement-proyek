@@ -13,7 +13,7 @@ from app.api.dependencies.user import (
     get_user_service,
     permission_required,
 )
-from app.core.events.bus import dispatch_pending_events
+from app.core.domain.bus import dispatch_pending_events
 from app.db.models.role_model import Role
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (

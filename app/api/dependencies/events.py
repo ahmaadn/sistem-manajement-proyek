@@ -1,6 +1,6 @@
 from fastapi import BackgroundTasks
 
-from app.core.events.bus import set_event_background
+from app.core.domain.bus import set_event_background
 
 
 def inject_event_background(background_tasks: BackgroundTasks):

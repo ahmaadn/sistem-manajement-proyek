@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import case, exists, func, select
 from sqlalchemy.orm import selectinload
 
-from app.core.events.audit_events import ProjectCreatedEvent
-from app.core.events.bus import enqueue_event
+from app.core.domain.bus import enqueue_event
+from app.core.domain.events.project import ProjectCreatedEvent
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
