@@ -1,3 +1,6 @@
+from abc import ABCMeta, abstractmethod
+from typing import Any
+
 from sqlalchemy import case, exists, func, select
 from sqlalchemy.orm import selectinload
 
@@ -7,10 +10,66 @@ from app.db.repositories.generic_repository import GenericRepository
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
-class ProjectRepository(GenericRepository[Project, ProjectCreate, ProjectUpdate]):
+class ProjectRepository(
+    GenericRepository[Project, ProjectCreate, ProjectUpdate], metaclass=ABCMeta
+):
     """Repository untuk entitas Project."""
 
     model = Project
+
+    @abstractmethod
+    async def get_member(
+        self, project_id: int, member_id: int
+    ) -> ProjectMember | None:
+        """Mendapatkan anggota proyek berdasarkan ID proyek dan ID anggota."""
+
+    @abstractmethod
+    async def add_member(
+        self, project_id: int, user_id: int, role: RoleProject
+    ) -> ProjectMember:
+        """Menambahkan anggota baru ke proyek."""
+
+    @abstractmethod
+    async def remove_member(self, project_id: int, user_id: int) -> None:
+        """Menghapus anggota dari proyek."""
+
+    @abstractmethod
+    async def update_member_role(
+        self, member: ProjectMember, project_id: int, role: RoleProject
+    ) -> ProjectMember:
+        """Memperbarui peran anggota proyek."""
+
+    @abstractmethod
+    async def get_project_by_owner(
+        self, user_id: int, project_id: int
+    ) -> Project | None:
+        """Mendapatkan proyek milik pengguna tertentu."""
+
+    @abstractmethod
+    async def get_user_project_statistics(self, user_id: int) -> dict[str, int]:
+        """Statistik proyek pengguna."""
+
+    @abstractmethod
+    async def list_user_project_participants_rows(self, user_id: int) -> Any:
+        """Daftar partisipasi proyek pengguna."""
+
+    @abstractmethod
+    async def paginate_user_projects(
+        self, user_id: int, is_admin_or_pm: bool, page: int, per_page: int
+    ) -> dict[str, Any]:
+        """Paginasi proyek pengguna."""
+
+    @abstractmethod
+    async def get_roles_map_for_user_in_projects(
+        self, user_id: int, project_ids: list[int]
+    ) -> dict[int, RoleProject]:
+        """Peta peran pengguna di beberapa proyek."""
+
+    @abstractmethod
+    async def get_project_detail_for_user(
+        self, user_id: int, is_admin_or_pm: bool, project_id: int
+    ) -> Project | None:
+        """Detail proyek untuk pengguna."""
 
 
 class ProjectSQLAlchemyRepository(ProjectRepository):
@@ -146,7 +205,7 @@ class ProjectSQLAlchemyRepository(ProjectRepository):
 
     async def paginate_user_projects(
         self, user_id: int, is_admin_or_pm: bool, page: int, per_page: int
-    ):
+    ) -> dict[str, Any]:
         conditions = [
             exists(
                 select(1)

@@ -5,7 +5,7 @@ from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project
 from app.db.models.role_model import Role
 from app.db.models.task_model import ResourceType, StatusTask
-from app.db.repositories.project_reepository import ProjectSQLAlchemyRepository
+from app.db.repositories.project_reepository import ProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class ProjectService:
-    def __init__(self, uow: UnitOfWork, repo: ProjectSQLAlchemyRepository) -> None:
+    def __init__(self, uow: UnitOfWork, repo: ProjectRepository) -> None:
         self.uow = uow
         self.repo = repo
 
@@ -225,7 +225,9 @@ class ProjectService:
             for row in rows
         ]
 
-    async def get_user_projects(self, user: User, page: int = 1, per_page: int = 10):
+    async def get_user_projects(
+        self, user: User, page: int = 1, per_page: int = 10
+    ) -> PaginationSchema[ProjectPublicResponse]:
         """Mengambil daftar proyek untuk pengguna.
 
         Args:
