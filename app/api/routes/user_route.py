@@ -6,6 +6,7 @@ from app.api.dependencies.task import get_task_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import (
     get_current_user,
+    get_user_admin,
     get_user_service,
     permission_required,
 )
@@ -76,7 +77,8 @@ class _User:
         self,
         user_id: int,
     ) -> UserDetail:
-        """Mendapatkan detail user. hanyaa bisa di akses oleh admin dan project manajer
+        """Mendapatkan detail user. hanyaa bisa di akses oleh admin dan project
+            manajer
 
         **Akses** : Admin, Project Manajer
         """
@@ -117,3 +119,34 @@ class _User:
             count=len(users),
             items=users,
         )
+
+    @r.patch(
+        "/users/{user_id}/role",
+        status_code=status.HTTP_200_OK,
+        responses={
+            status.HTTP_200_OK: {
+                "description": "Peran pengguna berhasil diubah",
+                "model": dict,
+            },
+            status.HTTP_401_UNAUTHORIZED: {
+                "description": "Tidak punyak akses",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Pengguna tidak ditemukan",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def change_role(
+        self, user_id: int, new_role: Role, admin: User = Depends(get_user_admin)
+    ):
+        """Mengubah peran pengguna
+
+        **Akses**: Admin
+        """
+        await self.user_service.change_user_role(
+            actor=admin, user_id=user_id, new_role=new_role
+        )
+        await self.uow.commit()
+        return {"message": "Peran pengguna berhasil diubah"}

@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.role_model import Role, UserRole
@@ -55,6 +55,18 @@ class UserRepository(ABC):
                 peran yang akan dibuat.
         """
 
+    @abstractmethod
+    async def change_user_role(self, user_id: int, new_role: Role) -> UserRole:
+        """
+        Mengubah role pengguna berdasarkan ID.
+        """
+
+    @abstractmethod
+    async def count_users_with_role(self, role: Role) -> int:
+        """
+        Menghitung jumlah pengguna dengan peran tertentu.
+        """
+
 
 class UserSQLAlchemyRepository(UserRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -92,3 +104,29 @@ class UserSQLAlchemyRepository(UserRepository):
         await self.session.flush()
 
         return user_role_list
+
+    async def change_user_role(self, user_id: int, new_role: Role) -> UserRole:
+        """
+        Update atau buat role untuk user_id tertentu.
+        """
+        res = await self.session.execute(
+            select(UserRole).where(UserRole.user_id == user_id).limit(1)
+        )
+        ur = res.scalar_one_or_none()
+        if ur is None:
+            ur = UserRole(user_id=user_id, role=new_role)
+            self.session.add(ur)
+        else:
+            ur.role = new_role
+            self.session.add(ur)
+
+        await self.session.flush()
+        await self.session.refresh(ur)
+        return ur
+
+    async def count_users_with_role(self, role: Role) -> int:
+        res = await self.session.execute(
+            select(func.count()).select_from(UserRole).where(UserRole.role == role)
+        )
+        count = res.scalar_one()
+        return int(count or 0)

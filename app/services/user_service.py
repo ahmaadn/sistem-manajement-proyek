@@ -12,7 +12,11 @@ if TYPE_CHECKING:
 from typing import TYPE_CHECKING
 
 from app.core.domain.events.user import UserRoleAssignedEvent
-from app.core.domain.policies.user_role import map_employee_role_to_app_role
+from app.core.domain.policies.user_role import (
+    ensure_admin_not_change_own_role,
+    ensure_not_demote_last_admin,
+    map_employee_role_to_app_role,
+)
 from app.db.repositories.user_repository import UserRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 
@@ -163,3 +167,61 @@ class UserService:
         return [
             User(**p.model_dump(), role=existing_roles[p.id]) for p in pegawai_list
         ]
+
+    async def change_user_role(
+        self, *, actor: User, user_id: int, new_role: Role
+    ) -> UserRole:
+        """
+        Ubah peran user. Jika belum memiliki role, akan dibuat.
+        Guard:
+            - Admin tidak boleh mengganti perannya sendiri (demote/promote).
+            - Admin terakhir di sistem tidak boleh di-demote/diganti dari ADMIN.
+        """
+        # Validasi user eksis di sumber pegawai
+        pegawai = await self.pegawai_service.get_user_info(user_id)
+        if not pegawai:
+            raise exceptions.UserNotFoundError
+
+        # Guard 1: admin tidak boleh ganti perannya sendiri
+        ensure_admin_not_change_own_role(
+            actor_role=actor.role,
+            actor_id=actor.id,
+            target_user_id=user_id,
+            new_role=new_role,
+        )
+
+        # Ambil role saat ini target
+        current = await self.repo.get_user_role(user_id)
+
+        # Admin tidak boleh mengganti perannya sendiri
+        if current is not None:
+            admin_count = await self.repo.count_users_with_role(Role.ADMIN)
+            ensure_not_demote_last_admin(
+                current_target_role=current.role,
+                new_role=new_role,
+                total_admins=admin_count,
+            )
+
+        # Cek peran saat ini target user
+        current = await self.repo.get_user_role(user_id)
+
+        # Jika target saat ini ADMIN dan akan diubah menjadi non-ADMIN,
+        # pastikan bukan admin terakhir.
+        if current is not None:
+            admin_count = await self.repo.count_users_with_role(Role.ADMIN)
+            ensure_not_demote_last_admin(
+                current_target_role=current.role,
+                new_role=new_role,
+                total_admins=admin_count,
+            )
+
+        ur = await self.repo.change_user_role(user_id, new_role)
+
+        # Angkat domain event (publish post-commit oleh UoW)
+        self.uow.add_event(
+            UserRoleAssignedEvent(
+                user_id=user_id,
+                role_name=getattr(new_role, "name", str(new_role)),
+            )
+        )
+        return ur
