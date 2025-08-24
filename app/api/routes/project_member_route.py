@@ -105,9 +105,13 @@ class _Project:
 
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
+        member_info = await self.user_service.get(user_id)
+        if not member_info:
+            raise exceptions.MemberNotFoundError
+
         async with self.uow:
             await self.project_service.remove_member_by_actor(
-                project_id, self.user, user_id
+                project_id, self.user, member_info, user_id
             )
             await self.uow.commit()
 

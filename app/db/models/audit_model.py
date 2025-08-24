@@ -75,4 +75,5 @@ class AuditEventType(StrEnum):
     PROJECT_UPDATED = "project_updated"
     PROJECT_REMOVED = "project_removed"
     PROJECT_MEMBER_ADDED = "project_member_added"
+    PROJECT_MEMBER_UPDATED = "project_member_updated"
     PROJECT_MEMBER_REMOVED = "project_member_removed"

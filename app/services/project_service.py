@@ -1,6 +1,11 @@
 from typing import TYPE_CHECKING
 
 from app.core.domain.events.project import ProjectCreatedEvent
+from app.core.domain.events.project_member import (
+    ProjectMemberAddedEvent,
+    ProjectMemberRemovedEvent,
+    ProjectMemberUpdatedEvent,
+)
 from app.core.domain.policies.project_member import (
     ensure_actor_can_remove_member,
     ensure_can_assign_member_role,
@@ -387,11 +392,20 @@ class ProjectService:
             raise exceptions.MemberAlreadyExistsError
 
         created = await self.repo.add_member(project_id, member.id, role)
-        # TODO: self.uow.add_event(MemberAdded(...)) jika event sudah disiapkan
+
+        self.uow.add_event(
+            ProjectMemberAddedEvent(
+                performed_by=actor.id,
+                project_id=project.id,
+                member_id=member.id,
+                member_name=member.name,
+                new_role=role,
+            )
+        )
         return created
 
     async def remove_member_by_actor(
-        self, project_id: int, actor: User, target_user_id: int
+        self, project_id: int, actor: User, member: User, target_user_id: int
     ) -> None:
         # pastikan actor owner (dan dapatkan owner id)
         project = await self.repo.get_project_by_owner(actor.id, project_id)
@@ -410,7 +424,15 @@ class ProjectService:
             raise exceptions.MemberNotFoundError
 
         await self.repo.remove_member(project_id, target_user_id)
-        # TODO: self.uow.add_event(MemberRemoved(...))
+
+        self.uow.add_event(
+            ProjectMemberRemovedEvent(
+                performed_by=actor.id,
+                project_id=project.id,
+                member_id=target_user_id,
+                member_name=member.name,
+            )
+        )
 
     async def change_role_member_by_actor(
         self, project_id: int, actor: User, member: User, new_role: RoleProject
@@ -434,5 +456,15 @@ class ProjectService:
         )
 
         updated = await self.repo.update_member_role(current, project_id, new_role)
-        # TODO: self.uow.add_event(MemberRoleChanged(...))
+        self.uow.add_event(
+            ProjectMemberUpdatedEvent(
+                performed_by=actor.id,
+                project_id=project_id,
+                member_id=member.id,
+                member_name=member.name,
+                after=new_role,
+                before=current.role,
+            )
+        )
+
         return updated
