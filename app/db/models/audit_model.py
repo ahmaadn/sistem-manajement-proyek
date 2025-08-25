@@ -80,3 +80,7 @@ class AuditEventType(StrEnum):
 
     # subtask
     SUBTASKS_DETACHED = "subtasks_detached"
+
+    # Assignment
+    TASK_ASSIGNED_ADDED = "task_assigned_added"
+    TASK_ASSIGNED_REMOVED = "task_assigned_removed"
