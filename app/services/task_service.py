@@ -4,9 +4,9 @@ from sqlalchemy.orm import selectinload
 
 from app.core.domain.events.task import (
     SubTasksDetachedFromSectionEvent,
-    TaskAssignedEvent,
     TaskCreatedEvent,
     TaskDeletedEvent,
+    TaskRenameEvent,
     TaskStatusChangedEvent,
     TaskUpdatedEvent,
 )
@@ -87,12 +87,18 @@ class TaskService:
         )
         self.uow.add_event(
             TaskCreatedEvent(
-                task_id=task.id, project_id=task.project_id, created_by=actor.id
+                task_id=task.id,
+                project_id=task.project_id,
+                created_by=actor.id,
+                item_type=task.resource_type,
+                task_name=task.name,
             )
         )
         return task
 
-    async def update_task(self, task_id: int, payload: TaskUpdate) -> Task:
+    async def update_task(
+        self, user_id: int, task_id: int, payload: TaskUpdate
+    ) -> Task:
         """Memperbarui tugas yang ada.
 
         Args:
@@ -109,12 +115,38 @@ class TaskService:
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
         updated = await self.repo.update(task, payload)
+
         self.uow.add_event(
-            TaskUpdatedEvent(task_id=updated.id, project_id=updated.project_id)
+            TaskUpdatedEvent(
+                task_id=updated.id, project_id=updated.project_id, updated_by=user_id
+            )
         )
+
+        if payload.name and payload.name != task.name:
+            self.uow.add_event(
+                TaskRenameEvent(
+                    task_id=updated.id,
+                    project_id=updated.project_id,
+                    updated_by=user_id,
+                    before=task.name,
+                    after=payload.name,
+                )
+            )
+
+        if payload.status and payload.status != task.status:
+            self.uow.add_event(
+                TaskStatusChangedEvent(
+                    user_id=user_id,
+                    task_id=updated.id,
+                    project_id=updated.project_id,
+                    old_status=task.status or "",
+                    new_status=payload.status,
+                )
+            )
+
         return updated
 
-    async def delete_task(self, task_id: int) -> None:
+    async def delete_task(self, user_id: int, task_id: int) -> None:
         """Menghapus tugas berdasarkan ID.
 
         Args:
@@ -131,6 +163,7 @@ class TaskService:
             detached = await self.repo.detach_all_subtasks_from_section(task.id)
             self.uow.add_event(
                 SubTasksDetachedFromSectionEvent(
+                    user_id=user_id,
                     section_task_id=task.id,
                     project_id=task.project_id,
                     detached_count=detached,
@@ -141,7 +174,9 @@ class TaskService:
 
         await self.repo.soft_delete(task)
         self.uow.add_event(
-            TaskDeletedEvent(task_id=task.id, project_id=task.project_id)
+            TaskDeletedEvent(
+                task_id=task.id, project_id=task.project_id, deleted_by=user_id
+            )
         )
 
     # Status change
@@ -172,12 +207,11 @@ class TaskService:
             actor_user_id=actor_user_id,
         )
 
-        # ensure_task_status_transition(task.status, new_status)
-
         old = getattr(task.status, "name", str(task.status))
         updated = await self.repo.update(task, {"status": new_status})
         self.uow.add_event(
             TaskStatusChangedEvent(
+                user_id=actor_user_id,
                 task_id=task.id,
                 project_id=task.project_id,
                 old_status=old,
@@ -210,12 +244,7 @@ class TaskService:
             project_member_user_ids=member_ids, target_user_id=user.id
         )
 
-        ta = await self.repo.assign_user(task, user.id)
-        self.uow.add_event(
-            TaskAssignedEvent(
-                task_id=task.id, project_id=task.project_id, user_id=ta.user_id
-            )
-        )
+        await self.repo.assign_user(task, user.id)
 
     async def validate_display_order(
         self, project_id: int, display_order: int | None

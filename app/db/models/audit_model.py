@@ -60,7 +60,7 @@ class AuditEventType(StrEnum):
     # Task
     TASK_CREATED = "task_created"
     TASK_UPDATED = "task_updated"
-    TASK_REMOVED = "task_removed"
+    TASK_DELETED = "task_deleted"
     TASK_STATUS_CHANGED = "task_status_changed"
     TASK_DUE_DATE_CHANGED = "task_due_date_changed"
     TASK_PRIORITY_CHANGED = "task_priority_changed"
@@ -77,3 +77,6 @@ class AuditEventType(StrEnum):
     PROJECT_MEMBER_ADDED = "project_member_added"
     PROJECT_MEMBER_UPDATED = "project_member_updated"
     PROJECT_MEMBER_REMOVED = "project_member_removed"
+
+    # subtask
+    SUBTASKS_DETACHED = "subtasks_detached"

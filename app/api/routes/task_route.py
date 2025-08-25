@@ -223,7 +223,7 @@ class _Task:
         await self._ensure_project_owner(task.project_id)
 
         async with self.uow:
-            await self.task_service.delete_task(task_id)
+            await self.task_service.delete_task(self.user.id, task_id)
             await self.uow.commit()
 
     @r.put(
@@ -256,7 +256,9 @@ class _Task:
         await self._ensure_project_owner(task.project_id)
 
         async with self.uow:
-            updated = await self.task_service.update_task(task_id, payload)
+            updated = await self.task_service.update_task(
+                self.user.id, task_id, payload
+            )
             await self.uow.commit()
         return updated
 
