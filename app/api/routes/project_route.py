@@ -4,9 +4,8 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.services import get_project_service
+from app.api.dependencies.services import get_project_service, get_task_service
 from app.api.dependencies.sessions import get_async_session
-from app.api.dependencies.task import get_task_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import (
     get_current_user,

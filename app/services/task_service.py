@@ -1,52 +1,301 @@
-from sqlalchemy import case, func, select
+from typing import TYPE_CHECKING, Any
 
-from app.db.models.project_member_model import ProjectMember
-from app.db.models.project_model import Project, StatusProject
-from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import StatusTask, Task
+from sqlalchemy.orm import selectinload
+
+from app.core.domain.events.assignee_task import (
+    TaskAssignedAddedEvent,
+    TaskAssignedRemovedEvent,
+)
+from app.core.domain.events.task import (
+    SubTasksDetachedFromSectionEvent,
+    TaskCreatedEvent,
+    TaskDeletedEvent,
+    TaskRenameEvent,
+    TaskStatusChangedEvent,
+    TaskUpdatedEvent,
+)
+from app.core.domain.policies.task import (
+    ensure_assignee_is_project_member,
+    ensure_only_assignee_can_change_status,
+)
+from app.db.models.task_model import ResourceType, StatusTask, Task
+from app.db.repositories.task_repository import InterfaceTaskRepository
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.user import User
-from app.services.base_service import GenericCRUDService
 from app.utils import exceptions
-from app.utils.common import ErrorCode
+
+if TYPE_CHECKING:
+    pass
 
 
-class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
-    model = Task
-    audit_entity_name = "task"
-    not_found_error_code = ErrorCode.TASK_NOT_FOUND
+class TaskService:
+    def __init__(self, uow: UnitOfWork, repo: InterfaceTaskRepository) -> None:
+        self.uow = uow
+        self.repo = repo
 
-    def _exception_not_found(self, **extra):
-        """
-        Membuat exception jika tugas tidak ditemukan.
-        """
-        return exceptions.TaskNotFoundError("Task not found")
-
-    async def next_display_order(self, project_id: int):
-        """Mengambil urutan tampilan tugas berikutnya.
+    async def get(
+        self, task_id: int, *, options: list[Any] | None = None
+    ) -> Task | None:
+        """Mendapatkan tugas berdasarkan ID.
 
         Args:
-            project_id (int): ID proyek yang terkait dengan tugas.
+            task_id (int): ID tugas yang akan diambil.
+            options (list[Any] | None, optional): Opsi tambahan untuk kueri.
+                Defaults to None.
 
         Returns:
-            int: Urutan tampilan tugas berikutnya.
+            Task | None: Tugas yang diminta, atau None jika tidak ditemukan.
         """
+        return await self.repo.get(task_id, options=options)
 
-        # Mengambil urutan tampilan tugas bedasarkan project_id
-        quary = await self.session.execute(
-            select(self.model)
-            .where(self.model.project_id == project_id)
-            .order_by(self.model.display_order.desc())
+    async def list(
+        self,
+        *,
+        filters: dict[str, Any] | None = None,
+        order_by: Any | None = None,
+        custom_query=None,
+    ) -> list[Task]:
+        """Mendapatkan daftar tugas.
+
+        Args:
+            filters (dict[str, Any] | None, optional): Filter untuk daftar tugas.
+                Defaults to None.
+            order_by (Any | None, optional): Urutan hasil. Defaults to None.
+            custom_query (_type_, optional): Kuery kustom untuk daftar tugas.
+                Defaults to None.
+
+        Returns:
+            list[Task]: Daftar tugas yang ditemukan.
+        """
+        return await self.repo.list(
+            filters=filters, order_by=order_by, custom_query=custom_query
         )
 
-        # Ambil tugas terakhir
-        last_task = quary.scalars().first()
-        if last_task is None:
-            return 10000
+    async def create_task(
+        self, payload: TaskCreate, *, parent_task_id: int | None, actor: User
+    ) -> Task:
+        """Membuat tugas baru.
 
-        return last_task.display_order + 10000
+        Args:
+            payload (TaskCreate): Data untuk tugas baru.
+            parent_task_id (int | None): ID tugas induk, jika ada.
+            actor (User): Pengguna yang membuat tugas.
 
-    async def validate_display_order(self, project_id: int, display_order: int):
+        Returns:
+            Task: Tugas yang telah dibuat.
+        """
+        payload.display_order = await self.repo.validate_display_order(
+            payload.project_id, payload.display_order
+        )
+        task = await self.repo.create(
+            payload,
+            extra_fields={"parent_id": parent_task_id, "created_by": actor.id},
+        )
+        self.uow.add_event(
+            TaskCreatedEvent(
+                task_id=task.id,
+                project_id=task.project_id,
+                created_by=actor.id,
+                item_type=task.resource_type,
+                task_name=task.name,
+            )
+        )
+        return task
+
+    async def update_task(
+        self, user_id: int, task_id: int, payload: TaskUpdate
+    ) -> Task:
+        """Memperbarui tugas yang ada.
+
+        Args:
+            task_id (int): ID tugas yang akan diperbarui.
+            payload (TaskUpdate): Data pembaruan untuk tugas.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+
+        Returns:
+            Task: Tugas yang telah diperbarui.
+        """
+        task = await self.repo.get(task_id)
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
+        updated = await self.repo.update(task, payload)
+
+        self.uow.add_event(
+            TaskUpdatedEvent(
+                task_id=updated.id, project_id=updated.project_id, updated_by=user_id
+            )
+        )
+
+        if payload.name and payload.name != task.name:
+            self.uow.add_event(
+                TaskRenameEvent(
+                    task_id=updated.id,
+                    project_id=updated.project_id,
+                    updated_by=user_id,
+                    before=task.name,
+                    after=payload.name,
+                )
+            )
+
+        if payload.status and payload.status != task.status:
+            self.uow.add_event(
+                TaskStatusChangedEvent(
+                    user_id=user_id,
+                    task_id=updated.id,
+                    project_id=updated.project_id,
+                    old_status=task.status or "",
+                    new_status=payload.status,
+                )
+            )
+
+        return updated
+
+    async def delete_task(self, user_id: int, task_id: int) -> None:
+        """Menghapus tugas berdasarkan ID.
+
+        Args:
+            task_id (int): ID tugas yang akan dihapus.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+        """
+        task = await self.repo.get(task_id, options=[selectinload(Task.sub_tasks)])
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
+
+        if task.resource_type == ResourceType.SECTION:
+            detached = await self.repo.detach_all_subtasks_from_section(task.id)
+            self.uow.add_event(
+                SubTasksDetachedFromSectionEvent(
+                    user_id=user_id,
+                    section_task_id=task.id,
+                    project_id=task.project_id,
+                    detached_count=detached,
+                )
+            )
+        else:
+            await self.repo.cascade_soft_delete_subtasks(task.id)
+
+        await self.repo.soft_delete(task)
+        self.uow.add_event(
+            TaskDeletedEvent(
+                task_id=task.id, project_id=task.project_id, deleted_by=user_id
+            )
+        )
+
+    # Status change
+    async def change_status(
+        self, task_id: int, *, new_status: StatusTask, actor_user_id: int
+    ) -> Task:
+        """Mengubah status tugas.
+
+        Args:
+            task_id (int): ID tugas yang akan diubah statusnya.
+            new_status (StatusTask): Status baru yang akan diterapkan.
+            actor_user_id (int): ID pengguna yang mencoba mengubah status tugas.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.ForbiddenError: Jika pengguna tidak memiliki izin untuk
+                mengubah status tugas.
+
+        Returns:
+            Task: Tugas yang telah diperbarui.
+        """
+        task = await self.repo.get_task_with_assignees(task_id)
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
+
+        ensure_only_assignee_can_change_status(
+            task_assignee_user_ids=[a.user_id for a in task.assignees],
+            actor_user_id=actor_user_id,
+        )
+
+        old = getattr(task.status, "name", str(task.status))
+        updated = await self.repo.update(task, {"status": new_status})
+        self.uow.add_event(
+            TaskStatusChangedEvent(
+                user_id=actor_user_id,
+                task_id=task.id,
+                project_id=task.project_id,
+                old_status=old,
+                new_status=getattr(new_status, "name", str(new_status)),
+            )
+        )
+        return updated
+
+    async def assign_user(self, actor_id, task_id: int, *, user: User) -> None:
+        """Menugaskan pengguna ke tugas tertentu.
+
+        Args:
+            task_id (int): ID tugas yang akan ditugaskan.
+            user_info (User): Informasi pengguna yang akan ditugaskan.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.UserNotInProjectError: Jika pengguna tidak terdaftar di
+                proyek.
+
+        Returns:
+            TaskAssignee: Objek penugasan tugas yang berhasil dibuat.
+        """
+        task = await self.repo.get(task_id)
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
+
+        member_ids = await self.repo.get_project_member_user_ids(task.project_id)
+        ensure_assignee_is_project_member(
+            project_member_user_ids=member_ids, target_user_id=user.id
+        )
+
+        await self.repo.assign_user(task, user.id)
+        self.uow.add_event(
+            TaskAssignedAddedEvent(
+                task_id=task.id,
+                project_id=task.project_id,
+                user_id=actor_id,
+                assignee_id=user.id,
+                assignee_name=user.name,
+            )
+        )
+
+    async def unassign_user(self, actor_id: int, user: User, task: Task) -> None:
+        """Menghapus penugasan pengguna dari tugas tertentu.
+
+        Args:
+            actor_id (int): ID pengguna yang mencoba menghapus penugasan.
+            user (User): Pengguna yang akan dihapus penugasannya.
+            task (Task): Tugas yang akan dihapus penugasannya.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.UserNotInProjectError: Jika pengguna tidak terdaftar di
+                proyek.
+        """
+
+        member_ids = await self.repo.get_project_member_user_ids(task.project_id)
+        ensure_assignee_is_project_member(
+            project_member_user_ids=member_ids, target_user_id=user.id
+        )
+
+        await self.repo.unassign_user(user.id, task.id)
+
+        self.uow.add_event(
+            TaskAssignedRemovedEvent(
+                task_id=task.id,
+                project_id=task.project_id,
+                user_id=actor_id,
+                assignee_id=user.id,
+                assignee_name=user.name,
+            )
+        )
+
+    async def validate_display_order(
+        self, project_id: int, display_order: int | None
+    ) -> int:
         """Validasi urutan tampilan tugas.
 
         Args:
@@ -56,61 +305,7 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
         Raises:
             ValueError: Jika urutan tampilan tidak valid.
         """
-        if display_order is None or display_order <= 0:
-            display_order = await self.next_display_order(project_id)
-
-        # Cek apakah ada tugas lain dengan urutan tampilan yang sama
-        existing_task = await self.session.execute(
-            select(self.model)
-            .where(self.model.project_id == project_id)
-            .where(self.model.display_order == display_order)
-        )
-
-        if existing_task.scalars().first() is not None:
-            display_order = await self.next_display_order(project_id)
-
-        return display_order
-
-    async def assign_user(self, task: Task, user_info: User) -> TaskAssignee:
-        """Menugaskan pengguna ke tugas tertentu.
-
-        Args:
-            task_id (int): ID tugas yang akan ditugaskan.
-            user_info (User): Informasi pengguna yang akan ditugaskan.
-
-        Raises:
-            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
-            exceptions.UserNotInProjectError: Jika pengguna tidak terdaftar di proyek.
-
-        Returns:
-            TaskAssignee: Objek penugasan tugas yang berhasil dibuat.
-        """
-
-        # cek user telah terdaftar
-        assign_task = await self.session.get(TaskAssignee, (task.id, user_info.id))
-        if assign_task:
-            return assign_task
-
-        # Cek user ada di project members
-        project_members = await self.session.execute(
-            select(ProjectMember).where(
-                ProjectMember.project_id == task.project_id,
-                ProjectMember.user_id == user_info.id,
-            )
-        )
-
-        # Cek apakah user terdaftar di project members
-        if user_info.id not in [
-            member.user_id for member in project_members.scalars()
-        ]:
-            raise exceptions.UserNotInProjectError
-
-        assign_task = TaskAssignee(task_id=task.id, user_id=user_info.id)
-        self.session.add(assign_task)
-
-        await self.session.commit()
-        await self.session.refresh(assign_task)
-        return assign_task
+        return await self.repo.validate_display_order(project_id, display_order)
 
     async def get_user_task_statistics(self, user_id: int) -> dict:
         """Mengambil statistik tugas untuk pengguna tertentu.
@@ -121,50 +316,5 @@ class TaskService(GenericCRUDService[Task, TaskCreate, TaskUpdate]):
         Returns:
             dict: Statistik tugas untuk pengguna tertentu.
         """
-
-        task_stats_stmt = (
-            select(
-                func.count().label("total_task"),
-                func.sum(
-                    case((Task.status == StatusTask.IN_PROGRESS, 1), else_=0)
-                ).label("task_in_progress"),
-                func.sum(
-                    case((Task.status == StatusTask.COMPLETED, 1), else_=0)
-                ).label("task_completed"),
-                func.sum(
-                    case(
-                        (Task.status == StatusTask.CANCELLED, 1),
-                        else_=0,
-                    )
-                ).label("task_cancelled"),
-            )
-            .join(TaskAssignee, TaskAssignee.task_id == Task.id)
-            .join(Project, Project.id == Task.project_id)
-            .where(
-                TaskAssignee.user_id == user_id,
-                # Task tidak termasuk delete
-                Task.deleted_at.is_(None),
-                # Task tidak boleh pending
-                Task.status.not_in([StatusTask.PENDING]),
-                # hanya proyek yang aktif atau selesai
-                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
-                # tidak termasuk proyek yang dihapus
-                Project.deleted_at.is_(None),
-            )
-        )
-        task_stats_res = await self.session.execute(task_stats_stmt)
-        ts = task_stats_res.first()
-        if not ts:
-            return {
-                "total_task": 0,
-                "task_in_progress": 0,
-                "task_completed": 0,
-                "task_cancelled": 0,
-            }
-
-        return {
-            "total_task": ts.total_task or 0,
-            "task_in_progress": ts.task_in_progress or 0,
-            "task_completed": ts.task_completed or 0,
-            "task_cancelled": ts.task_cancelled or 0,
-        }
+        return await self.repo.get_user_task_statistics(user_id)
+        return await self.repo.get_user_task_statistics(user_id)
