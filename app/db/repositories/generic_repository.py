@@ -4,7 +4,6 @@ import datetime
 from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Generic, Optional, Sequence, Type, TypeVar
 
-from fastapi import HTTPException, status
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -153,10 +152,6 @@ class SQLAlchemyGenericRepository(
             options (list[Any] | None, optional): Opsi tambahan untuk query.
                 Defaults to None.
 
-        Raises:
-            self._exception_not_found: Jika objek tidak ditemukan.
-            self._exception_not_found: Jika objek telah dihapus (soft delete).
-
         Returns:
             Optional[ModelT]: Objek yang ditemukan atau None.
         """
@@ -183,10 +178,6 @@ class SQLAlchemyGenericRepository(
             order_by (Any | None, optional): Ekspresi order_by untuk query.
             custom_query (Callable[[Select], Select] | None, optional): Hook untuk
                 memodifikasi stmt.
-
-        Raises:
-            self._exception_not_found: Jika objek tidak ditemukan.
-            self._exception_not_found: Jika objek telah dihapus (soft delete).
         """
         # Bangun stmt agar parameter di atas dapat dipakai
         stmt = select(self.model)
@@ -410,8 +401,6 @@ class SQLAlchemyGenericRepository(
 
         Raises:
             ValueError: Jika obj_id dan obj tidak ada, harus ada minimal satu.
-            self._exception_not_found: Jika objek tidak ditemukan.
-            self._exception_not_found: Jika objek telah dihapus (soft delete).
         """
 
         if obj_id is None and obj is None:
@@ -450,8 +439,6 @@ class SQLAlchemyGenericRepository(
 
         Raises:
             ValueError: Jika obj_id dan obj tidak ada, harus ada minimal satu.
-            self._exception_not_found: Jika objek tidak ditemukan.
-            self._exception_not_found: Jika objek telah dihapus (soft delete).
         """
 
         if obj_id is None and obj is None:
@@ -488,16 +475,6 @@ class SQLAlchemyGenericRepository(
         if hasattr(instance, self.soft_delete_field):
             return getattr(instance, self.soft_delete_field) is not None
         return False
-
-    def _exception_not_found(self, **extra) -> Exception:
-        return HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error_code": self.not_found_error_code,
-                "message": "Item tidak ditemukan.",
-                **extra,
-            },
-        )
 
     # ============ Hook ============
 
