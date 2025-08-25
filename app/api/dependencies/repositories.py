@@ -2,7 +2,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.sessions import get_async_session
-from app.db.repositories.project_reepository import ProjectSQLAlchemyRepository
+from app.db.repositories.project_repository import ProjectSQLAlchemyRepository
 from app.db.repositories.user_repository import UserSQLAlchemyRepository
 
 

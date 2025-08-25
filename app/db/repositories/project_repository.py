@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import abstractmethod
 from typing import Any, Sequence
 
 from sqlalchemy import Row, case, exists, func, select
@@ -6,16 +6,20 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
-from app.db.repositories.generic_repository import GenericRepository
+from app.db.repositories.generic_repository import (
+    CreateSchemaT,
+    InterfaceRepository,
+    ModelT,
+    SQLAlchemyGenericRepository,
+    UpdateSchemaT,
+)
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
-class ProjectRepository(
-    GenericRepository[Project, ProjectCreate, ProjectUpdate], metaclass=ABCMeta
+class InterfaceProjectRepository(
+    InterfaceRepository[ModelT, CreateSchemaT, UpdateSchemaT]
 ):
     """Repository untuk entitas Project."""
-
-    model = Project
 
     @abstractmethod
     async def get_member(
@@ -42,7 +46,7 @@ class ProjectRepository(
     @abstractmethod
     async def get_project_by_owner(
         self, user_id: int, project_id: int
-    ) -> Project | None:
+    ) -> ModelT | None:
         """Mendapatkan proyek milik pengguna tertentu."""
 
     @abstractmethod
@@ -70,12 +74,17 @@ class ProjectRepository(
     @abstractmethod
     async def get_project_detail_for_user(
         self, user_id: int, is_admin_or_pm: bool, project_id: int
-    ) -> Project | None:
+    ) -> ModelT | None:
         """Detail proyek untuk pengguna."""
 
 
-class ProjectSQLAlchemyRepository(ProjectRepository):
+class ProjectSQLAlchemyRepository(
+    InterfaceProjectRepository[Project, ProjectCreate, ProjectUpdate],
+    SQLAlchemyGenericRepository[Project, ProjectCreate, ProjectUpdate],
+):
     """Implementasi SQLAlchemy untuk ProjectRepository."""
+
+    model = Project
 
     async def get_member(
         self, project_id: int, member_id: int

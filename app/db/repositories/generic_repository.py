@@ -1,25 +1,123 @@
 from __future__ import annotations
 
 import datetime
-from abc import ABCMeta
+from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Generic, Optional, Sequence, Type, TypeVar
 
 from fastapi import HTTPException, status
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base as BaseModel
 from app.schemas.base import BaseSchema
 from app.utils.common import ErrorCode
 from app.utils.pagination import paginate
 
-ModelT = TypeVar("ModelT", bound=BaseModel)
+ModelT = TypeVar("ModelT")
 CreateSchemaT = TypeVar("CreateSchemaT", bound=BaseSchema)
 UpdateSchemaT = TypeVar("UpdateSchemaT", bound=BaseSchema)
 
 
-class GenericRepository(
-    Generic[ModelT, CreateSchemaT, UpdateSchemaT], metaclass=ABCMeta
+class InterfaceRepository(ABC, Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
+    """Abstract contract that mirrors GenericSQLAlchemyRepository's API."""
+
+    model: Type[ModelT]
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    @abstractmethod
+    async def get_by_id(
+        self,
+        obj_id: Any,
+        *,
+        allow_deleted: bool = False,
+        return_none_if_not_found: bool = False,
+        options: list[Any] | None = None,
+    ) -> Optional[ModelT]: ...
+
+    @abstractmethod
+    async def get(
+        self,
+        *,
+        allow_deleted: bool = False,
+        return_none_if_not_found: bool = True,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> Optional[ModelT]: ...
+
+    @abstractmethod
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        include_deleted: bool = False,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> Sequence[ModelT]: ...
+
+    @abstractmethod
+    async def pagination(
+        self,
+        *,
+        page: int = 1,
+        per_page: int = 10,
+        include_deleted: bool = False,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def create(
+        self,
+        obj_in: CreateSchemaT,
+        *,
+        extra_fields: dict[str, Any] | None = None,
+    ) -> ModelT: ...
+
+    @abstractmethod
+    async def update(
+        self,
+        obj: ModelT,
+        update_data: UpdateSchemaT | dict[str, Any],
+    ) -> ModelT: ...
+
+    @abstractmethod
+    async def soft_delete(
+        self, obj_id: Any | None = None, obj: ModelT | None = None
+    ) -> None: ...
+
+    @abstractmethod
+    async def hard_delete(
+        self, obj_id: Any | None = None, obj: ModelT | None = None
+    ) -> None: ...
+
+    # Optional hooks with no-op defaults
+    async def on_created(self, instance: ModelT) -> None:
+        return None
+
+    async def on_updated(
+        self, instance: ModelT, change: dict[str, Any], **kwargs
+    ) -> None:
+        return None
+
+    async def on_soft_deleted(self, instance: ModelT, **kwargs) -> None:
+        return None
+
+    async def on_hard_deleted(self, instance: ModelT, **kwargs) -> None:
+        return None
+
+
+class SQLAlchemyGenericRepository(
+    InterfaceRepository[ModelT, CreateSchemaT, UpdateSchemaT],
+    Generic[ModelT, CreateSchemaT, UpdateSchemaT],
+    metaclass=ABCMeta,
 ):
     """
     Base generic repository
