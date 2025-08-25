@@ -328,7 +328,7 @@ class _Task:
         **Akses** : Project Manager (Owner)
         """
 
-        user = await user_service.get(user_id)
+        user = await user_service.get_user(user_id)
         assert user is not None
 
         task = await self.task_service.get(task_id)

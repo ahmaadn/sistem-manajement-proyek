@@ -64,7 +64,7 @@ class _Project:
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
         # Ambil info user yang akan ditambahkan (tanpa logika bisnis di router)
-        member_info = await self.user_service.get(user_id=payload.user_id)
+        member_info = await self.user_service.get_user(user_id=payload.user_id)
         if not member_info:
             raise exceptions.UserNotFoundError
 
@@ -105,7 +105,7 @@ class _Project:
 
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
-        member_info = await self.user_service.get(user_id)
+        member_info = await self.user_service.get_user(user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 
@@ -142,7 +142,7 @@ class _Project:
 
         **Akses** : Project Manajer (Owner), Admin (Owner)
         """
-        member_info = await self.user_service.get(user_id)
+        member_info = await self.user_service.get_user(user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 

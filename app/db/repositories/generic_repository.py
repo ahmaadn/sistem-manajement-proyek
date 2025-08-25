@@ -30,8 +30,6 @@ class InterfaceRepository(ABC, Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         self,
         obj_id: Any,
         *,
-        allow_deleted: bool = False,
-        return_none_if_not_found: bool = False,
         options: list[Any] | None = None,
     ) -> Optional[ModelT]: ...
 
@@ -40,7 +38,6 @@ class InterfaceRepository(ABC, Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         self,
         *,
         allow_deleted: bool = False,
-        return_none_if_not_found: bool = True,
         options: list[Any] | None = None,
         condition: list[Any] | None = None,
         order_by: Any | None = None,
@@ -143,8 +140,6 @@ class SQLAlchemyGenericRepository(
         self,
         obj_id: Any,
         *,
-        allow_deleted: bool = False,
-        return_none_if_not_found: bool = False,
         options: list[Any] | None = None,
     ) -> Optional[ModelT]:
         """Mendapatkan objek berdasarkan ID.
@@ -165,27 +160,12 @@ class SQLAlchemyGenericRepository(
         Returns:
             Optional[ModelT]: Objek yang ditemukan atau None.
         """
-        instance = await self.session.get(self.model, obj_id, options=options)
-
-        # Jika objek tidak ditemukan
-        if instance is None:
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        # objek di temukan tetapi telah dihapus (soft delete)
-        if (not allow_deleted) and self._is_deleted(instance):
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        return instance
+        return await self.session.get(self.model, obj_id, options=options)
 
     async def get(
         self,
         *,
         allow_deleted: bool = False,
-        return_none_if_not_found: bool = True,
         options: list[Any] | None = None,
         condition: list[Any] | None = None,
         order_by: Any | None = None,
@@ -196,8 +176,6 @@ class SQLAlchemyGenericRepository(
         Args:
             allow_deleted (bool, optional): Mengizinkan pengambilan objek yang
                 dihapus (soft delete).
-            return_none_if_not_found (bool, optional): Jika True, kembalikan None
-                alih-alih raise.
             options (list[Any] | None, optional): SQLAlchemy loader options
                 (selectinload, joinedload, dll).
             condition (list[Any] | None, optional): Daftar ekspresi SQLAlchemy
@@ -220,28 +198,19 @@ class SQLAlchemyGenericRepository(
         if condition:
             stmt = stmt.where(*condition)
 
+        # Tambahkan filter soft-delete pada level query
+        if (not allow_deleted) and hasattr(self.model, self.soft_delete_field):
+            stmt = stmt.where(getattr(self.model, self.soft_delete_field).is_(None))
+
         if order_by is not None:
             stmt = stmt.order_by(order_by)
 
         if custom_query is not None:
             stmt = custom_query(stmt)
 
-        res = await self.session.execute(stmt)
-        instance = res.scalars().first()
-
         # Jika objek tidak ditemukan
-        if instance is None:
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        # Jika objek ditemukan namun soft-deleted dan tidak diizinkan
-        if (not allow_deleted) and self._is_deleted(instance):
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        return instance
+        res = await self.session.execute(stmt)
+        return res.scalars().first()
 
     async def list(
         self,
@@ -451,8 +420,10 @@ class SQLAlchemyGenericRepository(
         if obj:
             instance = obj
         else:
-            instance = await self.get_by_id(obj_id, return_none_if_not_found=False)
-            assert instance is not None  # untuk type checker
+            instance = await self.get_by_id(obj_id)
+
+        if instance is None:
+            return
 
         if hasattr(instance, self.soft_delete_field):
             setattr(
@@ -489,8 +460,10 @@ class SQLAlchemyGenericRepository(
         if obj:
             instance = obj
         else:
-            instance = await self.get_by_id(obj_id, return_none_if_not_found=False)
-            assert instance is not None  # untuk type checker
+            instance = await self.get_by_id(obj_id)
+
+        if instance is None:
+            return
 
         await self.session.delete(instance)
         await self.on_hard_deleted(instance)  # Panggil hook on_hard_deleted

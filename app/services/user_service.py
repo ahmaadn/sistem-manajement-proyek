@@ -76,7 +76,7 @@ class UserService:
             )
         return user_role
 
-    async def get(self, user_id: int) -> User | None:
+    async def get_user(self, user_id: int) -> User:
         """Mendapatkan informasi pengguna berdasarkan ID.
 
         Args:
@@ -116,8 +116,7 @@ class UserService:
             raise exceptions.UserNotFoundError("Pengguna tidak ditemukan")
 
         if user_data is None:
-            user_data = await self.get(user_id)  # type: ignore
-            assert user_data is not None
+            user_data = await self.get_user(user_id)  # type: ignore
 
         if user_id is None:
             user_id = user_data.id

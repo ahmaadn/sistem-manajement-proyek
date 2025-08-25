@@ -137,11 +137,10 @@ class ProjectService:
             exceptions.MemberNotFoundError: Jika anggota tidak ditemukan.
             exceptions.CannotRemoveMemberError: Jika anggota adalah pemilik proyek.
         """
-        project = await self.repo.get_by_id(
-            project_id, return_none_if_not_found=True
-        )
+        project = await self.repo.get_by_id(project_id)
         if not project:
-            raise exceptions.MemberNotFoundError
+            raise exceptions.ProjectNotFoundError
+
         if project.created_by == user_id:
             raise exceptions.CannotRemoveMemberError(
                 "Tidak dapat menghapus owner dari proyek"

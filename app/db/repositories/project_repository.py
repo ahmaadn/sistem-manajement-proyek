@@ -8,7 +8,6 @@ from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.repositories.generic_repository import (
     InterfaceRepository,
-    ModelT,
     SQLAlchemyGenericRepository,
 )
 from app.schemas.project import ProjectCreate, ProjectUpdate
@@ -44,7 +43,7 @@ class InterfaceProjectRepository(
     @abstractmethod
     async def get_project_by_owner(
         self, user_id: int, project_id: int
-    ) -> ModelT | None:
+    ) -> Project | None:
         """Mendapatkan proyek milik pengguna tertentu."""
 
     @abstractmethod
@@ -72,7 +71,7 @@ class InterfaceProjectRepository(
     @abstractmethod
     async def get_project_detail_for_user(
         self, user_id: int, is_admin_or_pm: bool, project_id: int
-    ) -> ModelT | None:
+    ) -> Project | None:
         """Detail proyek untuk pengguna."""
 
 
@@ -151,7 +150,7 @@ class ProjectSQLAlchemyRepository(
                 select(1)
                 .select_from(ProjectMember)
                 .where(
-                    ProjectMember.project_id == project_id,
+                    ProjectMember.project_id == Project.id,
                     ProjectMember.user_id == user_id,
                     ProjectMember.role == RoleProject.OWNER,
                 )
