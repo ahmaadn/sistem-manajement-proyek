@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
-from sqlalchemy import Select, case, func, select
+from sqlalchemy import Select, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -135,6 +135,12 @@ class InterfaceTaskRepository(Protocol):
         - task_cancelled
         Hanya menghitung task dan project yang belum dihapus, serta status
         project/task tertentu.
+        """
+        ...
+
+    async def unassign_user(self, user_id: int, task_id: int) -> None:
+        """
+        Menghapus penugasan user dari sebuah task.
         """
         ...
 
@@ -315,3 +321,10 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             "task_completed": row.task_completed or 0,
             "task_cancelled": row.task_cancelled or 0,
         }
+
+    async def unassign_user(self, user_id: int, task_id: int) -> None:
+        stmt = delete(TaskAssignee).where(
+            TaskAssignee.user_id == user_id, TaskAssignee.task_id == task_id
+        )
+        await self.session.execute(stmt)
+        await self.session.flush()

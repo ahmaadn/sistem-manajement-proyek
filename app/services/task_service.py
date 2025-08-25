@@ -1,7 +1,11 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import selectinload
 
+from app.core.domain.events.assignee_task import (
+    TaskAssignedAddedEvent,
+    TaskAssignedRemovedEvent,
+)
 from app.core.domain.events.task import (
     SubTasksDetachedFromSectionEvent,
     TaskCreatedEvent,
@@ -20,6 +24,9 @@ from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.user import User
 from app.utils import exceptions
+
+if TYPE_CHECKING:
+    pass
 
 
 class TaskService:
@@ -220,7 +227,7 @@ class TaskService:
         )
         return updated
 
-    async def assign_user(self, task_id: int, *, user: User) -> None:
+    async def assign_user(self, actor_id, task_id: int, *, user: User) -> None:
         """Menugaskan pengguna ke tugas tertentu.
 
         Args:
@@ -245,6 +252,46 @@ class TaskService:
         )
 
         await self.repo.assign_user(task, user.id)
+        self.uow.add_event(
+            TaskAssignedAddedEvent(
+                task_id=task.id,
+                project_id=task.project_id,
+                user_id=actor_id,
+                assignee_id=user.id,
+                assignee_name=user.name,
+            )
+        )
+
+    async def unassign_user(self, actor_id: int, user: User, task: Task) -> None:
+        """Menghapus penugasan pengguna dari tugas tertentu.
+
+        Args:
+            actor_id (int): ID pengguna yang mencoba menghapus penugasan.
+            user (User): Pengguna yang akan dihapus penugasannya.
+            task (Task): Tugas yang akan dihapus penugasannya.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.UserNotInProjectError: Jika pengguna tidak terdaftar di
+                proyek.
+        """
+
+        member_ids = await self.repo.get_project_member_user_ids(task.project_id)
+        ensure_assignee_is_project_member(
+            project_member_user_ids=member_ids, target_user_id=user.id
+        )
+
+        await self.repo.unassign_user(user.id, task.id)
+
+        self.uow.add_event(
+            TaskAssignedRemovedEvent(
+                task_id=task.id,
+                project_id=task.project_id,
+                user_id=actor_id,
+                assignee_id=user.id,
+                assignee_name=user.name,
+            )
+        )
 
     async def validate_display_order(
         self, project_id: int, display_order: int | None

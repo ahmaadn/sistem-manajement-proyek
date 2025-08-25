@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies.services import get_project_service, get_task_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.uow import get_uow
-from app.api.dependencies.user import get_current_user, get_user_pm, get_user_service
+from app.api.dependencies.user import get_current_user, get_user_pm
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.task_model import StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
@@ -22,7 +22,6 @@ from app.schemas.task import (
 from app.schemas.user import User
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
-from app.services.user_service import UserService
 from app.utils import exceptions
 
 r = router = APIRouter(tags=["Task"])
@@ -307,26 +306,3 @@ class _Task:
             )
             await self.uow.commit()
         return updated
-
-    @r.post("/tasks/{task_id}/assign", status_code=status.HTTP_201_CREATED)
-    async def assign_task(
-        self,
-        task_id: int,
-        user_id: int = Body(..., embed=True),
-        user_service: UserService = Depends(get_user_service),
-    ) -> NoneType:
-        """
-        Menugaskan pengguna untuk tugas tertentu.
-
-        **Akses** : Project Manager (Owner)
-        """
-
-        user = await user_service.get_user(user_id)
-
-        task = await self.task_service.get(task_id)
-        assert task is not None
-        await self._ensure_project_owner(task.project_id)
-
-        async with self.uow:
-            await self.task_service.assign_user(task_id, user=user)
-            await self.uow.commit()
