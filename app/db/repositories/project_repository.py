@@ -7,17 +7,15 @@ from sqlalchemy.orm import selectinload
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.repositories.generic_repository import (
-    CreateSchemaT,
     InterfaceRepository,
     ModelT,
     SQLAlchemyGenericRepository,
-    UpdateSchemaT,
 )
 from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
 class InterfaceProjectRepository(
-    InterfaceRepository[ModelT, CreateSchemaT, UpdateSchemaT]
+    InterfaceRepository[Project, ProjectCreate, ProjectUpdate]
 ):
     """Repository untuk entitas Project."""
 
@@ -79,7 +77,7 @@ class InterfaceProjectRepository(
 
 
 class ProjectSQLAlchemyRepository(
-    InterfaceProjectRepository[Project, ProjectCreate, ProjectUpdate],
+    InterfaceProjectRepository,
     SQLAlchemyGenericRepository[Project, ProjectCreate, ProjectUpdate],
 ):
     """Implementasi SQLAlchemy untuk ProjectRepository."""
