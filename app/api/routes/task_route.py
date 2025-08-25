@@ -5,12 +5,13 @@ from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies.services import get_project_service
+from app.api.dependencies.services import get_project_service, get_task_service
 from app.api.dependencies.sessions import get_async_session
-from app.api.dependencies.task import get_task_service
+from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm, get_user_service
 from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.task_model import ResourceType, StatusTask, Task
+from app.db.models.task_model import StatusTask, Task
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
     SimpleTaskResponse,
     SubTaskResponse,
@@ -33,6 +34,7 @@ class _Task:
     task_service: TaskService = Depends(get_task_service)
     project_service: ProjectService = Depends(get_project_service)
     session: AsyncSession = Depends(get_async_session)
+    uow: UnitOfWork = Depends(get_uow)
 
     # Helper: pastikan user adalah member project
     async def _ensure_project_member(self, project_id: int) -> ProjectMember:
@@ -67,6 +69,7 @@ class _Task:
         Mendapatkan daftar tugas untuk proyek tertentu.
         - Hanya user yang terdaftar sebagai anggota proyek yang dapat mengakses
             tugas.
+        - Project yang di delete masih bisa lihat task
 
         **Akses** : Anggota Proyek (Member, Project Manager, Admin)
         """
@@ -100,6 +103,8 @@ class _Task:
     async def get_subtasks(self, project_id: int, task_id: int):
         """
         Mendapatkan daftar sub-tugas untuk tugas tertentu.
+                - Masih bisa menambahkan task walaupun project telah di delete
+
 
         **Akses** : Semua Anggota Project
         """
@@ -139,25 +144,21 @@ class _Task:
         """
         Membuat tugas baru untuk proyek tertentu.
         - Akses hanya bisa dilakukan oleh project manager (Owner).
+        - Masih bisa menambahkan task walaupun project telah di delete
 
         **Akses** : Project Manager (Owner)
         """
 
-        # pastikan yang akses router adalah project manajer (Owner)
+        # pastikan Owner
         await self._ensure_project_owner(payload.project_id)
 
-        # handle display order None atau 0
-        payload.display_order = await self.task_service.validate_display_order(
-            payload.project_id, payload.display_order
-        )
-
-        return await self.task_service.create(
-            payload,
-            extra_fields={
-                "parent_id": parent_task_id,
-                "created_by": self.user.id,
-            },
-        )
+        # display_order handled in service
+        async with self.uow:
+            task = await self.task_service.create_task(
+                payload, parent_task_id=parent_task_id, actor=self.user
+            )
+            await self.uow.commit()
+        return task
 
     @r.get(
         "/tasks/{task_id}",
@@ -215,31 +216,15 @@ class _Task:
         **Akses** : Project Manager (Owner)
         """
 
-        # Get task
         task = await self.task_service.get(
             task_id, options=[selectinload(Task.sub_tasks)]
         )
-        assert task is not None  # Sudah di handle di get
-
-        # pastikan yang akses router adalah project manajer (Owner)
+        assert task is not None
         await self._ensure_project_owner(task.project_id)
 
-        # Delete task
-        await self.task_service.soft_delete(task_id)
-
-        if task.resource_type == ResourceType.SECTION:
-            tasks = []
-            for sub_task in task.sub_tasks:
-                sub_task.parent_id = None
-                tasks.append(sub_task)
-
-            self.session.add_all(tasks)
-            await self.session.commit()
-        else:
-            # TODO: Implement logic for non-section tasks
-            # hapus semua task berkaitan
-            for sub_task in task.sub_tasks:
-                await self.task_service.soft_delete(sub_task.id)
+        async with self.uow:
+            await self.task_service.delete_task(task_id)
+            await self.uow.commit()
 
     @r.put(
         "/tasks/{task_id}",
@@ -264,14 +249,16 @@ class _Task:
         **Akses** : Project Manager (Owner)
         """
 
-        # Mendapatkan task
         task = await self.task_service.get(task_id)
-        assert task is not None
+        if task is None:
+            raise exceptions.TaskNotFoundError
 
-        # Pastikan user adalah pemilik proyek
         await self._ensure_project_owner(task.project_id)
 
-        return await self.task_service.update(task, payload)
+        async with self.uow:
+            updated = await self.task_service.update_task(task_id, payload)
+            await self.uow.commit()
+        return updated
 
     @r.patch(
         "/tasks/{task_id}/status",
@@ -307,13 +294,17 @@ class _Task:
         task = await self.task_service.get(
             task_id, options=[selectinload(Task.assignees)]
         )
-        assert task is not None
+        if task is None:
+            raise exceptions.TaskNotFoundError
 
-        # Hanya user yang ditugaskan (assignee) yang boleh mengubah status
-        if not any(ass.user_id == self.user.id for ass in task.assignees):
-            raise exceptions.ForbiddenError
+        await self._ensure_project_member(task.project_id)
 
-        return await self.task_service.update(task, {"status": status})
+        async with self.uow:
+            updated = await self.task_service.change_status(
+                task_id, new_status=status, actor_user_id=self.user.id
+            )
+            await self.uow.commit()
+        return updated
 
     @r.post("/tasks/{task_id}/assign", status_code=status.HTTP_201_CREATED)
     async def assign_task(
@@ -329,12 +320,11 @@ class _Task:
         """
 
         user = await user_service.get_user(user_id)
-        assert user is not None
 
         task = await self.task_service.get(task_id)
         assert task is not None
-
-        # Pastikan user adalah pemilik proyek
         await self._ensure_project_owner(task.project_id)
 
-        await self.task_service.assign_user(task, user)
+        async with self.uow:
+            await self.task_service.assign_user(task_id, user=user)
+            await self.uow.commit()
