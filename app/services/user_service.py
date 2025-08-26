@@ -1,9 +1,14 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from app.core.domain.events.user import UserRoleAssignedEvent
+from app.core.domain.policies.user_role import (
+    ensure_admin_not_change_own_role,
+    ensure_not_demote_last_admin,
+    map_employee_role_to_app_role,
+)
 from app.db.models.role_model import Role, UserRole
+from app.db.repositories.user_repository import UserRepository
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.user import PegawaiInfo, ProjectSummary, User, UserDetail
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
@@ -15,11 +20,15 @@ if TYPE_CHECKING:
 
 class UserService:
     def __init__(
-        self, session: AsyncSession, pegawai_service: PegawaiService
+        self,
+        *,
+        pegawai_service: PegawaiService,
+        uow: UnitOfWork,
+        repo: UserRepository,
     ) -> None:
-        self.session = session
-
         self.pegawai_service = pegawai_service
+        self.uow = uow
+        self.repo = repo
 
     async def get_user_role(self, user_id: int) -> UserRole | None:
         """Mendapatkan role pengguna berdasarkan ID.
@@ -30,37 +39,42 @@ class UserService:
         Returns:
             UserRole | None: Role pengguna yang ditemukan atau None jika tidak ada.
         """
-        statement = select(UserRole).where(UserRole.user_id == user_id)
-        result = await self.session.execute(statement)
-        return result.scalar_one_or_none()
+        return await self.repo.get_user_role(user_id)
 
-    async def assign_role_to_user(self, user_id: int, user: PegawaiInfo) -> UserRole:
+    async def assign_role_to_user(
+        self, user_id: int, user: PegawaiInfo, actor_id: int | None = None
+    ) -> UserRole:
         """Menetapkan peran kepada pengguna.
 
         Args:
             user_id (int): ID pengguna yang akan ditetapkan perannya.
-            user (PegawaiInfo): Informasi pegawai yang akan digunakan untuk menetapkan peran.
+            user (PegawaiInfo): Informasi pegawai yang akan digunakan untuk
+                menetapkan peran.
 
         Returns:
             UserRole: Objek UserRole yang berhasil dibuat atau diperbarui.
         """
-
         # dapatkan role user
         user_role = await self.get_user_role(user_id)
-
-        # Jika user sudah memiliki role, kembalikan payload
         if user_role:
             return user_role
 
-        # cast role jika employee_role admin maka dia akan manjadi admin
-        role = self.mapping_role.get(user.employee_role, Role.TEAM_MEMBER)
+        role = map_employee_role_to_app_role(user.employee_role)
+        user_role = await self.repo.create_user_role(user_id, role)
 
-        user_role = UserRole(user_id=user_id, role=role)
-        self.session.add(user_role)
-        await self.session.commit()
+        # domain event
+        if self.uow:
+            self.uow.add_event(
+                UserRoleAssignedEvent(
+                    performed_by=actor_id,
+                    assignee_id=user_id,
+                    assignee_name=user.name,
+                    assignee_role=getattr(role, "name", str(role)),
+                )
+            )
         return user_role
 
-    async def get(self, user_id: int) -> User | None:
+    async def get_user(self, user_id: int) -> User:
         """Mendapatkan informasi pengguna berdasarkan ID.
 
         Args:
@@ -70,15 +84,14 @@ class UserService:
             exceptions.UserNotFoundError: Jika pengguna tidak ditemukan.
 
         Returns:
-            UserRead | None: Informasi pengguna yang ditemukan atau None jika tidak ada.
+            UserRead | None: Informasi pengguna yang ditemukan atau None jika
+                tidak ada.
         """
         user_profile = await self.pegawai_service.get_user_info(user_id)
-
         if not user_profile:
             raise exceptions.UserNotFoundError
 
         user_role = await self.assign_role_to_user(user_id, user_profile)
-
         return User(**user_profile.model_dump(), role=user_role.role)
 
     async def get_user_detail(
@@ -101,8 +114,7 @@ class UserService:
             raise exceptions.UserNotFoundError("Pengguna tidak ditemukan")
 
         if user_data is None:
-            user_data = await self.get(user_id)  # type: ignore
-            assert user_data is not None  # sudah di handle pada waktu get
+            user_data = await self.get_user(user_id)  # type: ignore
 
         if user_id is None:
             user_id = user_data.id
@@ -110,7 +122,6 @@ class UserService:
         project_stats = await project_service.get_user_project_statistics(user_id)
         task_stats = await task_service.get_user_task_statistics(user_id)
 
-        # Merge statistics
         statistics = ProjectSummary(
             total_project=project_stats["total_project"],
             project_active=project_stats["project_active"],
@@ -121,50 +132,95 @@ class UserService:
             task_cancelled=task_stats["task_cancelled"],
         )
 
-        # projects = await project_service.get_user_project_participants(user_id)
         return UserDetail(
             **user_data.model_dump(),
             statistics=statistics,
-            # projects=projects,
         )
-
-    @property
-    def mapping_role(self):
-        return {
-            "admin": Role.ADMIN,
-            "team_member": Role.TEAM_MEMBER,
-            "hrd": Role.PROJECT_MANAGER,
-        }
 
     async def list_user(self) -> list[User]:
         """
-        Mendapatkan daftar semua pengguna.
+        Ambil semua pegawai dari provider eksternal, sinkronkan role jika belum ada
+        (tanpa commit), lalu kembalikan daftar User dengan role.
         """
         pegawai_list = await self.pegawai_service.list_user()
         if not pegawai_list:
             return []
 
         user_ids = [p.id for p in pegawai_list]
+        existing_roles = await self.repo.list_roles_for_users(user_ids)
 
-        # Ambil role yang sudah ada dalam satu query
-        res = await self.session.execute(
-            select(UserRole).where(UserRole.user_id.in_(user_ids))
-        )
-        existing_roles = {ur.user_id: ur.role for ur in res.scalars()}
-
-        # Siapkan insert bulk untuk yang belum punya role
-        to_create: list[UserRole] = []
+        # siapkan insert untuk yang belum punya role
+        to_create: list[tuple[int, Role]] = []
         for p in pegawai_list:
             if p.id not in existing_roles:
-                role = self.mapping_role.get(p.employee_role, Role.TEAM_MEMBER)
-                to_create.append(UserRole(user_id=p.id, role=role))
-                existing_roles[p.id] = role  # agar return konsisten
+                role = map_employee_role_to_app_role(p.employee_role)
+                to_create.append((p.id, role))
+                existing_roles[p.id] = role
 
         if to_create:
-            self.session.add_all(to_create)
-            await self.session.commit()
+            await self.repo.bulk_create_user_roles(to_create)
+            # commit tetap di boundary router
 
-        # Bangun hasil akhir
         return [
             User(**p.model_dump(), role=existing_roles[p.id]) for p in pegawai_list
         ]
+
+    async def change_user_role(
+        self, *, actor: User, user_id: int, new_role: Role
+    ) -> UserRole:
+        """
+        Ubah peran user. Jika belum memiliki role, akan dibuat.
+        Guard:
+            - Admin tidak boleh mengganti perannya sendiri (demote/promote).
+            - Admin terakhir di sistem tidak boleh di-demote/diganti dari ADMIN.
+        """
+        # Validasi user eksis di sumber pegawai
+        pegawai = await self.pegawai_service.get_user_info(user_id)
+        if not pegawai:
+            raise exceptions.UserNotFoundError
+
+        # Guard 1: admin tidak boleh ganti perannya sendiri
+        ensure_admin_not_change_own_role(
+            actor_role=actor.role,
+            actor_id=actor.id,
+            target_user_id=user_id,
+            new_role=new_role,
+        )
+
+        # Ambil role saat ini target
+        current = await self.repo.get_user_role(user_id)
+
+        # Admin tidak boleh mengganti perannya sendiri
+        if current is not None:
+            admin_count = await self.repo.count_users_with_role(Role.ADMIN)
+            ensure_not_demote_last_admin(
+                current_target_role=current.role,
+                new_role=new_role,
+                total_admins=admin_count,
+            )
+
+        # Cek peran saat ini target user
+        current = await self.repo.get_user_role(user_id)
+
+        # Jika target saat ini ADMIN dan akan diubah menjadi non-ADMIN,
+        # pastikan bukan admin terakhir.
+        if current is not None:
+            admin_count = await self.repo.count_users_with_role(Role.ADMIN)
+            ensure_not_demote_last_admin(
+                current_target_role=current.role,
+                new_role=new_role,
+                total_admins=admin_count,
+            )
+
+        ur = await self.repo.change_user_role(user_id, new_role)
+
+        # Angkat domain event (publish post-commit oleh UoW)
+        self.uow.add_event(
+            UserRoleAssignedEvent(
+                performed_by=actor.id,
+                assignee_id=user_id,
+                assignee_name=pegawai.name,
+                assignee_role=getattr(new_role, "name", str(new_role)),
+            )
+        )
+        return ur

@@ -1,11 +1,13 @@
 from typing import Callable
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.authentication import validate_token
-from app.api.dependencies.sessions import get_async_session
+from app.api.dependencies.repositories import get_user_repository
+from app.api.dependencies.uow import get_uow
 from app.db.models.role_model import Role
+from app.db.repositories.user_repository import UserRepository
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.user import User
 from app.services.pegawai_service import PegawaiService
 from app.services.user_service import UserService
@@ -13,19 +15,13 @@ from app.utils import exceptions
 
 
 async def get_user_service(
-    session: AsyncSession = Depends(get_async_session),
     pegawai_service: PegawaiService = Depends(PegawaiService),
+    uow: UnitOfWork = Depends(get_uow),
+    repo: UserRepository = Depends(get_user_repository),
 ) -> UserService:
-    """Mendapatkan instance UserService.
+    """Mendapatkan instance UserService."""
 
-    Args:
-        session (AsyncSession, optional): Session database. Defaults to
-            Depends(get_async_session).
-
-    Returns:
-        UserService: Instance UserService.
-    """
-    return UserService(session, pegawai_service)
+    return UserService(pegawai_service=pegawai_service, uow=uow, repo=repo)
 
 
 async def get_current_user(

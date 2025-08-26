@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.audit_model import AuditLog
     from app.db.models.project_model import Project
     from app.db.models.task_assigne_model import TaskAssignee
 
@@ -86,7 +87,6 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     project_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("project.id"), nullable=False
     )
-
     """ID proyek tempat tugas ini berada."""
 
     parent_id: Mapped[int | None] = mapped_column(
@@ -124,4 +124,12 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     Relasi ke pengguna yang ditugaskan untuk tugas ini,
     relasi ini bersifat one to many (satu tugas dapat ditugaskan kepada banyak
     pengguna)
+    """
+
+    audit_logs: Mapped[List["AuditLog"]] = relationship(
+        "AuditLog", back_populates="task"
+    )
+    """
+    Relasi ke AuditLog.
+    relasi bersifat one-to-many (1 task dapat memiliki banyak audit log)
     """
