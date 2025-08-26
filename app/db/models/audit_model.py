@@ -77,6 +77,7 @@ class AuditEventType(StrEnum):
     PROJECT_MEMBER_ADDED = "project_member_added"
     PROJECT_MEMBER_UPDATED = "project_member_updated"
     PROJECT_MEMBER_REMOVED = "project_member_removed"
+    PROJECT_STATUS_CHANGED = "project_status_changed"
 
     # subtask
     SUBTASKS_DETACHED = "subtasks_detached"

@@ -1,6 +1,10 @@
 from typing import TYPE_CHECKING
 
-from app.core.domain.events.project import ProjectCreatedEvent
+from app.core.domain.events.project import (
+    ProjectCreatedEvent,
+    ProjectStatusChangedEvent,
+    ProjectUpdatedEvent,
+)
 from app.core.domain.events.project_member import (
     ProjectMemberAddedEvent,
     ProjectMemberRemovedEvent,
@@ -102,8 +106,30 @@ class ProjectService:
         Returns:
             Project: Proyek yang diperbarui.
         """
+        project = await self.repo.update(project, project_update)
 
-        return await self.repo.update(project, project_update)
+        # Tambah event update
+        if project_update.title and project.title != project_update.title:
+            self.uow.add_event(
+                ProjectUpdatedEvent(
+                    user_id=project.created_by,
+                    project_id=project.id,
+                    project_title=project.title,
+                )
+            )
+
+        # Tambah event status change
+        if project_update.status and project.status != project_update.status:
+            self.uow.add_event(
+                ProjectStatusChangedEvent(
+                    user_id=project.created_by,
+                    project_id=project.id,
+                    before=project.status,
+                    after=project_update.status,
+                )
+            )
+
+        return project
 
     async def add_member(
         self, project_id: int, user_id: int, role: RoleProject
