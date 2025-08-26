@@ -1,24 +1,17 @@
 from typing import TYPE_CHECKING
 
-from app.db.models.role_model import Role, UserRole
-from app.schemas.user import PegawaiInfo, ProjectSummary, User, UserDetail
-from app.services.pegawai_service import PegawaiService
-from app.utils import exceptions
-
-if TYPE_CHECKING:
-    from app.services.project_service import ProjectService
-    from app.services.task_service import TaskService
-
-from typing import TYPE_CHECKING
-
 from app.core.domain.events.user import UserRoleAssignedEvent
 from app.core.domain.policies.user_role import (
     ensure_admin_not_change_own_role,
     ensure_not_demote_last_admin,
     map_employee_role_to_app_role,
 )
+from app.db.models.role_model import Role, UserRole
 from app.db.repositories.user_repository import UserRepository
 from app.db.uow.sqlalchemy import UnitOfWork
+from app.schemas.user import PegawaiInfo, ProjectSummary, User, UserDetail
+from app.services.pegawai_service import PegawaiService
+from app.utils import exceptions
 
 if TYPE_CHECKING:
     from app.services.project_service import ProjectService
@@ -48,7 +41,9 @@ class UserService:
         """
         return await self.repo.get_user_role(user_id)
 
-    async def assign_role_to_user(self, user_id: int, user: PegawaiInfo) -> UserRole:
+    async def assign_role_to_user(
+        self, user_id: int, user: PegawaiInfo, actor_id: int | None = None
+    ) -> UserRole:
         """Menetapkan peran kepada pengguna.
 
         Args:
@@ -71,7 +66,10 @@ class UserService:
         if self.uow:
             self.uow.add_event(
                 UserRoleAssignedEvent(
-                    user_id=user_id, role_name=getattr(role, "name", str(role))
+                    performed_by=actor_id,
+                    assignee_id=user_id,
+                    assignee_name=user.name,
+                    assignee_role=getattr(role, "name", str(role)),
                 )
             )
         return user_role
@@ -219,8 +217,10 @@ class UserService:
         # Angkat domain event (publish post-commit oleh UoW)
         self.uow.add_event(
             UserRoleAssignedEvent(
-                user_id=user_id,
-                role_name=getattr(new_role, "name", str(new_role)),
+                performed_by=actor.id,
+                assignee_id=user_id,
+                assignee_name=pegawai.name,
+                assignee_role=getattr(new_role, "name", str(new_role)),
             )
         )
         return ur

@@ -19,7 +19,7 @@ class AuditLog(Base, CreateStampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     """ID unik untuk setiap entri audit log."""
 
-    user_id: Mapped[int] = mapped_column(Integer, nullable=True, default=None)
+    performed_by: Mapped[int] = mapped_column(Integer, nullable=True, default=None)
     """ID pengguna yang terkait dengan audit log."""
 
     project_id: Mapped[int] = mapped_column(
@@ -35,7 +35,7 @@ class AuditLog(Base, CreateStampMixin):
     action_type: Mapped[str] = mapped_column(String(50), nullable=False)
     """Tipe aksi yang dicatat dalam audit log."""
 
-    detail: Mapped[Dict[str, Any]] = mapped_column(
+    details: Mapped[Dict[str, Any]] = mapped_column(
         JSONB, nullable=True, server_default="{}"
     )
     """
@@ -69,6 +69,7 @@ class AuditEventType(StrEnum):
     # Assign
     TASK_ASSIGNEE_ADDED = "task_assignee_added"
     TASK_ASSIGNEE_REMOVED = "task_assignee_removed"
+    USER_ROLE_ASSIGNED = "user_role_assigned"
 
     # Project
     PROJECT_CREATED = "project_created"

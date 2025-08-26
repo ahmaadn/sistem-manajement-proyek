@@ -54,7 +54,7 @@ class ProjectService:
 
         self.uow.add_event(
             ProjectCreatedEvent(
-                user_id=user.id,
+                performed_by=user.id,
                 project_id=result.id,
                 project_title=result.title,
             )
@@ -112,7 +112,7 @@ class ProjectService:
         if project_update.title and project.title != project_update.title:
             self.uow.add_event(
                 ProjectUpdatedEvent(
-                    user_id=project.created_by,
+                    performed_by=project.created_by,
                     project_id=project.id,
                     project_title=project.title,
                 )
@@ -122,7 +122,7 @@ class ProjectService:
         if project_update.status and project.status != project_update.status:
             self.uow.add_event(
                 ProjectStatusChangedEvent(
-                    user_id=project.created_by,
+                    performed_by=project.created_by,
                     project_id=project.id,
                     before=project.status,
                     after=project_update.status,

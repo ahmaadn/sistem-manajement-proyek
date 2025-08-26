@@ -1,11 +1,15 @@
+import logging
+
 from app.core.domain.bus import subscribe
 from app.core.domain.events.project_member import (
     ProjectMemberAddedEvent,
     ProjectMemberRemovedEvent,
     ProjectMemberUpdatedEvent,
 )
-from app.core.domain.handlers.audit_handlers import write_audit
+from app.core.domain.handlers.audit_handler import write_audit
 from app.db.models.audit_model import AuditEventType
+
+logger = logging.getLogger(__name__)
 
 
 async def on_project_member_added(ev: ProjectMemberAddedEvent):
@@ -19,9 +23,8 @@ async def on_project_member_added(ev: ProjectMemberAddedEvent):
             "new_role": ev.new_role,
         },
     )
-
-    print(
-        f"[INFO] Audit log created for project member addition: {ev.member_name!r} ",
+    logger.info(
+        f"Audit log created for project member addition: {ev.member_name!r} ",
         f"to project ID {ev.project_id}",
     )
 
@@ -38,9 +41,8 @@ async def on_project_member_updated(ev: ProjectMemberUpdatedEvent):
             "after": ev.after,
         },
     )
-
-    print(
-        f"[INFO] Audit log created for project member update: {ev.member_name!r} ",
+    logger.info(
+        f"Audit log created for project member update: {ev.member_name!r} ",
         f"to project ID {ev.project_id}",
     )
 
@@ -55,9 +57,8 @@ async def on_project_member_removed(ev: ProjectMemberRemovedEvent):
             "member_name": ev.member_name,
         },
     )
-
-    print(
-        f"[INFO] Audit log created for project member removal: {ev.member_name!r} ",
+    logger.info(
+        f"Audit log created for project member removal: {ev.member_name!r} ",
         f"from project ID {ev.project_id}",
     )
 
