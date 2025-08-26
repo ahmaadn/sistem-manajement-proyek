@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from app.core.domain.bus import DomainEvent
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProjectMemberAddedEvent(DomainEvent):
     performed_by: int
     project_id: int
@@ -12,7 +12,7 @@ class ProjectMemberAddedEvent(DomainEvent):
     new_role: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProjectMemberUpdatedEvent(DomainEvent):
     performed_by: int
     project_id: int
@@ -22,7 +22,7 @@ class ProjectMemberUpdatedEvent(DomainEvent):
     after: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ProjectMemberRemovedEvent(DomainEvent):
     performed_by: int
     project_id: int
