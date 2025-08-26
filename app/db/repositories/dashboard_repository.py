@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+from datetime import date
+from typing import Protocol
+
+from sqlalchemy import case, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models.project_model import Project, StatusProject
+from app.db.models.task_assigne_model import TaskAssignee
+from app.db.models.task_model import StatusTask, Task
+
+
+class InterfaceDashboardReadRepository(Protocol):
+    async def get_pm_project_status_summary(self, start_of_this_month: date) -> dict:
+        """Mendapatkan ringkasan status proyek untuk PM.
+
+        Args:
+            start_of_this_month (date): Tanggal awal bulan ini.
+
+        Returns:
+            dict: Ringkasan status proyek. terdiri dari total_project (Jumlah proyek)
+            , active_projects (Jumlah proyek aktif), completed_projects (Jumlah
+            proyek selesai), dan new_this_month (Jumlah proyek baru bulan ini).
+        """
+        ...
+
+    async def get_pm_yearly_summary(self, one_year_ago: date) -> list[dict]:
+        """Mendapatkan ringkasan tahunan untuk PM.
+
+        Args:
+            one_year_ago (date): Tanggal satu tahun yang lalu.
+
+        Returns:
+            list[dict]: Daftar ringkasan tahunan. terdiri dari bulan (month), jumlah
+            proyek yang dibuat (created_count), diaktifkan (actived_count), dan
+            diselesaikan (completed_count).
+        """
+        ...
+
+    async def list_upcoming_project_deadlines(
+        self, skip: int, limit: int
+    ) -> list[Project]:
+        """List proyek yang akan datang.
+
+        Args:
+            skip (int): Jumlah proyek yang dilewati.
+            limit (int): Jumlah proyek yang diambil.
+
+        Returns:
+            list[Project]: Daftar proyek yang akan datang.
+        """
+        ...
+
+    async def list_user_upcoming_tasks(self, user_id: int, limit: int) -> list[Task]:
+        """List tugas yang akan datang untuk pengguna tertentu.
+
+        Args:
+            user_id (int): ID pengguna.
+            limit (int): Jumlah tugas yang diambil.
+
+        Returns:
+            list[Task]: Daftar tugas yang akan datang untuk pengguna tertentu.
+        """
+        ...
+
+
+class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_pm_project_status_summary(self, start_of_this_month: date) -> dict:
+        stmt = select(
+            func.count(Project.id).label("total_project"),
+            func.sum(
+                case((Project.status == StatusProject.ACTIVE, 1), else_=0)
+            ).label("active_projects"),
+            func.sum(
+                case((Project.status == StatusProject.COMPLETED, 1), else_=0)
+            ).label("completed_projects"),
+            func.sum(
+                case((Project.created_at >= start_of_this_month, 1), else_=0)
+            ).label("new_this_month"),
+        ).where(Project.deleted_at.is_(None))
+
+        res = await self.session.execute(stmt)
+        row = res.fetchone()
+        return {
+            "total_project": (row.total_project or 0) if row else 0,
+            "active_projects": (row.active_projects or 0) if row else 0,
+            "completed_projects": (row.completed_projects or 0) if row else 0,
+            "new_this_month": (row.new_this_month or 0) if row else 0,
+        }
+
+    async def get_pm_yearly_summary(self, one_year_ago: date) -> list[dict]:
+        q = (
+            select(
+                # bulan proyek dibuat
+                func.date_trunc("month", Project.created_at).label("month"),
+                # jumlah project yang dibuat dalam bulan tersebut
+                func.sum(
+                    case((Project.created_at >= one_year_ago, 1), else_=0)
+                ).label("created_count"),
+                # jumlah project ACTIVE
+                func.sum(
+                    case((Project.status == StatusProject.ACTIVE, 1), else_=0)
+                ).label("actived_count"),
+                # jumlah project COMPLETED
+                func.sum(
+                    case((Project.status == StatusProject.COMPLETED, 1), else_=0)
+                ).label("completed_count"),
+            )
+            .where(
+                # proyek yang dibuat dalam satu tahun terakhir
+                Project.created_at >= one_year_ago,
+                # proyek yang bukan di hapus
+                Project.deleted_at.is_(None),
+            )
+            .group_by("month")
+        )
+        res = await self.session.execute(q)
+        return [
+            {
+                "month": row.month,
+                "created_count": row.created_count,
+                "actived_count": row.actived_count,
+                "completed_count": row.completed_count,
+            }
+            for row in res.fetchall()
+        ]
+
+    async def list_upcoming_project_deadlines(
+        self, skip: int, limit: int
+    ) -> list[Project]:
+        q = (
+            select(Project)
+            .where(
+                Project.deleted_at.is_(None),
+                Project.status == StatusProject.ACTIVE,
+                Project.end_date.is_not(None),
+            )
+            .order_by(Project.end_date.asc())
+            .offset(skip)
+            .limit(limit)
+        )
+        res = await self.session.execute(q)
+        return list(res.scalars().all())
+
+    async def list_user_upcoming_tasks(self, user_id: int, limit: int) -> list[Task]:
+        q = (
+            select(Task)
+            .join(TaskAssignee, TaskAssignee.task_id == Task.id)
+            .join(Project, Project.id == Task.project_id)
+            .where(
+                # user yang di assign
+                TaskAssignee.user_id == user_id,
+                # task tidak di hapus
+                Task.deleted_at.is_(None),
+                # proyek yang tidak di hapus
+                Project.deleted_at.is_(None),
+                # proyek yang aktif
+                Project.status.is_(StatusProject.ACTIVE),
+                # task yang memiliki due date
+                Task.due_date.is_not(None),
+                # task yang tidak di selesaikan
+                Task.status.is_not(StatusTask.COMPLETED),
+            )
+            .order_by(
+                case((Task.due_date < func.now(), 0), else_=1),
+                Task.due_date.asc(),
+            )
+            .limit(limit)
+        )
+        res = await self.session.execute(q)
+        return list(res.scalars().all())
