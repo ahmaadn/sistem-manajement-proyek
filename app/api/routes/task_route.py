@@ -186,7 +186,8 @@ class _Task:
         """
 
         task = await self.task_service.get(task_id)
-        assert task is not None
+        if task is None:
+            raise exceptions.TaskNotFoundError
 
         # pastikan user adalah member project
         await self._ensure_project_member(task.project_id)
@@ -218,7 +219,8 @@ class _Task:
         task = await self.task_service.get(
             task_id, options=[selectinload(Task.sub_tasks)]
         )
-        assert task is not None
+        if task is None:
+            raise exceptions.TaskNotFoundError
         await self._ensure_project_owner(task.project_id)
 
         async with self.uow:
