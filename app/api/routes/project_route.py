@@ -47,7 +47,7 @@ class _Project:
     async def list_projects(
         self,
         page: int = Query(default=1, ge=1),
-        per_page: int = Query(default=10, ge=10),
+        per_page: int = Query(default=10, ge=1, le=100),
     ):
         """
         Mengambil daftar project yang terkait. **PM/Admin**: semua project yang
