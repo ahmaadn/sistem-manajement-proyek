@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import logging
 from collections import defaultdict
 from contextvars import ContextVar
-from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from typing import (
     Any,
@@ -19,7 +17,8 @@ from typing import (
 )
 
 from fastapi import BackgroundTasks
-from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.domain.event import DomainEvent
 
 logger = logging.getLogger(__name__)
 
@@ -36,24 +35,6 @@ def set_event_background(bg_tasks: BackgroundTasks | None) -> None:
     - bg_tasks diharapkan objek fastapi.BackgroundTasks (punya .add_task(fn, *args))
     """
     _BG_TASKS_VAR.set(bg_tasks)
-
-
-@dataclass(frozen=True, kw_only=True)
-class DomainEvent:
-    occurred_at: datetime.datetime = field(
-        default_factory=lambda: datetime.datetime.now(datetime.timezone.utc)
-    )
-
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
-
-    def dump_model(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @property
-    def json(self) -> str:
-        return str(self.dump_model())
 
 
 T_contra = TypeVar("T_contra", bound=DomainEvent, contravariant=True)
@@ -83,13 +64,11 @@ class EventBus:
 
     def subscribe(self, event_type: Type[DomainEvent], handler: Handler) -> None:
         self._handlers[event_type].append((handler, HandlerMode.IMMEDIATE))
-        logger.debug(
-            "event.subscribe",
-            extra={
-                "event": event_type.__name__,
-                "handler": getattr(handler, "__name__", str(handler)),
-                "mode": "immediate",
-            },
+
+        logger.info(
+            "event.subscribe immediate %s -> %s",
+            event_type.__name__,
+            getattr(handler, "__name__", str(handler)),
         )
 
     def subscribe_background(
@@ -98,12 +77,9 @@ class EventBus:
         # daftar sebagai handler background
         self._handlers[event_type].append((handler, HandlerMode.BACKGROUND))
         logger.debug(
-            "event.subscribe",
-            extra={
-                "event": event_type.__name__,
-                "handler": getattr(handler, "__name__", str(handler)),
-                "mode": "background",
-            },
+            "event.subscribe background %s -> %s",
+            event_type.__name__,
+            getattr(handler, "__name__", str(handler)),
         )
 
     async def publish(self, event: DomainEvent) -> None:
@@ -162,33 +138,35 @@ class EventBus:
                     task.add_done_callback(background_handlers.discard)
 
 
+PENDING_EVENT = []
 _event_bus = EventBus()
 subscribe = _event_bus.subscribe
 subscribe_background = _event_bus.subscribe_background
 publish = _event_bus.publish
 
 
-def enqueue_event(session: AsyncSession, event: DomainEvent) -> None:
+def enqueue_event(event: DomainEvent) -> None:
     """Entri sebuah event untuk diproses nanti.
 
     Args:
         session (AsyncSession): Sesi database.
         event (DomainEvent): Event yang akan dimasukkan dalam antrean.
     """
-    pending = session.info.setdefault("_pending_events", [])
-    pending.append(event)
+    PENDING_EVENT.append(event)
+    logger.info("Event enqueued: %s", event.__class__.__name__)
 
 
-async def dispatch_pending_events(session: AsyncSession) -> None:
+async def dispatch_pending_events() -> None:
     """
     Menjalankan event yang tertunda.
 
     Args:
         session (AsyncSession): Sesi database.
     """
-    pending: list[DomainEvent] = session.info.pop("_pending_events", [])
-    for ev in pending:
+    for ev in PENDING_EVENT:
         try:
             await publish(ev)
         except Exception:
             logger.exception("event.handler.error", extra={"event": ev.name})
+
+    PENDING_EVENT.clear()

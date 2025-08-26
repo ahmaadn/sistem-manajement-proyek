@@ -94,8 +94,9 @@ class TaskService:
         )
         self.uow.add_event(
             TaskCreatedEvent(
-                task_id=task.id,
+                performed_by=task.id,
                 project_id=task.project_id,
+                task_id=task.id,
                 created_by=actor.id,
                 item_type=task.resource_type,
                 task_name=task.name,
@@ -125,15 +126,19 @@ class TaskService:
 
         self.uow.add_event(
             TaskUpdatedEvent(
-                task_id=updated.id, project_id=updated.project_id, updated_by=user_id
+                performed_by=updated.id,
+                project_id=updated.project_id,
+                task_id=task.id,
+                updated_by=user_id,
             )
         )
 
         if payload.name and payload.name != task.name:
             self.uow.add_event(
                 TaskRenameEvent(
-                    task_id=updated.id,
+                    performed_by=updated.id,
                     project_id=updated.project_id,
+                    task_id=task.id,
                     updated_by=user_id,
                     before=task.name,
                     after=payload.name,
@@ -143,7 +148,7 @@ class TaskService:
         if payload.status and payload.status != task.status:
             self.uow.add_event(
                 TaskStatusChangedEvent(
-                    user_id=user_id,
+                    performed_by=user_id,
                     task_id=updated.id,
                     project_id=updated.project_id,
                     old_status=task.status or "",
@@ -182,7 +187,10 @@ class TaskService:
         await self.repo.soft_delete(task)
         self.uow.add_event(
             TaskDeletedEvent(
-                task_id=task.id, project_id=task.project_id, deleted_by=user_id
+                performed_by=task.id,
+                project_id=task.project_id,
+                task_name=task.name,
+                deleted_by=user_id,
             )
         )
 
@@ -218,7 +226,7 @@ class TaskService:
         updated = await self.repo.update(task, {"status": new_status})
         self.uow.add_event(
             TaskStatusChangedEvent(
-                user_id=actor_user_id,
+                performed_by=actor_user_id,
                 task_id=task.id,
                 project_id=task.project_id,
                 old_status=old,
@@ -255,6 +263,7 @@ class TaskService:
         self.uow.add_event(
             TaskAssignedAddedEvent(
                 task_id=task.id,
+                performed_by=task.id,
                 project_id=task.project_id,
                 user_id=actor_id,
                 assignee_id=user.id,
@@ -286,6 +295,7 @@ class TaskService:
         self.uow.add_event(
             TaskAssignedRemovedEvent(
                 task_id=task.id,
+                performed_by=task.id,
                 project_id=task.project_id,
                 user_id=actor_id,
                 assignee_id=user.id,

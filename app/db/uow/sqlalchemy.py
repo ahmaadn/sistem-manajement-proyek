@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.domain.bus import dispatch_pending_events, enqueue_event
 
 if TYPE_CHECKING:
-    from app.core.domain.bus import DomainEvent
+    from app.core.domain.event import DomainEvent
 
 
 @runtime_checkable
@@ -35,14 +35,14 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         """
         # Simpan di buffer dan enqueue ke session (agar konsisten dengan bus)
         self._events.append(event)
-        enqueue_event(self.session, event)
+        enqueue_event(event)
 
     async def commit(self) -> None:
         """Commit the current transaction."""
         await self.session.commit()
         try:
             # Publish seluruh pending events yang ter-enqueue di session
-            await dispatch_pending_events(self.session)
+            await dispatch_pending_events()
         finally:
             self._events.clear()
         self._closed = True

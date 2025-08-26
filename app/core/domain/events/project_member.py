@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 
-from app.core.domain.bus import DomainEvent
+from app.core.domain.event import DomainEvent
 
 
 @dataclass(frozen=True, kw_only=True)
 class ProjectMemberAddedEvent(DomainEvent):
-    performed_by: int
     project_id: int
     member_id: int
     member_name: str
@@ -14,7 +13,6 @@ class ProjectMemberAddedEvent(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True)
 class ProjectMemberUpdatedEvent(DomainEvent):
-    performed_by: int
     project_id: int
     member_id: int
     member_name: str
@@ -24,7 +22,6 @@ class ProjectMemberUpdatedEvent(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True)
 class ProjectMemberRemovedEvent(DomainEvent):
-    performed_by: int
     project_id: int
     member_id: int
     member_name: str
