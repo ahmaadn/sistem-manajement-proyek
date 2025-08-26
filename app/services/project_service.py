@@ -275,7 +275,7 @@ class ProjectService:
         """
         is_admin_or_pm = user.role in (Role.PROJECT_MANAGER, Role.ADMIN)
         paginate = await self.repo.paginate_user_projects(
-            user.id, is_admin_or_pm, page, per_page
+            user.id, is_admin_or_pm, page, per_page, user.role == Role.ADMIN
         )
 
         project_ids = [p.id for p in paginate["items"]]
@@ -292,7 +292,7 @@ class ProjectService:
                 end_date=item.end_date,
                 status=item.status,
                 created_by=item.created_by,
-                project_role=role_map[item.id],
+                project_role=role_map.get(item.id, RoleProject.VIEWER),
             )
             for item in paginate["items"]
         ]

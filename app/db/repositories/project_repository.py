@@ -58,7 +58,12 @@ class InterfaceProjectRepository(
 
     @abstractmethod
     async def paginate_user_projects(
-        self, user_id: int, is_admin_or_pm: bool, page: int, per_page: int
+        self,
+        user_id: int,
+        is_admin_or_pm: bool,
+        page: int,
+        per_page: int,
+        is_admin: bool = False,
     ) -> dict[str, Any]:
         """Paginasi proyek pengguna."""
 
@@ -214,20 +219,36 @@ class ProjectSQLAlchemyRepository(
         return res.all()
 
     async def paginate_user_projects(
-        self, user_id: int, is_admin_or_pm: bool, page: int, per_page: int
+        self,
+        user_id: int,
+        is_admin_or_pm: bool,
+        page: int,
+        per_page: int,
+        is_admin: bool = False,
     ) -> dict[str, Any]:
-        conditions = [
-            exists(
-                select(1)
-                .select_from(ProjectMember)
-                .where(
-                    ProjectMember.project_id == Project.id,
-                    ProjectMember.user_id == user_id,
+        """
+        - Admin: semua project (tanpa syarat member, semua status)
+        - PM: hanya project yang ia ikuti (tanpa filter status)
+        - User biasa: hanya project yang ia ikuti (status ACTIVE/COMPLETED)
+        """
+
+        conditions: list[Any] = [Project.deleted_at.is_(None)]
+
+        # Scope membership
+        if not is_admin:
+            conditions.append(
+                exists(
+                    select(1)
+                    .select_from(ProjectMember)
+                    .where(
+                        ProjectMember.project_id == Project.id,
+                        ProjectMember.user_id == user_id,
+                    )
                 )
-            ),
-            Project.deleted_at.is_(None),
-        ]
-        if not is_admin_or_pm:
+            )
+
+        # Scope status
+        if not (is_admin or is_admin_or_pm):
             conditions.append(
                 Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
             )
