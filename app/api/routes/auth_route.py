@@ -3,7 +3,9 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.authentication import AuthHandler, auth_handler
+from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_user_service
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.token import TokenAuth
 from app.services.user_service import UserService
 from app.utils import exceptions
@@ -32,12 +34,15 @@ class _Auth:
         credentials: OAuth2PasswordRequestForm = Depends(),
         authenticate: AuthHandler = Depends(auth_handler),
         user_service: UserService = Depends(get_user_service),
+        uow: UnitOfWork = Depends(get_uow),
     ):
         token, user_info = await authenticate.login(
             username_or_email=credentials.username,
             password=credentials.password,
         )
-        await user_service.assign_role_to_user(token["user_id"], user_info)
+        async with uow:
+            await user_service.assign_role_to_user(token["user_id"], user_info)
+            await uow.commit()
 
         return TokenAuth(
             access_token=token["access_token"],

@@ -1,25 +1,122 @@
 from __future__ import annotations
 
 import datetime
+from abc import ABC, ABCMeta, abstractmethod
 from typing import Any, Callable, Generic, Optional, Sequence, Type, TypeVar
 
-from fastapi import HTTPException, status
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.base import Base as BaseModel
 from app.schemas.base import BaseSchema
 from app.utils.common import ErrorCode
 from app.utils.pagination import paginate
 
-ModelT = TypeVar("ModelT", bound=BaseModel)
+ModelT = TypeVar("ModelT")
 CreateSchemaT = TypeVar("CreateSchemaT", bound=BaseSchema)
 UpdateSchemaT = TypeVar("UpdateSchemaT", bound=BaseSchema)
 
 
-class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
+class InterfaceRepository(ABC, Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
+    """Abstract contract that mirrors GenericSQLAlchemyRepository's API."""
+
+    model: Type[ModelT]
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    @abstractmethod
+    async def get_by_id(
+        self,
+        obj_id: Any,
+        *,
+        options: list[Any] | None = None,
+    ) -> Optional[ModelT]: ...
+
+    @abstractmethod
+    async def get(
+        self,
+        *,
+        allow_deleted: bool = False,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> Optional[ModelT]: ...
+
+    @abstractmethod
+    async def list(
+        self,
+        *,
+        skip: int = 0,
+        limit: int = 100,
+        include_deleted: bool = False,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> Sequence[ModelT]: ...
+
+    @abstractmethod
+    async def pagination(
+        self,
+        *,
+        page: int = 1,
+        per_page: int = 10,
+        include_deleted: bool = False,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
+        order_by: Any | None = None,
+        custom_query: Callable[[Select], Select] | None = None,
+    ) -> dict[str, Any]: ...
+
+    @abstractmethod
+    async def create(
+        self,
+        obj_in: CreateSchemaT,
+        *,
+        extra_fields: dict[str, Any] | None = None,
+    ) -> ModelT: ...
+
+    @abstractmethod
+    async def update(
+        self,
+        obj: ModelT,
+        update_data: UpdateSchemaT | dict[str, Any],
+    ) -> ModelT: ...
+
+    @abstractmethod
+    async def soft_delete(
+        self, obj_id: Any | None = None, obj: ModelT | None = None
+    ) -> None: ...
+
+    @abstractmethod
+    async def hard_delete(
+        self, obj_id: Any | None = None, obj: ModelT | None = None
+    ) -> None: ...
+
+    # Optional hooks with no-op defaults
+    async def on_created(self, instance: ModelT) -> None:
+        return None
+
+    async def on_updated(
+        self, instance: ModelT, change: dict[str, Any], **kwargs
+    ) -> None:
+        return None
+
+    async def on_soft_deleted(self, instance: ModelT, **kwargs) -> None:
+        return None
+
+    async def on_hard_deleted(self, instance: ModelT, **kwargs) -> None:
+        return None
+
+
+class SQLAlchemyGenericRepository(
+    InterfaceRepository[ModelT, CreateSchemaT, UpdateSchemaT],
+    Generic[ModelT, CreateSchemaT, UpdateSchemaT],
+    metaclass=ABCMeta,
+):
     """
-    Base generic CRUD manager
+    Base generic repository
     Asumsi:
         - Model memiliki primary key bernama 'id'
         - Soft delete menggunakan kolom 'deleted_at' (UTC datetime) dan/atau
@@ -38,18 +135,16 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
 
     # ============ Public Methods ============
 
-    async def get(
+    async def get_by_id(
         self,
-        obj_id: int,
+        obj_id: Any,
         *,
-        allow_deleted: bool = False,
-        return_none_if_not_found: bool = False,
         options: list[Any] | None = None,
     ) -> Optional[ModelT]:
         """Mendapatkan objek berdasarkan ID.
 
         Args:
-            obj_id (int): ID objek yang ingin diambil.
+            obj_id (Any): ID objek yang ingin diambil.
             allow_deleted (bool, optional): Mengizinkan pengambilan objek yang
                 dihapus. Defaults to False.
             return_none_if_not_found (bool, optional): Mengembalikan None jika objek
@@ -57,50 +152,25 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             options (list[Any] | None, optional): Opsi tambahan untuk query.
                 Defaults to None.
 
-        Raises:
-            ValueError: Jika obj_id bukan int.
-            self._exception_not_found: Jika objek tidak ditemukan.
-            self._exception_not_found: Jika objek telah dihapus (soft delete).
-
         Returns:
             Optional[ModelT]: Objek yang ditemukan atau None.
         """
-        instance = await self.session.get(self.model, obj_id, options=options)
+        return await self.session.get(self.model, obj_id, options=options)
 
-        # Jika objek tidak ditemukan
-        if instance is None:
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        # objek di temukan tetapi telah dihapus (soft delete)
-        if (not allow_deleted) and self._is_deleted(instance):
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        return instance
-
-    async def fetch_one(
+    async def get(
         self,
         *,
         allow_deleted: bool = False,
-        return_none_if_not_found: bool = True,
-        filters: dict[str, Any] | None = None,
         options: list[Any] | None = None,
         condition: list[Any] | None = None,
         order_by: Any | None = None,
         custom_query: Callable[[Select], Select] | None = None,
     ) -> Optional[ModelT]:
-        """Mendapatkan objek berdasarkan ID.
+        """Mendapatkan objek berdasarkan kriteria.
 
         Args:
             allow_deleted (bool, optional): Mengizinkan pengambilan objek yang
                 dihapus (soft delete).
-            return_none_if_not_found (bool, optional): Jika True, kembalikan None
-                alih-alih raise.
-            filters (dict[str, Any] | None, optional): Tambahan filter kolom exact
-                match.
             options (list[Any] | None, optional): SQLAlchemy loader options
                 (selectinload, joinedload, dll).
             condition (list[Any] | None, optional): Daftar ekspresi SQLAlchemy
@@ -110,19 +180,18 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
                 memodifikasi stmt.
         """
         # Bangun stmt agar parameter di atas dapat dipakai
-        stmt: Select = select(self.model)
+        stmt = select(self.model)
 
         if options:
             stmt = stmt.options(*options)
 
-        # Tambah filters dict
-        if filters:
-            for attr, value in filters.items():
-                stmt = stmt.where(getattr(self.model, attr) == value)
-
         # Tambah condition list
         if condition:
             stmt = stmt.where(*condition)
+
+        # Tambahkan filter soft-delete pada level query
+        if (not allow_deleted) and hasattr(self.model, self.soft_delete_field):
+            stmt = stmt.where(getattr(self.model, self.soft_delete_field).is_(None))
 
         if order_by is not None:
             stmt = stmt.order_by(order_by)
@@ -130,22 +199,9 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         if custom_query is not None:
             stmt = custom_query(stmt)
 
-        res = await self.session.execute(stmt)
-        instance: Optional[ModelT] = res.scalars().first()
-
         # Jika objek tidak ditemukan
-        if instance is None:
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        # Jika objek ditemukan namun soft-deleted dan tidak diizinkan
-        if (not allow_deleted) and self._is_deleted(instance):
-            if return_none_if_not_found:
-                return None
-            raise self._exception_not_found()
-
-        return instance
+        res = await self.session.execute(stmt)
+        return res.scalars().first()
 
     async def list(
         self,
@@ -153,7 +209,8 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         skip: int = 0,
         limit: int = 100,
         include_deleted: bool = False,
-        filters: dict[str, Any] | None = None,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
         order_by: Any | None = None,
         custom_query: Callable[[Select], Select] | None = None,
     ) -> Sequence[ModelT]:
@@ -164,8 +221,10 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             limit (int, optional): Jumlah objek yang diambil. Defaults to 100.
             include_deleted (bool, optional): Mengizinkan pengambilan objek yang
                 dihapus. Defaults to False.
-            filters (dict[str, Any] | None, optional): Filter untuk pencarian objek.
-                Defaults to None.
+            options (list[Any] | None, optional): SQLAlchemy loader options
+                (selectinload, joinedload, dll).
+            condition (list[Any] | None, optional): Daftar ekspresi SQLAlchemy
+                tambahan untuk where().
             order_by (Any | None, optional): Urutan pengambilan objek. Defaults to
                 None.
             custom_query (Any, optional): Custom SQLAlchemy query untuk modifikasi
@@ -177,10 +236,12 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
 
         stmt = select(self.model)
 
+        if options:
+            stmt = stmt.options(*options)
+
         # Tambahkan filter jika ada
-        if filters:
-            for attr, value in filters.items():
-                stmt = stmt.where(getattr(self.model, attr) == value)
+        if condition:
+            stmt = stmt.where(*condition)
 
         # Tambahkan filter untuk soft delete
         if not include_deleted and hasattr(self.model, self.soft_delete_field):
@@ -207,19 +268,22 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         page: int = 1,
         per_page: int = 10,
         include_deleted: bool = False,
-        filters: dict[str, Any] | None = None,
+        options: list[Any] | None = None,
+        condition: list[Any] | None = None,
         order_by: Any | None = None,
         custom_query: Callable[[Select], Select] | None = None,
     ):
         """Mendapatkan daftar / list objek
 
         Args:
-            skip (int, optional): Jumlah objek yang dilewati. Defaults to 0.
-            limit (int, optional): Jumlah objek yang diambil. Defaults to 100.
+            page (int, optional): Halaman yang diminta. Defaults to 1.
+            per_page (int, optional): Jumlah objek per halaman. Defaults to 10.
             include_deleted (bool, optional): Mengizinkan pengambilan objek yang
                 dihapus. Defaults to False.
-            filters (dict[str, Any] | None, optional): Filter untuk pencarian objek.
-                Defaults to None.
+            options (list[Any] | None, optional): SQLAlchemy loader options
+                (selectinload, joinedload, dll).
+            condition (list[Any] | None, optional): Daftar ekspresi SQLAlchemy
+                tambahan untuk where().
             order_by (Any | None, optional): Urutan pengambilan objek. Defaults to
                 None.
             custom_query (Any, optional): Custom SQLAlchemy query untuk modifikasi
@@ -232,9 +296,12 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         stmt = select(self.model)
 
         # Tambahkan filter jika ada
-        if filters:
-            for attr, value in filters.items():
-                stmt = stmt.where(getattr(self.model, attr) == value)
+        if options:
+            stmt = stmt.options(*options)
+
+        # Tambahkan filter jika ada
+        if condition:
+            stmt = stmt.where(*condition)
 
         # Tambahkan filter untuk soft delete
         if not include_deleted and hasattr(self.model, self.soft_delete_field):
@@ -278,31 +345,31 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
         # Tambahkan instance ke session
         self.session.add(instance)
         await self.session.flush()
+        await self.session.refresh(instance)
 
         # Panggil hook on_created
-        await self.on_created(instance, **extra_fields or {})
-
-        return await self._save(instance)
+        await self.on_created(instance)
+        return instance
 
     async def update(
         self,
         obj: ModelT,
-        obj_in: UpdateSchemaT | dict[str, Any],
+        update_data: UpdateSchemaT | dict[str, Any],
     ) -> ModelT:
         """Memperbarui objek yang ada.
 
         Args:
             obj (int): Objek yang akan diperbarui.
-            obj_in (UpdateSchemaT): Data yang akan diperbarui.
+            update_data (UpdateSchemaT): Data yang akan diperbarui.
 
         Returns:
             ModelT: Objek yang telah diperbarui.
         """
 
         update_data = (
-            obj_in.model_dump(exclude_unset=True)
-            if not isinstance(obj_in, dict)
-            else dict(obj_in)
+            update_data.model_dump(exclude_unset=True)
+            if not isinstance(update_data, dict)
+            else dict(update_data)
         )
         # simpan data perubahan
         changed: dict[str, dict[str, Any]] = {}
@@ -316,29 +383,36 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
                 setattr(obj, k, v)
 
         self.session.add(obj)
-
-        # Panggil hook on_updated
-        await self.on_updated(obj, **changed)
-
-        return await self._save(obj)
+        await self.session.flush()
+        await self.session.refresh(obj)
+        await self.on_updated(obj, changed)  # Panggil hook on_updated
+        return obj
 
     async def soft_delete(
-        self, obj_id: int | None = None, obj: ModelT | None = None
+        self, obj_id: Any | None = None, obj: ModelT | None = None
     ) -> None:
-        """Menghapus objek secara soft delete.
+        """Menghapus objek secara soft delete. jika tidak ada obj_id atau obj,
+        akan mengangkat ValueError. soft delete akan melakukan fallback ke hard
+        delete jika kolom soft delete tidak ada.
 
         Args:
-            obj_id (int): ID objek yang akan dihapus.
+            obj_id (Any | None): ID objek yang akan dihapus.
+            obj (ModelT | None): Objek yang akan dihapus.
+
+        Raises:
+            ValueError: Jika obj_id dan obj tidak ada, harus ada minimal satu.
         """
 
         if obj_id is None and obj is None:
             raise ValueError("Either obj_id or obj must be provided")
 
-        if obj_id:
-            instance = await self.get(obj_id)
-
-        else:
+        if obj:
             instance = obj
+        else:
+            instance = await self.get_by_id(obj_id)
+
+        if instance is None:
+            return
 
         if hasattr(instance, self.soft_delete_field):
             setattr(
@@ -351,51 +425,38 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             # fallback ke hard delete
             await self.session.delete(instance)
 
-        # Panggil hook on_soft_deleted
-        await self.on_soft_deleted(instance)  # type: ignore
-
-        await self.session.commit()
+        await self.on_soft_deleted(instance)  # Panggil hook on_soft_deleted
+        await self.session.flush()
 
     async def hard_delete(
-        self, obj_id: int | None = None, obj: ModelT | None = None
+        self, obj_id: Any | None = None, obj: ModelT | None = None
     ) -> None:
         """Menghapus objek secara hard delete.
 
         Args:
-            obj_id (int | None): ID objek yang akan dihapus.
+            obj_id (Any | None): ID objek yang akan dihapus.
             obj (ModelT | None): Objek yang akan dihapus.
+
+        Raises:
+            ValueError: Jika obj_id dan obj tidak ada, harus ada minimal satu.
         """
 
         if obj_id is None and obj is None:
             raise ValueError("Either obj_id or obj must be provided")
 
-        if obj_id:
-            instance = await self.get(obj_id)
-        else:
+        if obj:
             instance = obj
+        else:
+            instance = await self.get_by_id(obj_id)
+
+        if instance is None:
+            return
 
         await self.session.delete(instance)
-
-        # Panggil hook on_hard_deleted
-        await self.on_hard_deleted(instance)  # type: ignore
-
-        await self.session.commit()
+        await self.on_hard_deleted(instance)  # Panggil hook on_hard_deleted
+        await self.session.flush()
 
     # ============ Internal Helpers ============
-
-    async def _save(self, instance: ModelT, *, commit: bool = True) -> ModelT:
-        """Menyimpan objek ke database.
-
-        Args:
-            instance (ModelT): Objek yang akan disimpan.
-
-        Returns:
-            ModelT: Objek yang telah disimpan.
-        """
-        if commit:
-            await self.session.commit()
-            await self.session.refresh(instance)
-        return instance
 
     def _is_deleted(self, instance: ModelT) -> bool:
         """Memeriksa apakah objek telah dihapus.
@@ -415,28 +476,23 @@ class GenericCRUDService(Generic[ModelT, CreateSchemaT, UpdateSchemaT]):
             return getattr(instance, self.soft_delete_field) is not None
         return False
 
-    def _exception_not_found(self, **extra) -> Exception:
-        return HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error_code": self.not_found_error_code,
-                "message": "Item tidak ditemukan.",
-                **extra,
-            },
-        )
+    # ============ Hook ============
 
-    async def on_created(self, instance: ModelT, **kwargs) -> None:
+    async def on_created(self, instance: ModelT) -> None:
         """Event handler yang dipanggil setelah objek dibuat.
 
         Args:
             instance (ModelT): Objek yang baru dibuat.
         """
 
-    async def on_updated(self, instance: ModelT, **kwargs) -> None:
+    async def on_updated(
+        self, instance: ModelT, change: dict[str, Any], **kwargs
+    ) -> None:
         """Event handler yang dipanggil setelah objek diperbarui.
 
         Args:
             instance (ModelT): Objek yang telah diperbarui.
+            change (dict[str, Any]): Perubahan yang diterapkan pada objek.
         """
 
     async def on_soft_deleted(self, instance: ModelT, **kwargs) -> None:

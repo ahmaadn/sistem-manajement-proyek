@@ -22,6 +22,7 @@ class ProjectStatusSummary(BaseSchema):
 class YearlySummary(BaseSchema):
     month: datetime
     created_count: int
+    actived_count: int
     completed_count: int
 
 
