@@ -1,5 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.dependencies.events import inject_event_background
 from app.core.config import settings
 
 from .routes import assignee_task_route as assignee_task
@@ -10,7 +11,11 @@ from .routes import project_route as proyek
 from .routes import task_route as task
 from .routes import user_route as user
 
-router = APIRouter(prefix=settings.version_url)  # url prefix for all routes ex: /v1
+# url prefix for all routes ex: /v1
+# inject event background task untuk semua route
+router = APIRouter(
+    prefix=settings.version_url, dependencies=[Depends(inject_event_background)]
+)
 router.include_router(auth.router)
 router.include_router(user.router)
 router.include_router(proyek.router)
