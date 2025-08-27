@@ -83,6 +83,7 @@ dependencies = [
     { name = "fastapi-utils" },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "typing-inspect" },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -94,6 +95,7 @@ requires-dist = [
     { name = "fastapi-utils", specifier = ">=0.8.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.42" },
     { name = "typing-inspect", specifier = ">=0.9.0" },
+    { name = "websockets", specifier = ">=15.0.1" },
 ]
 
 [[package]]
