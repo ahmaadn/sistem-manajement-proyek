@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.attachment_model import Attachment
     from app.db.models.audit_model import AuditLog
     from app.db.models.comment_model import Comment
     from app.db.models.project_model import Project
@@ -142,4 +143,12 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Relasi ke komentar yang dibuat untuk tugas ini,
     relasi ini bersifat one to many (satu tugas dapat memiliki banyak komentar)
+    """
+
+    attachments: Mapped[List["Attachment"]] = relationship(
+        "Attachment", back_populates="task", cascade="all, delete-orphan"
+    )
+    """
+    Relasi ke lampiran yang dibuat untuk tugas ini,
+    relasi ini bersifat one to many (satu tugas dapat memiliki banyak lampiran)
     """
