@@ -61,3 +61,7 @@ class Attachment(Base, CreateStampMixin):
     """
 
     comment: Mapped["Comment"] = relationship("Comment", back_populates="attachment")
+    """
+    Relasi dengan komentar. relasi bersifat one-to-one. Satu lampiran hanya bisa
+    terkait dengan 1 komentar.
+    """

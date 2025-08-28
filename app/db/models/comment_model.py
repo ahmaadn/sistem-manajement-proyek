@@ -7,6 +7,7 @@ from app.db.base import Base
 from app.db.models.mixin import CreateStampMixin
 
 if TYPE_CHECKING:
+    from app.db.models.attachment_model import Attachment
     from app.db.models.task_model import Task
 
 
@@ -29,8 +30,12 @@ class Comment(Base, CreateStampMixin):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     """Content pesan"""
 
-    task: Mapped["Task"] = relationship("Task", back_populates="comment")
+    task: Mapped["Task"] = relationship("Task", back_populates="comments")
     """
-    Relasi dengan task. relasi bersifat one to one. 1 comment hanya bisa dimiliki
+    Relasi dengan task. relasi bersifat many-to-one. Banyak komentar bisa dimiliki
     oleh 1 task.
     """
+
+    attachment: Mapped["Attachment"] = relationship(
+        "Attachment", back_populates="comment", uselist=False
+    )
