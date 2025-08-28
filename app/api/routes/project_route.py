@@ -138,6 +138,8 @@ class _Project:
             await self.project_service.update_project(project, payload)
             await self.uow.commit()
 
+        return project
+
     @r.delete(
         "/projects/{project_id}",
         status_code=status.HTTP_202_ACCEPTED,
