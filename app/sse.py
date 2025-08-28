@@ -46,6 +46,8 @@ async def sse_stream(
     )
 
     async def event_generator():
+        # Prelude 2KB agar proxy/CDN segera buka stream dan flush
+        yield b": sse-prelude " + (b"x" * 2048) + b"\n\n"
         try:
             # Keep-alive tiap 15 detik
             while True:
@@ -64,7 +66,7 @@ async def sse_stream(
             await sse_manager.unsubscribe(sub)
 
     headers = {
-        "Cache-Control": "no-cache",
+        "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",  # untuk Nginx
     }
