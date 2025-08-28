@@ -69,6 +69,7 @@ async def sse_stream(
         "Cache-Control": "no-cache, no-transform",
         "Connection": "keep-alive",
         "X-Accel-Buffering": "no",  # untuk Nginx
+        "x-vercel-ai-data-stream": "v1",  # untuk Vercel
     }
     return StreamingResponse(
         event_generator(), media_type="text/event-stream", headers=headers
