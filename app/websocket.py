@@ -52,6 +52,7 @@ async def get_user_from_token(token: str, pegawai_service: PegawaiService):
             user_role = await user_service.assign_role_to_user(
                 pegawai_info.id, pegawai_info
             )
+            await session.commit()
 
         return User(**pegawai_info.model_dump(), role=Role(user_role.role))
 
