@@ -7,7 +7,7 @@ from app.core.domain.policies.user_role import (
     map_employee_role_to_app_role,
 )
 from app.db.models.role_model import Role, UserRole
-from app.db.repositories.user_repository import UserRepository
+from app.db.repositories.user_repository import InterfaceUserRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.user import PegawaiInfo, ProjectSummary, User, UserDetail
 from app.services.pegawai_service import PegawaiService
@@ -24,7 +24,7 @@ class UserService:
         *,
         pegawai_service: PegawaiService,
         uow: UnitOfWork,
-        repo: UserRepository,
+        repo: InterfaceUserRepository,
     ) -> None:
         self.pegawai_service = pegawai_service
         self.uow = uow

@@ -6,7 +6,7 @@ from app.api.dependencies.authentication import validate_token
 from app.api.dependencies.repositories import get_user_repository
 from app.api.dependencies.uow import get_uow
 from app.db.models.role_model import Role
-from app.db.repositories.user_repository import UserRepository
+from app.db.repositories.user_repository import InterfaceUserRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.user import User
 from app.services.pegawai_service import PegawaiService
@@ -17,7 +17,7 @@ from app.utils import exceptions
 async def get_user_service(
     pegawai_service: PegawaiService = Depends(PegawaiService),
     uow: UnitOfWork = Depends(get_uow),
-    repo: UserRepository = Depends(get_user_repository),
+    repo: InterfaceUserRepository = Depends(get_user_repository),
 ) -> UserService:
     """Mendapatkan instance UserService."""
 

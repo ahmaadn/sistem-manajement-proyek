@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.role_model import Role, UserRole
 
 
-class UserRepository(ABC):
+class InterfaceUserRepository(ABC):
     @abstractmethod
     async def get_user_role(self, user_id: int) -> UserRole | None:
         """Mendapatkan role pengguna berdasarkan ID.
@@ -68,7 +68,7 @@ class UserRepository(ABC):
         """
 
 
-class UserSQLAlchemyRepository(UserRepository):
+class UserSQLAlchemyRepository(InterfaceUserRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
