@@ -10,6 +10,7 @@ from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.audit_model import AuditLog
+    from app.db.models.comment_model import Comment
     from app.db.models.project_model import Project
     from app.db.models.task_assigne_model import TaskAssignee
 
@@ -98,7 +99,8 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     project: Mapped["Project"] = relationship("Project", back_populates="tasks")
     """
     Relasi ke proyek yang terkait dengan tugas ini,
-    relasi ini bersifat one to one (satu tugas hanya dapat terkait dengan satu proyek)
+    relasi ini bersifat one to one (satu tugas hanya dapat terkait dengan satu
+    proyek)
     """
 
     parent: Mapped[Optional["Task"]] = relationship(
@@ -132,4 +134,12 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Relasi ke AuditLog.
     relasi bersifat one-to-many (1 task dapat memiliki banyak audit log)
+    """
+
+    comments: Mapped[List["Comment"]] = relationship(
+        "Comment", back_populates="task"
+    )
+    """
+    Relasi ke komentar yang dibuat untuk tugas ini,
+    relasi ini bersifat one to many (satu tugas dapat memiliki banyak komentar)
     """
