@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import websocket
+from app import sse, websocket
 from app.api import api
 from app.core.config import settings
 from app.core.config.logging import configure_logging
@@ -52,6 +52,7 @@ def get_app() -> FastAPI:
     # Routers
     app.include_router(api.router)
     app.include_router(websocket.router)
+    app.include_router(sse.router)
 
     # Middleware
     app.add_middleware(
