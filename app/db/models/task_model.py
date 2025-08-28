@@ -138,7 +138,7 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     """
 
     comments: Mapped[List["Comment"]] = relationship(
-        "Comment", back_populates="task"
+        "Comment", back_populates="task", cascade="all, delete-orphan"
     )
     """
     Relasi ke komentar yang dibuat untuk tugas ini,
