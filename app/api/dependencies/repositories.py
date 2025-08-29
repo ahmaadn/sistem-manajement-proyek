@@ -2,6 +2,10 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.sessions import get_async_session
+from app.db.repositories.attachment_repository import (
+    AttachmentSQLAlchemyRepository,
+    InterfaceAttachmentRepository,
+)
 from app.db.repositories.comment_repository import (
     CommentSQLAlchemyRepository,
     InterfaceCommentRepository,
@@ -40,3 +44,10 @@ def get_comment_repository(
 ) -> InterfaceCommentRepository:
     """Get the comment repository."""
     return CommentSQLAlchemyRepository(session)
+
+
+def get_attachment_repository(
+    session: AsyncSession = Depends(get_async_session),
+) -> InterfaceAttachmentRepository:
+    """Get the attachment repository."""
+    return AttachmentSQLAlchemyRepository(session)

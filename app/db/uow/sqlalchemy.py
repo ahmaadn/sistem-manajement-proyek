@@ -5,6 +5,10 @@ from typing import TYPE_CHECKING, List, Protocol, runtime_checkable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.domain.bus import dispatch_pending_events, enqueue_event
+from app.db.repositories.attachment_repository import (
+    AttachmentSQLAlchemyRepository,
+    InterfaceAttachmentRepository,
+)
 from app.db.repositories.comment_repository import (
     CommentSQLAlchemyRepository,
     InterfaceCommentRepository,
@@ -39,6 +43,7 @@ class UnitOfWork(Protocol):
     project_repo: InterfaceProjectRepository
     dashboard_repository: InterfaceDashboardReadRepository
     user_repository: InterfaceUserRepository
+    attachment_repo: InterfaceAttachmentRepository
 
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
@@ -59,6 +64,7 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.project_repo = ProjectSQLAlchemyRepository(self.session)
         self.dashboard_repository = DashboardSQLAlchemyReadRepository(self.session)
         self.user_repository = UserSQLAlchemyRepository(self.session)
+        self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
 
     def add_event(self, event: "DomainEvent") -> None:
         """Menambahkan event ke dalam unit of work.

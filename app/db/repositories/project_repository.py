@@ -79,6 +79,19 @@ class InterfaceProjectRepository(
     ) -> Project | None:
         """Detail proyek untuk pengguna."""
 
+    @abstractmethod
+    async def is_project_owner(self, project_id: int, user_id: int) -> bool:
+        """
+        Memeriksa apakah pengguna adalah pemilik proyek yang terkait dengan tugas.
+
+        Args:
+            project_id: ID proyek
+            user_id: ID pengguna
+
+        Returns:
+            bool: True jika pengguna adalah pemilik proyek, False jika tidak
+        """
+
 
 class ProjectSQLAlchemyRepository(
     InterfaceProjectRepository,
@@ -300,3 +313,25 @@ class ProjectSQLAlchemyRepository(
         )
         res = await self.session.execute(stmt)
         return res.scalars().first()
+
+    async def is_project_owner(self, project_id: int, user_id: int) -> bool:
+        """
+        Memeriksa apakah pengguna adalah pemilik proyek yang terkait dengan tugas.
+
+        Args:
+            task_id: ID tugas
+            user_id: ID pengguna
+
+        Returns:
+            bool: True jika pengguna adalah pemilik proyek, False jika tidak
+        """
+
+        stmt = select(
+            exists().where(
+                ProjectMember.project_id == project_id,
+                ProjectMember.user_id == user_id,
+                ProjectMember.role == RoleProject.OWNER,
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one()

@@ -16,6 +16,7 @@ class ErrorCode(StrEnum):
     # Proyek
     PROJECT_NOT_FOUND = auto()
     PROJECT_ALREADY_EXISTS = auto()
+    NOT_A_MEMBER = auto()
 
     # Auth
     UNAUTHORIZED = auto()
@@ -39,3 +40,8 @@ class ErrorCode(StrEnum):
     COMMENT_NOT_FOUND = auto()
     COMMENT_NOT_ALLOWED = auto()
     COMMENT_CANNOT_DELETE = auto()
+
+    # Media
+    MEDIA_NOT_SUPPORTED = auto()
+    FILE_TOO_LARGE = auto()
+    ATTACHMENT_NOT_FOUND = auto()

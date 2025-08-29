@@ -262,3 +262,61 @@ class CommentCantDeleteError(AppException):
         super().__init__(
             message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
         )
+
+
+class MediaNotSupportedError(AppException):
+    def __init__(
+        self,
+        message: str = "Tipe media tidak didukung",
+        /,
+        error_code: ErrorCode = ErrorCode.MEDIA_NOT_SUPPORTED,
+        **extra: Any,
+    ):
+        super().__init__(
+            message,
+            error_code,
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            **extra,
+        )
+
+
+class FileTooLargeError(AppException):
+    def __init__(
+        self,
+        message: str = "Ukuran file melebihi batas yang diizinkan",
+        /,
+        error_code: ErrorCode = ErrorCode.FILE_TOO_LARGE,
+        **extra: Any,
+    ):
+        super().__init__(
+            message,
+            error_code,
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            **extra,
+        )
+
+
+class NotAMemberError(AppException):
+    def __init__(
+        self,
+        message: str = "User bukan anggota proyek ini.",
+        /,
+        error_code: ErrorCode = ErrorCode.NOT_A_MEMBER,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
+        )
+
+
+class AttachmentNotFoundError(AppException):
+    def __init__(
+        self,
+        message: str = "Attachment tidak ditemukan",
+        /,
+        error_code: ErrorCode = ErrorCode.ATTACHMENT_NOT_FOUND,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_404_NOT_FOUND, **extra
+        )

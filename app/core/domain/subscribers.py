@@ -1,3 +1,6 @@
+from app.core.domain.handlers.attachments.cloudinary_handler import (
+    register_event_handlers as register_cloudinary_handlers,
+)
 from app.core.domain.handlers.audits.assignee_task_handlers import (
     register_event_handlers as register_assignee_task_handlers,
 )
@@ -21,3 +24,5 @@ def register_event_handlers():
     register_task_audit_handlers()
     register_assignee_task_handlers()
     register_user_handlers()
+
+    register_cloudinary_handlers()
