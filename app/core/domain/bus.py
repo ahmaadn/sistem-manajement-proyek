@@ -37,6 +37,13 @@ def set_event_background(bg_tasks: BackgroundTasks | None) -> None:
     _BG_TASKS_VAR.set(bg_tasks)
 
 
+def get_event_background() -> BackgroundTasks | None:
+    """
+    Get BackgroundTasks aktif untuk request saat ini.
+    """
+    return _BG_TASKS_VAR.get()
+
+
 T_contra = TypeVar("T_contra", bound=DomainEvent, contravariant=True)
 
 Handler = (
@@ -125,6 +132,7 @@ class EventBus:
                     bg_tasks.add_task(h, event)
 
                 else:
+                    logger.debug("Using asyncio.create_task for background handler")
                     # fallback: lepas ke event loop
                     task = asyncio.create_task(h(event))  # type: ignore
 

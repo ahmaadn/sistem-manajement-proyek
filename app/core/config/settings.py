@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     def version_url(self) -> str:
         return f"/v{self.VERSION_API}"
 
+    # CLOUD STORAGE
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+
 
 def _singleton(cls):
     _instances = {}

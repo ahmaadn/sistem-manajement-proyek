@@ -46,5 +46,5 @@ def configure_logging():
         logging_logger.propagate = True
 
     # Beri log konfirmasi
-    logging.root.setLevel(logging.INFO)
+    logging.root.setLevel(logging.DEBUG)
     logger.info("Logging telah dikonfigurasi dengan RichHandler.")

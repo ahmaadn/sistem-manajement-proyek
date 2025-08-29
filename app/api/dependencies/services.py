@@ -10,6 +10,7 @@ from app.api.dependencies.uow import get_uow
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.repositories.task_repository import InterfaceTaskRepository
 from app.db.uow.sqlalchemy import UnitOfWork
+from app.services.attachment_service import AttachmentService
 from app.services.comment_service import CommentService
 from app.services.dashboard_service import DashboardService
 from app.services.project_service import ProjectService
@@ -42,3 +43,8 @@ def get_dashboard_service(
 def get_comment_service(uow: UnitOfWork = Depends(get_uow)) -> CommentService:
     """Mendapatkan layanan komentar."""
     return CommentService(uow)
+
+
+def get_attachment_service(uow: UnitOfWork = Depends(get_uow)) -> AttachmentService:
+    """Mendapatkan layanan lampiran."""
+    return AttachmentService(uow)
