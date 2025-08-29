@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Protocol, runtime_checkable
+from typing import Any, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 from sqlalchemy import Select, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -171,6 +171,12 @@ class InterfaceTaskRepository(Protocol):
 
         Returns:
             bool: True jika user adalah pemilik proyek, False jika tidak.
+        """
+        ...
+
+    async def get_project_member_ids_by_task(self, task_id: int) -> Sequence[int]:
+        """
+        Mengambil daftar user_id yang menjadi anggota dari sebuah proyek.
         """
         ...
 
@@ -407,3 +413,15 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             .limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+    async def get_project_member_ids_by_task(self, task_id: int) -> Sequence[int]:
+        """
+        Mengambil daftar user_id yang menjadi anggota dari sebuah proyek.
+        """
+        stmt = (
+            select(ProjectMember.user_id)
+            .join(Task, Task.id == task_id)
+            .where(Task.project_id == ProjectMember.project_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalars().all()

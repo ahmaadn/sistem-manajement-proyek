@@ -51,7 +51,7 @@ class Attachment(Base, CreateStampMixin):
 
     file_size: Mapped[str] = mapped_column(String, nullable=False)
     """
-    Ukuran file lampiran
+    Ukuran file lampiran. Dalam satuan byte.
     """
 
     task: Mapped["Task"] = relationship("Task", back_populates="attachments")

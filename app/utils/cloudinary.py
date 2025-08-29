@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import re
 from typing import Any, Dict
 
 import cloudinary
@@ -55,15 +54,32 @@ def upload_bytes(
     )
 
 
+def extract_public_id(cloudinary_url: str) -> str:
+    """
+    Ekstrak public_id dari URL Cloudinary.
+
+    Args:
+        cloudinary_url: URL Cloudinary
+
+    Returns:
+        str: Public ID
+    """
+    # Format URL: https://res.cloudinary.com/{cloud_name}/{resource_type}/upload/{version}/{public_id}.{format}
+    parts = cloudinary_url.split("/")
+    public_id_with_ext = parts[-1]
+    # Hapus ekstensi file
+    public_id = ".".join(public_id_with_ext.split(".")[:-1])
+    folder = parts[-2]
+    return f"{folder}/{public_id}"
+
+
 def destroy_by_url(file_url: str) -> Dict[str, Any]:
     """
     Hapus resource berdasarkan URL Cloudinary.
     Mengambil public_id dari URL: .../upload/v<version>/<public_id>.<ext>
     """
-    init_cloudinary()
-    m = re.search(r"/upload/(?:v\d+/)?([^/.]+)(?:\.[a-zA-Z0-9]+)?$", file_url)
-    public_id = m.group(1) if m else None
+    public_id = extract_public_id(file_url)
     if not public_id:
         return {"result": "not_found"}
 
-    return cloudinary.uploader.destroy(public_id, resource_type="auto")
+    return cloudinary.uploader.destroy(public_id)
