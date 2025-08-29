@@ -65,6 +65,23 @@ class AppException(Exception):  # noqa: N818
         }
 
 
+class InternalServerError(AppException):
+    def __init__(
+        self,
+        message: str = "Terjadi kesalahan internal",
+        /,
+        error_code: ErrorCode = ErrorCode.INTERNAL_SERVER_ERROR,
+        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+        **extra: Any,
+    ):
+        super().__init__(
+            message,
+            error_code,
+            status_code=status_code,
+            **extra,
+        )
+
+
 class UnauthorizedError(AppException):
     def __init__(
         self,
@@ -205,4 +222,43 @@ class ForbiddenError(AppException):
     ):
         super().__init__(
             message, error_code, status_code=status.HTTP_403_FORBIDDEN, **extra
+        )
+
+
+class CommentNotFoundError(AppException):
+    def __init__(
+        self,
+        message: str = "Komentar tidak ditemukan",
+        /,
+        error_code: ErrorCode = ErrorCode.COMMENT_NOT_FOUND,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_404_NOT_FOUND, **extra
+        )
+
+
+class CommentCannotBeAddedError(AppException):
+    def __init__(
+        self,
+        message: str = "Komentar tidak dapat ditambahkan.",
+        /,
+        error_code: ErrorCode = ErrorCode.COMMENT_NOT_ALLOWED,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
+        )
+
+
+class CommentCantDeleteError(AppException):
+    def __init__(
+        self,
+        message: str = "Komentar tidak dapat dihapus.",
+        /,
+        error_code: ErrorCode = ErrorCode.COMMENT_CANNOT_DELETE,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
         )

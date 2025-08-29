@@ -6,7 +6,7 @@ from sqlalchemy import Select, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models.project_member_model import ProjectMember
+from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
@@ -141,6 +141,36 @@ class InterfaceTaskRepository(Protocol):
     async def unassign_user(self, user_id: int, task_id: int) -> None:
         """
         Menghapus penugasan user dari sebuah task.
+        """
+        ...
+
+    async def is_member_of_task_project(self, task_id: int, user_id: int) -> bool:
+        """
+        Mengecek apakah user adalah member dari project tempat task tersebut berada.
+        """
+        ...
+
+    async def is_active_task(self, task_id: int) -> bool:
+        """
+        Mengecek apakah task berada pada project yang masih aktif dan tidak dihapus.
+
+        Args:
+            task_id: ID task yang akan dicek.
+
+        Returns:
+            bool: True jika project aktif, False jika tidak.
+        """
+        ...
+
+    async def is_owner_of_project_by_task(self, user_id: int, task_id: int) -> bool:
+        """Mengecek apakah user adalah pemilik proyek dari task yang diberikan.
+
+        Args:
+            user_id (int): ID user yang akan dicek.
+            task_id (int): ID task yang akan dicek.
+
+        Returns:
+            bool: True jika user adalah pemilik proyek, False jika tidak.
         """
         ...
 
@@ -328,3 +358,52 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         await self.session.execute(stmt)
         await self.session.flush()
+
+    async def is_member_of_task_project(self, task_id: int, user_id: int) -> bool:
+        result = await self.session.execute(
+            select(1)
+            .select_from(Task)
+            .join(Project, Task.project_id == Project.id)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(
+                Task.id == task_id,
+                ProjectMember.user_id == user_id,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def is_active_task(self, task_id: int) -> bool:
+        result = await self.session.execute(
+            select(1)
+            .select_from(Task)
+            .join(Project, Task.project_id == Project.id)
+            .where(
+                # Pastikan di task sama
+                Task.id == task_id,
+                # Task berada di project yang aktif
+                Project.status == StatusProject.ACTIVE,
+                # Task tidak dihapus
+                Task.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def is_owner_of_project_by_task(self, user_id: int, task_id: int) -> bool:
+        result = await self.session.execute(
+            select(1)
+            .select_from(Task)
+            .join(Project, Task.project_id == Project.id)
+            .join(ProjectMember, ProjectMember.project_id == Project.id)
+            .where(
+                # memastikan id task sama
+                Task.id == task_id,
+                # memastikan user adalah anggota project
+                ProjectMember.user_id == user_id,
+                # memastikan user adalah owner project
+                ProjectMember.role == RoleProject.OWNER,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None

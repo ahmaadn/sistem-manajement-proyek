@@ -34,3 +34,8 @@ class ErrorCode(StrEnum):
     MEMBER_ALREADY_JOIN = auto()
     MEMBER_NOT_FOUND = auto()
     MEMBER_CANNOT_REMOVE = auto()
+
+    # Komentar
+    COMMENT_NOT_FOUND = auto()
+    COMMENT_NOT_ALLOWED = auto()
+    COMMENT_CANNOT_DELETE = auto()
