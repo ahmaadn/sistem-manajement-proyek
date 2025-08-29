@@ -5,6 +5,26 @@ from typing import TYPE_CHECKING, List, Protocol, runtime_checkable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.domain.bus import dispatch_pending_events, enqueue_event
+from app.db.repositories.comment_repository import (
+    CommentSQLAlchemyRepository,
+    InterfaceCommentRepository,
+)
+from app.db.repositories.dashboard_repository import (
+    DashboardSQLAlchemyReadRepository,
+    InterfaceDashboardReadRepository,
+)
+from app.db.repositories.project_repository import (
+    InterfaceProjectRepository,
+    ProjectSQLAlchemyRepository,
+)
+from app.db.repositories.task_repository import (
+    InterfaceTaskRepository,
+    TaskSQLAlchemyRepository,
+)
+from app.db.repositories.user_repository import (
+    InterfaceUserRepository,
+    UserSQLAlchemyRepository,
+)
 
 if TYPE_CHECKING:
     from app.core.domain.event import DomainEvent
@@ -13,6 +33,12 @@ if TYPE_CHECKING:
 @runtime_checkable
 class UnitOfWork(Protocol):
     session: AsyncSession
+
+    comment_repo: InterfaceCommentRepository
+    task_repo: InterfaceTaskRepository
+    project_repo: InterfaceProjectRepository
+    dashboard_repository: InterfaceDashboardReadRepository
+    user_repository: InterfaceUserRepository
 
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
@@ -26,6 +52,13 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.session = session
         self._events: List["DomainEvent"] = []
         self._closed = False
+
+        # init repo
+        self.comment_repo = CommentSQLAlchemyRepository(self.session)
+        self.task_repo = TaskSQLAlchemyRepository(self.session)
+        self.project_repo = ProjectSQLAlchemyRepository(self.session)
+        self.dashboard_repository = DashboardSQLAlchemyReadRepository(self.session)
+        self.user_repository = UserSQLAlchemyRepository(self.session)
 
     def add_event(self, event: "DomainEvent") -> None:
         """Menambahkan event ke dalam unit of work.
