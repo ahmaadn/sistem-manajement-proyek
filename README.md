@@ -4,14 +4,18 @@ Backend API untuk sistem manajemen proyek yang dibangun menggunakan FastAPI dan 
 
 ## 🚀 Fitur
 
-- **FastAPI Framework** - API modern dan cepat dengan dokumentasi otomatis
-- **SQLAlchemy ORM** - Object-Relational Mapping dengan dukungan async
-- **PostgreSQL Database** - Database relational yang robust
-- **Alembic Migrations** - Manajemen skema database
-- **JWT Authentication** - Autentikasi dan otorisasi yang aman
-- **Email Integration** - Sistem notifikasi email
-- **File Upload** - Upload file dengan Cloudinary
-- **API Documentation** - Dokumentasi API otomatis dengan Swagger/OpenAPI
+- **FastAPI Framework** - API modern dan cepat dengan dokumentasi otomatis.
+- **SQLAlchemy ORM** - Object-Relational Mapping dengan dukungan async.
+- **PostgreSQL Database** - Database relational yang robust.
+- **Alembic Migrations** - Manajemen skema database yang mudah.
+- **JWT Authentication** - Autentikasi dan otorisasi berbasis token yang aman.
+- **Manajemen User & Role** - Sistem user dengan role (Admin, Project Manager, Member).
+- **Manajemen Proyek & Tugas** - Operasi CRUD penuh untuk proyek dan tugas.
+- **Real-time Notifications** - Notifikasi real-time menggunakan Server-Sent Events (SSE), WebSockets, dan Pusher untuk update proyek, tugas, dan anggota tim.
+- **Email Integration** - Sistem notifikasi email untuk event penting.
+- **File Upload** - Upload file dengan integrasi Cloudinary.
+- **Arsitektur Modular** - Kode terstruktur dengan baik menggunakan Class-Based Views dan dependency injection.
+- **Event-Driven System** - Menggunakan event untuk menangani side-effect seperti notifikasi.
 
 ## 📋 Persyaratan
 
@@ -68,7 +72,6 @@ Aplikasi akan berjalan di `http://localhost:8000`
 
 Setelah aplikasi berjalan, dokumentasi API dapat diakses di:
 - **Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
 
 ## 🗂️ Struktur Proyek
 
@@ -77,29 +80,18 @@ app/
 ├── api/                 # API routes dan endpoints
 │   ├── dependencies/    # Dependency injection
 │   └── routes/         # Route handlers
-├── core/               # Konfigurasi aplikasi
+├── core/               # Konfigurasi aplikasi (termasuk real-time)
 ├── db/                 # Database setup dan migrations
 │   ├── models/         # SQLAlchemy models
 │   └── migrations/     # Alembic migrations
 ├── middleware/         # Custom middleware
 ├── schemas/            # Pydantic schemas
+├── services/           # Business logic layer
 ├── static/            # Static files
 ├── templates/         # Jinja2 templates
 └── utils/             # Utility functions
 ```
 
-## 🧪 Testing
-
-```bash
-# Menjalankan semua test
-pytest
-
-# Menjalankan test dengan coverage
-pytest --cov=app
-
-# Menjalankan test spesifik
-pytest test/test_api/
-```
 
 ## 🔧 Database Migrations
 
@@ -114,22 +106,7 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-## 🤝 Kontribusi
-
-1. Fork repository
-2. Buat feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
-4. Push ke branch (`git push origin feature/AmazingFeature`)
-5. Buat Pull Request
-
 ## 📝 License
 
 Project ini menggunakan lisensi MIT. Lihat file `LICENSE` untuk detail lebih lanjut.
 
-## 👥 Tim Pengembang
-
-- [Nama Developer] - Initial work
-
-## 📞 Dukungan
-
-Jika ada pertanyaan atau issue, silakan buat issue di repository ini atau hubungi tim pengembang.
