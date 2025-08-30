@@ -5,11 +5,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app import sse, websocket
 from app.api import api
 from app.core.config import settings
 from app.core.config.logging import configure_logging
 from app.core.domain.subscribers import register_event_handlers
+from app.core.realtime.drivers import include_realtime_routers
 from app.db import create_db_and_tables
 from app.db.models import load_all_models
 from app.middleware import middleware
@@ -51,8 +51,7 @@ def get_app() -> FastAPI:
 
     # Routers
     app.include_router(api.router)
-    app.include_router(websocket.router)
-    app.include_router(sse.router)
+    include_realtime_routers(app)
 
     # Middleware
     app.add_middleware(

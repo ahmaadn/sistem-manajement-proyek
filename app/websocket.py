@@ -14,7 +14,7 @@ from fastapi import (
 from fastapi.responses import HTMLResponse
 from sqlalchemy.exc import IntegrityError
 
-from app.core.realtime.connection_manager import ConnectionManager, get_manager
+from app.core.realtime.websocket_manager import WebSocketManager, get_manager
 from app.db.base import async_session_maker
 from app.db.models.role_model import Role
 from app.db.repositories.user_repository import UserSQLAlchemyRepository
@@ -70,11 +70,6 @@ async def get_user_from_token(token: str, pegawai_service: PegawaiService):
         ) from e
 
 
-class _DevUser:
-    def __init__(self, user_id: int) -> None:
-        self.id = user_id
-
-
 async def get_current_user_ws(
     access_token: str = Query(...),
     pegawai_service: PegawaiService = Depends(PegawaiService),
@@ -98,7 +93,7 @@ async def get_current_user_ws(
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    manager: ConnectionManager = Depends(get_manager),
+    manager: WebSocketManager = Depends(get_manager),
     user: User = Depends(get_current_user_ws),
 ) -> None:
     logger.info("WebSocket connection established: %s", user.id)

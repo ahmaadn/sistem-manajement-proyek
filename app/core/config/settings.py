@@ -62,6 +62,30 @@ class Settings(BaseSettings):
     CLOUDINARY_API_KEY: str = ""
     CLOUDINARY_API_SECRET: str = ""
 
+    # REALTIME DRIVERS
+    # contoh isi : websocket,sse,pusher
+    REALTIME_DRIVERS: str = "websocket,sse,pusher"
+
+    # PUSHER
+    PUSHER_APP_ID: str = ""
+    PUSHER_KEY: str = ""
+    PUSHER_SECRET: str = ""
+    PUSHER_CLUSTER: str = "ap1"  # singapura
+    PUSHER_SSL: bool = True
+
+    _ALLOWED = {"websocket", "sse", "pusher"}
+
+    def get_enabled_drivers(self) -> set[str]:
+        """
+        Baca env REALTIME_DRIVERS, default: "websocket,sse"
+        Contoh: REALTIME_DRIVERS=pusher  -> hanya Pusher
+                REALTIME_DRIVERS=websocket -> hanya WS
+        """
+        items = {
+            x.strip().lower() for x in self.REALTIME_DRIVERS.split(",") if x.strip()
+        }
+        return {x for x in items if x in self._ALLOWED}
+
 
 def _singleton(cls):
     _instances = {}

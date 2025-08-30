@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketState
 logger = logging.getLogger(__name__)
 
 
-class ConnectionManager:
+class WebSocketManager:
     def __init__(self) -> None:
         # user_id -> set(WebSocket)
         # 1 user dapat memiliki banyak websocket hal, ini bisa terjadi dikarenakan
@@ -157,14 +157,14 @@ class ConnectionManager:
         return json.dumps(base)
 
 
-def get_manager() -> ConnectionManager:
+def get_manager() -> WebSocketManager:
     """Mendapatkan instance ConnectionManager.
 
     Returns:
         ConnectionManager: Instance dari ConnectionManager.
     """
     print("get_manager called")
-    if not hasattr(get_manager, "_instance"):
-        get_manager.instance = ConnectionManager()  # type: ignore[reportFunctionMemberAccess]
+    if not hasattr(get_manager, "instance"):
+        get_manager.instance = WebSocketManager()  # type: ignore[reportFunctionMemberAccess]
 
     return get_manager.instance  # type: ignore[reportFunctionMemberAccess]

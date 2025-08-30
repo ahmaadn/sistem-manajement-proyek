@@ -37,7 +37,8 @@ class SseManager:
 
         Args:
             user_id (int): The ID of the user to subscribe.
-            projects (Iterable[int] | None, optional): The IDs of the projects to subscribe to. Defaults to None.
+            projects (Iterable[int] | None, optional): The IDs of the projects to
+            subscribe to. Defaults to None.
 
         Returns:
             SseSubscriber: The created subscriber.
@@ -137,3 +138,10 @@ class SseManager:
 
 
 sse_manager = SseManager()
+
+
+def get_sse_manager():
+    if hasattr(get_sse_manager, "instance"):
+        get_sse_manager.instance = SseManager()  # type: ignore[reportFunctionMemberAccess]
+
+    return get_sse_manager.instance  # type: ignore[reportFunctionMemberAccess]
