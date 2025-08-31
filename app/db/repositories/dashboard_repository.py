@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import StatusTask, Task
+from app.db.models.task_model import ResourceType, StatusTask, Task
 
 
 class InterfaceDashboardReadRepository(Protocol):
@@ -45,15 +45,17 @@ class InterfaceDashboardReadRepository(Protocol):
 
     async def list_upcoming_project_deadlines(
         self, *, user_id: int, skip: int, limit: int
-    ) -> list[Project]:
-        """List proyek yang akan datang.
+    ) -> list[tuple[Project, int, int]]:
+        """List proyek yang akan datang berdasarkan tenggat waktu untuk PM.
 
         Args:
+            user_id (int): ID pengguna.
             skip (int): Jumlah proyek yang dilewati.
             limit (int): Jumlah proyek yang diambil.
 
         Returns:
-            list[Project]: Daftar proyek yang akan datang.
+            list[tuple[Project, int, int]]: Daftar proyek yang akan datang. key
+                terdiri dari 'project', 'task_count', 'task_in_progress'.
         """
         ...
 
@@ -156,9 +158,32 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
 
     async def list_upcoming_project_deadlines(
         self, *, user_id: int, skip: int, limit: int
-    ) -> list[Project]:
+    ):
         q = (
-            select(Project)
+            select(
+                Project,
+                # Hitung jumlah task per status berdasarkan corelasi subquery
+                (
+                    select(func.count())
+                    .where(
+                        Task.project_id == Project.id,
+                        Task.deleted_at.is_(None),
+                        Task.status != StatusTask.PENDING,
+                        Task.resource_type == ResourceType.TASK,
+                    )
+                    .scalar_subquery()
+                ).label("task_count"),
+                (
+                    select(func.count())
+                    .where(
+                        Task.project_id == Project.id,
+                        Task.deleted_at.is_(None),
+                        Task.status == StatusTask.IN_PROGRESS,
+                        Task.resource_type != ResourceType.TASK,
+                    )
+                    .scalar_subquery()
+                ).label("task_in_progress"),
+            )
             .join(ProjectMember, ProjectMember.project_id == Project.id)
             .where(
                 # Project yang tidak dihapus
@@ -177,7 +202,11 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
             .limit(limit)
         )
         res = await self.session.execute(q)
-        return list(res.scalars().all())
+        rows = res.all()
+        return [
+            (row[0], int(row.task_count or 0), int(row.task_in_progress or 0))
+            for row in rows
+        ]
 
     async def list_user_upcoming_tasks(self, user_id: int, limit: int) -> list[Task]:
         q = (

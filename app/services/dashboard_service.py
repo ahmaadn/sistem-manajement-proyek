@@ -12,6 +12,7 @@ from app.schemas.dashboard import (
     AdminDashboardResponse,
     PMDashboardResponse,
     ProjectStatusSummary,
+    UpcomingDeadlineItem,
     UserDashboardResponse,
     YearlySummary,
 )
@@ -65,9 +66,21 @@ class DashboardService:
         yearly_rows = await self.repo.get_pm_yearly_summary(
             user_id=user_id, one_year_ago=one_year_ago
         )
-        upcoming_deadlines = await self.repo.list_upcoming_project_deadlines(
+        upcoming_deadlines_rows = await self.repo.list_upcoming_project_deadlines(
             user_id=user_id, skip=skip_deadline, limit=limit_deadline
         )
+        upcoming_deadlines = [
+            UpcomingDeadlineItem(
+                id=project.id,
+                title=project.title,
+                end_date=project.end_date,
+                start_date=project.start_date,
+                status=project.status,
+                task_count=task_count,
+                task_in_progress=task_in_progress,
+            )
+            for (project, task_count, task_in_progress) in upcoming_deadlines_rows
+        ]
 
         return PMDashboardResponse(
             project_summary=ProjectStatusSummary(
@@ -85,7 +98,7 @@ class DashboardService:
                 )
                 for row in yearly_rows
             ],
-            upcoming_deadlines=upcoming_deadlines,  # type: ignore , bakal auto cast ke list[ProjectResponse]
+            upcoming_deadlines=upcoming_deadlines,
         )
 
     async def user_dashboard(
