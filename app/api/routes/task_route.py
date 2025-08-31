@@ -160,15 +160,8 @@ class _Task:
         **Akses** : Project Manager (Owner)
         """
 
-        task = await self.task_service.get(
-            task_id, options=[selectinload(Task.sub_tasks)]
-        )
-        if task is None:
-            raise exceptions.TaskNotFoundError
-        await self._ensure_project_owner(task.project_id)
-
         async with self.uow:
-            await self.task_service.delete_task(self.user.id, task_id)
+            await self.task_service.delete_task(user=self.user, task_id=task_id)
             await self.uow.commit()
 
     @r.put(

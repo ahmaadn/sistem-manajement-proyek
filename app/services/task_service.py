@@ -7,7 +7,6 @@ from app.core.domain.events.assignee_task import (
     TaskAssignedRemovedEvent,
 )
 from app.core.domain.events.task import (
-    SubTasksDetachedFromSectionEvent,
     TaskCreatedEvent,
     TaskDeletedEvent,
     TaskRenameEvent,
@@ -267,7 +266,7 @@ class TaskService:
 
         return updated
 
-    async def delete_task(self, user_id: int, task_id: int) -> None:
+    async def delete_task(self, *, user: User, task_id: int) -> None:
         """Menghapus tugas berdasarkan ID.
 
         Args:
@@ -280,17 +279,31 @@ class TaskService:
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
+        is_owner = await self.uow.project_repo.ensure_member_in_project(
+            user_id=user.id,
+            project_id=task.project_id,
+            required_role=RoleProject.OWNER,
+        )
+
+        if not is_owner and user.role != Role.ADMIN:
+            raise exceptions.ForbiddenError("Tidak punya akses untuk menghapus task")
+
         if task.resource_type == ResourceType.MILESTONE:
-            detached = await self.repo.detach_all_subtasks_from_section(task.id)
-            self.uow.add_event(
-                SubTasksDetachedFromSectionEvent(
-                    user_id=user_id,
-                    section_task_id=task.id,
-                    project_id=task.project_id,
-                    detached_count=detached,
-                )
+            # Cegah delete jika masih ada child task yang belum terhapus
+            has_children = any(
+                st
+                for st in task.sub_tasks
+                if getattr(st, "deleted_at", None) is None
             )
+            if has_children:
+                raise exceptions.ForbiddenError(
+                    (
+                        "Milestone masih memiliki task. Hapus atau pindahkan task"
+                        "terlebih dahulu."
+                    )
+                )
         else:
+            # Task biasa: hapus semua subtask secara cascade (soft delete)
             await self.repo.cascade_soft_delete_subtasks(task.id)
 
         await self.repo.soft_delete(task)
@@ -299,7 +312,7 @@ class TaskService:
                 performed_by=task.id,
                 project_id=task.project_id,
                 task_name=task.name,
-                deleted_by=user_id,
+                deleted_by=user.id,
             )
         )
 
