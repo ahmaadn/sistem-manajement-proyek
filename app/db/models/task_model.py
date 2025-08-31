@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class ResourceType(StrEnum):
     TASK = "task"
     MILESTONE = "milestone"
-    SECTION = "section"
 
 
 class StatusTask(StrEnum):
