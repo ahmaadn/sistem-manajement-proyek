@@ -49,6 +49,7 @@ class DashboardService:
 
     async def pm_dashboard(
         self,
+        user_id: int,
         project_service: "ProjectService",
         skip_deadline: int = 0,
         limit_deadline: int = 5,
@@ -58,10 +59,14 @@ class DashboardService:
         start_of_this_month = today.replace(day=1)
         one_year_ago = today - timedelta(days=365)
 
-        summary = await self.repo.get_pm_project_status_summary(start_of_this_month)
-        yearly_rows = await self.repo.get_pm_yearly_summary(one_year_ago)
+        summary = await self.repo.get_pm_project_status_summary(
+            user_id=user_id, start_of_this_month=start_of_this_month
+        )
+        yearly_rows = await self.repo.get_pm_yearly_summary(
+            user_id=user_id, one_year_ago=one_year_ago
+        )
         upcoming_deadlines = await self.repo.list_upcoming_project_deadlines(
-            skip=skip_deadline, limit=limit_deadline
+            user_id=user_id, skip=skip_deadline, limit=limit_deadline
         )
 
         return PMDashboardResponse(

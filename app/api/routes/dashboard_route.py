@@ -72,6 +72,7 @@ class _Dashboard:
         skip_deadline: int = 0,
     ) -> PMDashboardResponse:
         return await self.dashboard_service.pm_dashboard(
+            user_id=pm.id,
             project_service=self.project_service,
             skip_deadline=skip_deadline,
             limit_deadline=limit_deadline,
