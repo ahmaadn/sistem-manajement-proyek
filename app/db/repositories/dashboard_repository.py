@@ -159,11 +159,11 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                 # proyek yang tidak di hapus
                 Project.deleted_at.is_(None),
                 # proyek yang aktif
-                Project.status.is_(StatusProject.ACTIVE),
+                Project.status == StatusProject.ACTIVE,
                 # task yang memiliki due date
                 Task.due_date.is_not(None),
                 # task yang tidak di selesaikan
-                Task.status.is_not(StatusTask.COMPLETED),
+                Task.status != StatusTask.COMPLETED,
             )
             .order_by(
                 case((Task.due_date < func.now(), 0), else_=1),

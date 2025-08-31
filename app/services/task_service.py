@@ -327,4 +327,3 @@ class TaskService:
             dict: Statistik tugas untuk pengguna tertentu.
         """
         return await self.repo.get_user_task_statistics(user_id)
-        return await self.repo.get_user_task_statistics(user_id)
