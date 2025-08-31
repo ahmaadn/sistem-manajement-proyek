@@ -75,6 +75,38 @@ class TaskService:
             filters=filters, order_by=order_by, custom_query=custom_query
         )
 
+    async def list_subtask(self, *, user: User, task_id: int) -> list[Task]:
+        """Mendapatkan daftar sub-tugas untuk tugas tertentu.
+
+        Args:
+            task_id (int): ID tugas yang akan diambil sub-tugasnya.
+
+        Returns:
+            list[Task]: Daftar sub-tugas yang ditemukan.
+        """
+
+        task = await self.get(task_id)
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
+
+        project_exists, is_member = await self.uow.project_repo.get_membership_flags(
+            user_id=user.id, project_id=task.project_id
+        )
+
+        if not project_exists:
+            raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
+
+        if not is_member and user.role != Role.ADMIN:
+            raise exceptions.ForbiddenError(
+                "hanya anggota proyek yang dapat mengakses sub-tugas"
+            )
+
+        return await self.repo.list(
+            filters={"parent_id": task.id},
+            order_by=Task.display_order,
+            custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
+        )
+
     async def create_task(
         self, *, user: User, parent_id: int, project_id: int, payload: TaskCreate
     ) -> Task:

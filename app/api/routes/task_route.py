@@ -48,7 +48,7 @@ class _Task:
         return project_member
 
     @r.get(
-        "/projects/{project_id}/tasks/{task_id}/subtasks",
+        "/tasks/{parent_id}/subtasks",
         status_code=status.HTTP_200_OK,
         response_model=list[SubTaskResponse],
         responses={
@@ -60,28 +60,25 @@ class _Task:
                 "description": "User tidak memiliki akses ke proyek ini",
                 "model": exceptions.AppErrorResponse,
             },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Task atau Project tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
         },
     )
-    async def get_subtasks(self, project_id: int, task_id: int):
+    async def get_subtasks(self, parent_id: int):
         """
         Mendapatkan daftar sub-tugas untuk tugas tertentu.
-                - Masih bisa menambahkan task walaupun project telah di delete
 
-
-        **Akses** : Semua Anggota Project
+        **Akses** : Semua Anggota Project, Admin
         """
 
-        # pastikan user adalah member project
-        await self._ensure_project_member(project_id)
-
-        return await self.task_service.list_task(
-            filters={"parent_id": task_id},
-            order_by=Task.display_order,
-            custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
+        return await self.task_service.list_subtask(
+            user=self.user, task_id=parent_id
         )
 
     @r.post(
-        "/projects/{project_id}/tasks/{task_id}/subtasks",
+        "/projects/{project_id}/tasks/{parent_id}",
         response_model=SimpleTaskResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
@@ -95,7 +92,9 @@ class _Task:
             },
         },
     )
-    async def create_task(self, project_id: int, task_id: int, payload: TaskCreate):
+    async def create_task(
+        self, project_id: int, parent_id: int, payload: TaskCreate
+    ):
         """
         Membuat tugas baru untuk proyek tertentu.
         - Akses hanya bisa dilakukan oleh project manager (Owner).
@@ -108,7 +107,7 @@ class _Task:
             task = await self.task_service.create_task(
                 user=self.user,
                 project_id=project_id,
-                parent_id=task_id,
+                parent_id=parent_id,
                 payload=payload,
             )
             await self.uow.commit()
