@@ -118,16 +118,12 @@ class _Task:
         response_model=SimpleTaskResponse,
         status_code=status.HTTP_200_OK,
         responses={
-            status.HTTP_200_OK: {
-                "description": "Task detail retrieved successfully",
-                "model": SimpleTaskResponse,
-            },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User tidak memiliki akses ke proyek ini",
                 "model": exceptions.AppErrorResponse,
             },
             status.HTTP_404_NOT_FOUND: {
-                "description": "Task not found",
+                "description": "Task atau project tidak ditemukan",
                 "model": exceptions.AppErrorResponse,
             },
         },
@@ -136,17 +132,11 @@ class _Task:
         """
         Mendapatkan detail tugas untuk proyek tertentu.
 
-        **Akses** : Semua Anggota Project
+        **Akses** : Semua Anggota Project, Admin
         """
-
-        task = await self.task_service.get(task_id)
-        if task is None:
-            raise exceptions.TaskNotFoundError
-
-        # pastikan user adalah member project
-        await self._ensure_project_member(task.project_id)
-
-        return task
+        return await self.task_service.get_detail_task(
+            user=self.user, task_id=task_id
+        )
 
     @r.delete(
         "/tasks/{task_id}",

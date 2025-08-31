@@ -52,6 +52,40 @@ class TaskService:
         """
         return await self.repo.get(task_id, options=options)
 
+    async def get_detail_task(self, *, user: User, task_id: int) -> Task:
+        """Mendapatkan detail tugas untuk proyek tertentu.
+
+        Args:
+            user (User): Pengguna yang meminta detail tugas.
+            task_id (int): ID tugas yang akan diambil detailnya.
+
+        Raises:
+            exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan.
+            exceptions.ForbiddenError: Jika pengguna tidak memiliki akses.
+
+        Returns:
+            Task: Tugas yang diminta.
+        """
+        task = await self.get(task_id)
+        if task is None:
+            raise exceptions.TaskNotFoundError
+
+        # pastikan user adalah member project
+        project_exists, is_member = await self.uow.project_repo.get_membership_flags(
+            user_id=user.id, project_id=task.project_id
+        )
+
+        if not project_exists:
+            raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
+
+        if not is_member and user.role != Role.ADMIN:
+            raise exceptions.ForbiddenError(
+                "hanya anggota proyek yang dapat mengakses sub-tugas"
+            )
+
+        return task
+
     async def list_task(
         self,
         *,
