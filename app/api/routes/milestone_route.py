@@ -6,7 +6,7 @@ from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import MileStoneCreate
-from app.schemas.task import SimpleTaskResponse, TaskCreate, TaskResponse
+from app.schemas.task import SimpleTaskResponse, TaskResponse
 from app.schemas.user import User
 from app.services.task_service import TaskService
 from app.utils.exceptions import AppErrorResponse
@@ -78,38 +78,3 @@ class _Milestone:
             )
             await self.uow.commit()
         return milestone
-
-    @r.post(
-        "/projects/{project_id}/milestone/{milestone_id}/task",
-        response_model=SimpleTaskResponse,
-        status_code=status.HTTP_201_CREATED,
-        responses={
-            status.HTTP_403_FORBIDDEN: {
-                "description": (
-                    "Hanya pemilik proyek yang dapat membuat task pada milestone"
-                ),
-                "model": AppErrorResponse,
-            },
-            status.HTTP_404_NOT_FOUND: {
-                "description": "Project atau milestone tidak ditemukan",
-                "model": AppErrorResponse,
-            },
-        },
-    )
-    async def create_task(
-        self, project_id: int, milestone_id: int, payload: TaskCreate
-    ):
-        """
-        Membuat task di dalam milestone tertentu.
-
-        **Akses**: Owner Project
-        """
-        async with self.uow:
-            task = await self.task_service.create_task(
-                user=self.user,
-                parent_id=milestone_id,
-                project_id=project_id,
-                payload=payload,
-            )
-            await self.uow.commit()
-        return task
