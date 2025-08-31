@@ -504,5 +504,5 @@ class ProjectService:
         return await self.repo.ensure_member_in_project(
             user_id=user.id,
             project_id=project_id,
-            project_role=project_role,
+            required_role=project_role,
         )

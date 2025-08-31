@@ -98,7 +98,7 @@ class InterfaceProjectRepository(
         *,
         user_id: int,
         project_id: int,
-        project_role: RoleProject | None = None,
+        required_role: RoleProject | None = None,
     ) -> bool:
         """
         Memastikan anggota ada di proyek. bisa custom role untuk memastikan juga
@@ -107,7 +107,7 @@ class InterfaceProjectRepository(
         Args:
             user_id (int): ID pengguna.
             project_id (int): ID proyek.
-            project_role (RoleProject | None): Peran proyek. Defaults to
+            required_role (RoleProject | None): Peran proyek. Defaults to
                 None.
 
         Returns:
@@ -130,7 +130,8 @@ class InterfaceProjectRepository(
         Args:
             user_id (int): ID pengguna.
             project_id (int): ID proyek.
-            required_role (RoleProject | None, optional): Peran yang diperlukan. Defaults to None.
+            required_role (RoleProject | None, optional): Peran yang diperlukan.
+                Defaults to None.
 
         Returns:
             tuple[bool, bool]: (project_exists, allowed)
@@ -385,7 +386,7 @@ class ProjectSQLAlchemyRepository(
         *,
         user_id: int,
         project_id: int,
-        project_role: RoleProject | None = None,
+        required_role: RoleProject | None = None,
     ) -> bool:
         conditions = [
             ProjectMember.project_id == Project.id,
@@ -393,8 +394,8 @@ class ProjectSQLAlchemyRepository(
             Project.id == project_id,
             Project.deleted_at.is_(None),
         ]
-        if project_role is not None:
-            conditions.append(ProjectMember.role == project_role)
+        if required_role is not None:
+            conditions.append(ProjectMember.role == required_role)
 
         stmt = select(exists().where(*conditions))
         return (await self.session.execute(stmt)).scalar_one()
