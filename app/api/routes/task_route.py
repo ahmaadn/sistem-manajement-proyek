@@ -1,6 +1,6 @@
 from types import NoneType
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,7 +16,6 @@ from app.schemas.task import (
     SimpleTaskResponse,
     SubTaskResponse,
     TaskCreate,
-    TaskResponse,
     TaskUpdate,
 )
 from app.schemas.user import User
@@ -49,42 +48,6 @@ class _Task:
         return project_member
 
     @r.get(
-        "/projects/{project_id}/tasks",
-        response_model=list[TaskResponse],
-        status_code=status.HTTP_200_OK,
-        responses={
-            status.HTTP_200_OK: {
-                "description": "Daftar tugas berhasil diambil",
-                "model": list[TaskResponse],
-            },
-            status.HTTP_403_FORBIDDEN: {
-                "description": "User tidak memiliki akses ke proyek ini",
-                "model": exceptions.AppErrorResponse,
-            },
-        },
-    )
-    async def get_tasks(self, project_id: int):
-        """
-        Mendapatkan daftar tugas untuk proyek tertentu.
-        - Hanya user yang terdaftar sebagai anggota proyek yang dapat mengakses
-            tugas.
-        - Project yang di delete masih bisa lihat task
-
-        **Akses** : Anggota Proyek (Member, Project Manager, Admin)
-        """
-
-        # pastikan user adalah member project
-        await self._ensure_project_member(project_id)
-
-        return await self.task_service.list(
-            filters={"project_id": project_id, "parent_id": None},
-            order_by=Task.display_order,
-            custom_query=lambda s: s.options(
-                selectinload(Task.sub_tasks, recursion_depth=1)
-            ),
-        )
-
-    @r.get(
         "/projects/{project_id}/tasks/{task_id}/subtasks",
         status_code=status.HTTP_200_OK,
         response_model=list[SubTaskResponse],
@@ -111,14 +74,14 @@ class _Task:
         # pastikan user adalah member project
         await self._ensure_project_member(project_id)
 
-        return await self.task_service.list(
+        return await self.task_service.list_task(
             filters={"parent_id": task_id},
             order_by=Task.display_order,
             custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
         )
 
     @r.post(
-        "/tasks",
+        "/projects/{project_id}/tasks/{task_id}/subtasks",
         response_model=SimpleTaskResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
@@ -132,29 +95,21 @@ class _Task:
             },
         },
     )
-    async def create_task(
-        self,
-        payload: TaskCreate,
-        parent_task_id: int | None = Query(
-            default=None, description="ID tugas induk jika ada"
-        ),
-        user: User = Depends(get_user_pm),
-    ):
+    async def create_task(self, project_id: int, task_id: int, payload: TaskCreate):
         """
         Membuat tugas baru untuk proyek tertentu.
         - Akses hanya bisa dilakukan oleh project manager (Owner).
         - Masih bisa menambahkan task walaupun project telah di delete
 
-        **Akses** : Project Manager (Owner)
+        **Akses** : Owner Project
         """
-
-        # pastikan Owner
-        await self._ensure_project_owner(payload.project_id)
-
         # display_order handled in service
         async with self.uow:
             task = await self.task_service.create_task(
-                payload, parent_task_id=parent_task_id, actor=self.user
+                user=self.user,
+                project_id=project_id,
+                parent_id=task_id,
+                payload=payload,
             )
             await self.uow.commit()
         return task

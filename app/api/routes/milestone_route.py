@@ -1,0 +1,115 @@
+from fastapi import APIRouter, Depends, status
+from fastapi_utils.cbv import cbv
+
+from app.api.dependencies.services import get_task_service
+from app.api.dependencies.uow import get_uow
+from app.api.dependencies.user import get_current_user
+from app.db.uow.sqlalchemy import UnitOfWork
+from app.schemas.milestone import MileStoneCreate
+from app.schemas.task import SimpleTaskResponse, TaskCreate, TaskResponse
+from app.schemas.user import User
+from app.services.task_service import TaskService
+from app.utils.exceptions import AppErrorResponse
+
+r = router = APIRouter(tags=["Milestone"])
+
+
+@cbv(r)
+class _Milestone:
+    user: User = Depends(get_current_user)
+    uow: UnitOfWork = Depends(get_uow)
+    task_service: TaskService = Depends(get_task_service)
+
+    @r.get(
+        "/projects/{project_id}/milestone",
+        response_model=list[TaskResponse],
+        status_code=status.HTTP_200_OK,
+        responses={
+            status.HTTP_200_OK: {
+                "description": "Daftar tugas berhasil diambil",
+                "model": list[TaskResponse],
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "description": "User tidak memiliki akses ke proyek ini",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def get_tasks(self, project_id: int):
+        """
+        Mendapatkan daftar tugas untuk proyek tertentu.
+        - Hanya user yang terdaftar sebagai anggota proyek yang dapat mengakses
+            tugas.
+        - Project yang di delete masih bisa lihat task
+        - Admin dapat melihat semua task
+
+        **Akses** : Anggota Proyek dan Admin
+        """
+
+        # pastikan user adalah member project
+        return await self.task_service.list_milestone_with_task(
+            project_id=project_id, user=self.user
+        )
+
+    @r.post(
+        "/projects/{project_id}/milestone",
+        response_model=SimpleTaskResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            status.HTTP_403_FORBIDDEN: {
+                "description": "Hanya pemilik proyek yang dapat membuat milestone",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Project tidak ditemukan",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def create_milestone(self, project_id: int, payload: MileStoneCreate):
+        """
+        Membuat milestone baru.
+
+        **Akses**: Owner Project
+        """
+        async with self.uow:
+            milestone = await self.task_service.create_milestone(
+                user=self.user, project_id=project_id, payload=payload
+            )
+            await self.uow.commit()
+        return milestone
+
+    @r.post(
+        "/projects/{project_id}/milestone/{milestone_id}/task",
+        response_model=SimpleTaskResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            status.HTTP_403_FORBIDDEN: {
+                "description": (
+                    "Hanya pemilik proyek yang dapat membuat task pada milestone"
+                ),
+                "model": AppErrorResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Project atau milestone tidak ditemukan",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def create_task(
+        self, project_id: int, milestone_id: int, payload: TaskCreate
+    ):
+        """
+        Membuat task di dalam milestone tertentu.
+
+        **Akses**: Owner Project
+        """
+        async with self.uow:
+            task = await self.task_service.create_task(
+                user=self.user,
+                parent_id=milestone_id,
+                project_id=project_id,
+                payload=payload,
+            )
+            await self.uow.commit()
+        return task

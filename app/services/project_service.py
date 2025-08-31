@@ -313,10 +313,10 @@ class ProjectService:
         if not project:
             raise exceptions.ProjectNotFoundError
 
-        tasks = await task_service.list(
+        tasks = await task_service.list_task(
             filters={"project_id": project_id, "resource_type": ResourceType.TASK},
         )
-        milestones = await task_service.list(
+        milestones = await task_service.list_task(
             filters={
                 "project_id": project_id,
                 "resource_type": ResourceType.MILESTONE,
@@ -493,3 +493,16 @@ class ProjectService:
         )
 
         return updated
+
+    async def ensure_member_in_project(
+        self,
+        *,
+        user: User,
+        project_id: int,
+        project_role: RoleProject | None = None,
+    ) -> bool:
+        return await self.repo.ensure_member_in_project(
+            user_id=user.id,
+            project_id=project_id,
+            project_role=project_role,
+        )

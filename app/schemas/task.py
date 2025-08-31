@@ -10,10 +10,8 @@ from app.schemas.base import BaseSchema
 class TaskCreate(BaseSchema):
     """Class untuk membuat tugas baru."""
 
-    project_id: int = Field(..., description="ID proyek tempat tugas ini dibuat")
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
-    resource_type: ResourceType = Field(default=ResourceType.TASK)
     status: StatusTask | None = Field(default=StatusTask.IN_PROGRESS)
     priority: PriorityLevel | None = Field(default=None)
     display_order: int = Field(default=0)

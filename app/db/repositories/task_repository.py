@@ -4,12 +4,12 @@ from typing import Any, Callable, Optional, Protocol, Sequence, runtime_checkabl
 
 from sqlalchemy import Select, case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import StatusTask, Task
+from app.db.models.task_model import ResourceType, StatusTask, Task
 from app.schemas.task import TaskCreate, TaskUpdate
 
 
@@ -179,6 +179,9 @@ class InterfaceTaskRepository(Protocol):
         Mengambil daftar user_id yang menjadi anggota dari sebuah proyek.
         """
         ...
+
+    async def get_ancestor_milestone(self, task_id: int) -> Task | None: ...
+    async def is_under_milestone(self, task_id: int) -> bool: ...
 
 
 class TaskSQLAlchemyRepository(InterfaceTaskRepository):
@@ -425,3 +428,35 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def get_ancestor_milestone(self, task_id: int) -> Task | None:
+        # CTE rekursif: mulai dari task saat ini, naik ke parent hingga root
+        base = select(
+            Task.id, Task.parent_id, Task.resource_type, Task.deleted_at
+        ).where(Task.id == task_id)
+
+        task_alias = aliased(Task)
+        anc = base.cte(name="anc", recursive=True)
+        anc = anc.union_all(
+            select(
+                task_alias.id,
+                task_alias.parent_id,
+                task_alias.resource_type,
+                task_alias.deleted_at,
+            ).where(task_alias.id == anc.c.parent_id)
+        )
+
+        stmt = (
+            select(Task)
+            .join(anc, Task.id == anc.c.id)
+            .where(
+                Task.resource_type == ResourceType.MILESTONE,
+                Task.deleted_at.is_(None),
+            )
+            .limit(1)
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def is_under_milestone(self, task_id: int) -> bool:
+        return (await self.get_ancestor_milestone(task_id)) is not None
