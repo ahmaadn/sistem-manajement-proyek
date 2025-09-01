@@ -4,11 +4,10 @@ from fastapi import APIRouter, Body, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.services import get_project_service, get_task_service
+from app.api.dependencies.services import get_task_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm
-from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.task_model import StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
@@ -18,7 +17,6 @@ from app.schemas.task import (
     TaskUpdate,
 )
 from app.schemas.user import User
-from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
 from app.utils import exceptions
 
@@ -29,22 +27,8 @@ r = router = APIRouter(tags=["Task"])
 class _Task:
     user: User = Depends(get_current_user)
     task_service: TaskService = Depends(get_task_service)
-    project_service: ProjectService = Depends(get_project_service)
     session: AsyncSession = Depends(get_async_session)
     uow: UnitOfWork = Depends(get_uow)
-
-    # Helper: pastikan user adalah member project
-    async def _ensure_project_member(self, project_id: int) -> ProjectMember:
-        try:
-            return await self.project_service.get_member(project_id, self.user.id)
-        except exceptions.MemberNotFoundError:
-            raise exceptions.UserNotInProjectError from None
-
-    async def _ensure_project_owner(self, project_id: int) -> ProjectMember:
-        project_member = await self._ensure_project_member(project_id)
-        if project_member.role != RoleProject.OWNER:
-            raise exceptions.ForbiddenError
-        return project_member
 
     @r.get(
         "/tasks/{parent_id}/subtasks",
