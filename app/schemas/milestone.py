@@ -1,15 +1,27 @@
-from pydantic import Field
+from datetime import datetime
+from typing import Optional
 
-from app.db.models.task_model import StatusTask
-from app.schemas.base import BaseSchema
+from pydantic import BaseModel, Field
 
 
-class MileStoneCreate(BaseSchema):
-    name: str = Field(default="Untitled Task")
-    # description: str | None = Field(default=None)
-    status: StatusTask | None = Field(default=StatusTask.IN_PROGRESS)
-    # priority: PriorityLevel | None = Field(default=None)
-    display_order: int = Field(default=0)
-    # due_date: datetime.datetime | None = Field(default=None)
-    # start_date: datetime.datetime | None = Field(default=None)
-    # estimated_duration: int | None = Field(default=None)
+class MilestoneBase(BaseModel):
+    title: str = Field(..., max_length=255)
+
+
+class MilestoneCreate(MilestoneBase):
+    pass
+
+
+class MilestoneUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=255)
+
+
+class MilestoneResponse(BaseModel):
+    id: int
+    project_id: int
+    title: str
+    display_order: int
+    created_at: datetime
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

@@ -13,6 +13,7 @@ from app.db.uow.sqlalchemy import UnitOfWork
 from app.services.attachment_service import AttachmentService
 from app.services.comment_service import CommentService
 from app.services.dashboard_service import DashboardService
+from app.services.milestone_service import MilestoneService
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
 
@@ -48,3 +49,7 @@ def get_comment_service(uow: UnitOfWork = Depends(get_uow)) -> CommentService:
 def get_attachment_service(uow: UnitOfWork = Depends(get_uow)) -> AttachmentService:
     """Mendapatkan layanan lampiran."""
     return AttachmentService(uow)
+
+
+def get_milestone_service(uow: UnitOfWork = Depends(get_uow)) -> MilestoneService:
+    return MilestoneService(uow=uow)

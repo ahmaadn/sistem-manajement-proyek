@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 
-from app.api.dependencies.services import get_task_service
+from app.api.dependencies.services import get_milestone_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.milestone import MileStoneCreate
-from app.schemas.task import SimpleTaskResponse, TaskResponse
+from app.schemas.milestone import MilestoneCreate, MilestoneResponse
 from app.schemas.user import User
-from app.services.task_service import TaskService
+from app.services.milestone_service import MilestoneService
 from app.utils.exceptions import AppErrorResponse
 
 r = router = APIRouter(tags=["Milestone"])
@@ -18,16 +17,16 @@ r = router = APIRouter(tags=["Milestone"])
 class _Milestone:
     user: User = Depends(get_current_user)
     uow: UnitOfWork = Depends(get_uow)
-    task_service: TaskService = Depends(get_task_service)
+    milestone_service: MilestoneService = Depends(get_milestone_service)
 
     @r.get(
         "/projects/{project_id}/milestone",
-        response_model=list[TaskResponse],
+        response_model=list[MilestoneResponse],
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "Daftar tugas berhasil diambil",
-                "model": list[TaskResponse],
+                "model": list[MilestoneResponse],
             },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User tidak memiliki akses ke proyek ini",
@@ -47,13 +46,13 @@ class _Milestone:
         """
 
         # pastikan user adalah member project
-        return await self.task_service.list_milestone_with_task(
+        return await self.milestone_service.list_milestones(
             project_id=project_id, user=self.user
         )
 
     @r.post(
         "/projects/{project_id}/milestone",
-        response_model=SimpleTaskResponse,
+        response_model=MilestoneResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_403_FORBIDDEN: {
@@ -66,14 +65,14 @@ class _Milestone:
             },
         },
     )
-    async def create_milestone(self, project_id: int, payload: MileStoneCreate):
+    async def create_milestone(self, project_id: int, payload: MilestoneCreate):
         """
         Membuat milestone baru.
 
         **Akses**: Owner Project
         """
         async with self.uow:
-            milestone = await self.task_service.create_milestone(
+            milestone = await self.milestone_service.create_milestone(
                 user=self.user, project_id=project_id, payload=payload
             )
             await self.uow.commit()

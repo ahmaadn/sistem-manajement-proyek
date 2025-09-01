@@ -23,7 +23,6 @@ from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import ResourceType, StatusTask, Task
 from app.db.repositories.task_repository import InterfaceTaskRepository
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.milestone import MileStoneCreate
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.user import User
 from app.utils import exceptions
@@ -465,69 +464,6 @@ class TaskService:
             dict: Statistik tugas untuk pengguna tertentu.
         """
         return await self.repo.get_user_task_statistics(user_id)
-
-    async def create_milestone(
-        self, *, user: User, project_id: int, payload: MileStoneCreate
-    ) -> Task:
-        """Membuat Milestone baru
-
-        Args:
-            user (User): Pengguna yang membuat milestone.
-            project_id (int): ID proyek tempat milestone dibuat.
-            payload (MileStoneCreate): Data untuk milestone baru.
-        """
-
-        project_exists, is_owner = await self.uow.project_repo.get_membership_flags(
-            user_id=user.id, project_id=project_id, required_role=RoleProject.OWNER
-        )
-
-        if not project_exists:
-            raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
-
-        if not is_owner:
-            raise exceptions.ForbiddenError(
-                "Hanya owner proyek yang dapat membuat milestone"
-            )
-
-        milestone = await self.uow.task_repo.create(
-            payload=TaskCreate(
-                name=payload.name,
-                status=payload.status,
-                display_order=payload.display_order,
-            ),
-            extra_fields={
-                "project_id": project_id,
-                "created_by": user.id,
-                "resource_type": ResourceType.MILESTONE,
-            },
-        )
-
-        # TODO : Tambah event milestone created
-
-        return milestone
-
-    async def list_milestone_with_task(
-        self, *, project_id: int, user: User
-    ) -> list[Task]:
-        project_exists, is_member = await self.uow.project_repo.get_membership_flags(
-            user_id=user.id, project_id=project_id
-        )
-
-        if not project_exists:
-            raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
-
-        if user.role != Role.ADMIN and not is_member:
-            raise exceptions.ForbiddenError(
-                "Hanya anggota proyek yang dapat melihat milestone"
-            )
-
-        return await self.uow.task_repo.list(
-            filters={"project_id": project_id, "parent_id": None},
-            order_by=Task.display_order,
-            custom_query=lambda s: s.options(
-                selectinload(Task.sub_tasks, recursion_depth=1)
-            ),
-        )
 
     async def list_user_tasks(self, *, user: User):
         return await self.repo.list(
