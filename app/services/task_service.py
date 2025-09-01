@@ -213,7 +213,7 @@ class TaskService:
         return task
 
     async def update_task(
-        self, user_id: int, task_id: int, payload: TaskUpdate
+        self, *, user: User, task_id: int, payload: TaskUpdate
     ) -> Task:
         """Memperbarui tugas yang ada.
 
@@ -223,13 +223,27 @@ class TaskService:
 
         Raises:
             exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
+            exceptions.ForbiddenError: Jika pengguna tidak memiliki akses.
 
         Returns:
             Task: Tugas yang telah diperbarui.
         """
         task = await self.repo.get(task_id)
+
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
+
+        is_owner = self.uow.project_repo.ensure_member_in_project(
+            user_id=user.id,
+            project_id=task.project_id,
+            required_role=RoleProject.OWNER,
+        )
+
+        if not is_owner and user.role != Role.ADMIN:
+            raise exceptions.ForbiddenError(
+                "Tidak punya akses untuk mengupdate task"
+            )
+
         updated = await self.repo.update(task, payload)
 
         self.uow.add_event(
@@ -237,7 +251,7 @@ class TaskService:
                 performed_by=updated.id,
                 project_id=updated.project_id,
                 task_id=task.id,
-                updated_by=user_id,
+                updated_by=user.id,
             )
         )
 
@@ -247,7 +261,7 @@ class TaskService:
                     performed_by=updated.id,
                     project_id=updated.project_id,
                     task_id=task.id,
-                    updated_by=user_id,
+                    updated_by=user.id,
                     before=task.name,
                     after=payload.name,
                 )
@@ -256,7 +270,7 @@ class TaskService:
         if payload.status and payload.status != task.status:
             self.uow.add_event(
                 TaskStatusChangedEvent(
-                    performed_by=user_id,
+                    performed_by=user.id,
                     task_id=updated.id,
                     project_id=updated.project_id,
                     old_status=task.status or "",

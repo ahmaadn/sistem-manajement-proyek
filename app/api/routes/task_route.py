@@ -184,18 +184,12 @@ class _Task:
     ):
         """Mengupdate tugas tertentu.
 
-        **Akses** : Project Manager (Owner)
+        **Akses** : Owner Project
         """
-
-        task = await self.task_service.get(task_id)
-        if task is None:
-            raise exceptions.TaskNotFoundError
-
-        await self._ensure_project_owner(task.project_id)
 
         async with self.uow:
             updated = await self.task_service.update_task(
-                self.user.id, task_id, payload
+                user=self.user, task_id=task_id, payload=payload
             )
             await self.uow.commit()
         return updated
