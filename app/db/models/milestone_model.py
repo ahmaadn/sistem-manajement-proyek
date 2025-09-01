@@ -22,3 +22,4 @@ class Milestone(Base, TimeStampMixin):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
 
     project: Mapped["Project"] = relationship("Project", back_populates="milestones")
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
