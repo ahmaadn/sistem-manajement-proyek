@@ -19,6 +19,7 @@ from app.core.domain.policies.task import (
 )
 from app.db.models.project_member_model import RoleProject
 from app.db.models.role_model import Role
+from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import ResourceType, StatusTask, Task
 from app.db.repositories.task_repository import InterfaceTaskRepository
 from app.db.uow.sqlalchemy import UnitOfWork
@@ -179,7 +180,7 @@ class TaskService:
 
         # Jika parent adalah task biasa, pastikan ia terhubung ke milestone
         if parent.resource_type == ResourceType.TASK:
-            milestone = await self.uow.task_repo.get_ancestor_milestone(parent.id)
+            milestone = await self.uow.task_repo.is_under_milestone(parent.id)
             if not milestone:
                 # Ubah ke BadRequestError jika punya
                 raise exceptions.TaskNotFoundError(
@@ -526,4 +527,15 @@ class TaskService:
             custom_query=lambda s: s.options(
                 selectinload(Task.sub_tasks, recursion_depth=1)
             ),
+        )
+
+    async def list_user_tasks(self, *, user: User):
+        return await self.repo.list(
+            order_by=Task.display_order,
+            custom_query=lambda s: s.join(
+                TaskAssignee, TaskAssignee.task_id == Task.id
+            )
+            .where(TaskAssignee.user_id == user.id)
+            .distinct()
+            .options(selectinload(Task.sub_tasks)),
         )

@@ -213,3 +213,16 @@ class _Task:
             )
             await self.uow.commit()
         return updated
+
+    @r.get(
+        "/users/me/tasks",
+        response_model=list[SimpleTaskResponse],
+        status_code=status.HTTP_200_OK,
+    )
+    async def get_user_tasks(self):
+        """
+        Mendapatkan daftar tugas yang ditugaskan kepada pengguna tertentu.
+
+        **Akses** : Semua Anggota Project yang ditugaskan
+        """
+        return await self.task_service.list_user_tasks(user=self.user)
