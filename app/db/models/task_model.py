@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.db.models.attachment_model import Attachment
     from app.db.models.audit_model import AuditLog
     from app.db.models.comment_model import Comment
+    from app.db.models.milestone_model import Milestone
     from app.db.models.project_model import Project
     from app.db.models.task_assigne_model import TaskAssignee
 
@@ -40,18 +41,16 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     """ID tugas."""
 
+    milestone_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("milestone.id"), nullable=False
+    )
+    """ID mileston"""
+
     name: Mapped[str] = mapped_column(Text, nullable=False)
     """Nama tugas."""
 
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Deskripsi tugas."""
-
-    resource_type: Mapped[ResourceType] = mapped_column(
-        Enum(ResourceType, name="resource_type"),
-        default=ResourceType.TASK,
-        nullable=False,
-    )
-    """Tipe sumber daya tugas."""
 
     status: Mapped[StatusTask | None] = mapped_column(
         Enum(StatusTask, name="status_task"), nullable=True
@@ -150,4 +149,12 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Relasi ke lampiran yang dibuat untuk tugas ini,
     relasi ini bersifat one to many (satu tugas dapat memiliki banyak lampiran)
+    """
+
+    milestone: Mapped["Milestone"] = relationship(
+        "Milestone", back_populates="tasks", cascade="all, delete-orphan"
+    )
+    """
+    Relasi ke milestone yang terkait dengan tugas ini,
+    relasi ini bersifat one to many (satu milestone dapat memiliki banyak tugas)
     """
