@@ -3,14 +3,13 @@ from types import NoneType
 from fastapi import APIRouter, Body, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.dependencies.services import get_project_service, get_task_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm
 from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.task_model import StatusTask, Task
+from app.db.models.task_model import StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
     SimpleTaskResponse,
@@ -222,17 +221,8 @@ class _Task:
         - Untuk Owner bisa menggunakan endpoint **PUT /v1/tasks/{task_id}**
 
 
-        **Akses** : Anggota Assigned
+        **Akses** : Anggota Assigned (Anggota yang ditugaskan)
         """
-
-        task = await self.task_service.get(
-            task_id, options=[selectinload(Task.assignees)]
-        )
-        if task is None:
-            raise exceptions.TaskNotFoundError
-
-        await self._ensure_project_member(task.project_id)
-
         async with self.uow:
             updated = await self.task_service.change_status(
                 task_id, new_status=status, actor_user_id=self.user.id

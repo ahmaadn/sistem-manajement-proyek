@@ -349,6 +349,7 @@ class TaskService:
         Returns:
             Task: Tugas yang telah diperbarui.
         """
+
         task = await self.repo.get_task_with_assignees(task_id)
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
