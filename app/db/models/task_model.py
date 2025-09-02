@@ -152,7 +152,7 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     """
 
     milestone: Mapped["Milestone"] = relationship(
-        "Milestone", back_populates="tasks", cascade="all, delete-orphan"
+        "Milestone", back_populates="tasks"
     )
     """
     Relasi ke milestone yang terkait dengan tugas ini,
