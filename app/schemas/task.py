@@ -3,7 +3,7 @@ from typing import List
 
 from pydantic import Field
 
-from app.db.models.task_model import PriorityLevel, ResourceType, StatusTask
+from app.db.models.task_model import PriorityLevel, StatusTask
 from app.schemas.base import BaseSchema
 
 
@@ -37,7 +37,6 @@ class BaseTaskResponse(BaseSchema):
     id: int
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
-    resource_type: ResourceType = Field(default=ResourceType.TASK)
     status: StatusTask | None = Field(default=None)
     priority: PriorityLevel | None = Field(default=None)
     display_order: int | None = Field(default=None)

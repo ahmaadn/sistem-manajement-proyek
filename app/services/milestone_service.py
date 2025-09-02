@@ -2,9 +2,17 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models.milestone_model import Milestone
 from app.db.models.project_member_model import RoleProject
+from app.db.models.task_model import Task
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.milestone import MilestoneCreate
-from app.schemas.user import User
+from app.schemas.milestone import (
+    MilestoneCreate,
+    MilestoneResponse,
+    MilestoneSubtaskResponse,
+    MilestoneTaskResponse,
+)
+from app.schemas.task import UserTaskAssignmentResponse
+from app.schemas.user import PegawaiInfo, User
+from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 
@@ -13,27 +21,36 @@ class MilestoneService:
         self.uow = uow
         self.repo = self.uow.milestone_repo
 
-    async def list_milestones(
-        self, *, user: User, project_id: int
-    ) -> list[Milestone]:
-        """Mendapatkan daftar milestone untuk proyek tertentu.
+    def _eager_options(self):
+        """Mendapatkan opsi eager loading untuk query milestone.
+
+        Returns:
+            list: Daftar opsi eager loading.
+        """
+        return [
+            selectinload(Milestone.tasks),
+            selectinload(Milestone.tasks).selectinload(Task.assignees),
+            selectinload(Milestone.tasks).selectinload(Task.sub_tasks),
+            selectinload(Milestone.tasks)
+            .selectinload(Task.sub_tasks)
+            .selectinload(Task.assignees),
+        ]
+
+    async def _ensure_member(self, *, user: User, project_id: int) -> None:
+        """Memastikan bahwa pengguna adalah anggota proyek.
 
         Args:
-            user (User): Pengguna yang meminta daftar milestone.
-            project_id (int): ID proyek yang dimaksud.
+            user (User): Pengguna yang akan diperiksa.
+            project_id (int): ID proyek yang akan diperiksa.
 
         Raises:
             exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan.
-            exceptions.ForbiddenError: Jika pengguna tidak memiliki akses ke proyek.
-
-        Returns:
-            list[Milestone]: Daftar milestone untuk proyek yang dimaksud.
+            exceptions.ForbiddenError: Jika pengguna tidak memiliki akses ke proyek
+                ini.
         """
-
         project_exists, is_member = await self.uow.project_repo.get_membership_flags(
             user_id=user.id, project_id=project_id
         )
-
         if not project_exists:
             raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
         if not is_member:
@@ -41,7 +58,195 @@ class MilestoneService:
                 "User tidak memiliki akses ke proyek ini"
             )
 
-        return await self.repo.list_by_project(project_id=project_id)
+    async def _fetch_milestones(self, *, project_id: int) -> list[Milestone]:
+        """Mengambil daftar milestone untuk proyek tertentu.
+
+        Args:
+            project_id (int): ID proyek yang akan diambil milestone-nya.
+
+        Returns:
+            list[Milestone]: Daftar milestone yang terkait dengan proyek.
+        """
+        opts = self._eager_options()
+        milestones = await self.repo.list_by_project(
+            project_id=project_id,
+            custom_query=lambda q: q.options(*opts).order_by(
+                Milestone.display_order.asc()
+            ),
+        )
+        return sorted(milestones, key=lambda m: m.display_order)
+
+    @staticmethod
+    def _collect_assignee_ids(milestones: list[Milestone]) -> set[int]:
+        """Mengumpulkan ID pengguna yang ditugaskan dari daftar milestone.
+
+        Args:
+            milestones (list[Milestone]): Daftar milestone yang akan diproses.
+
+        Returns:
+            set[int]: Kumpulan ID pengguna yang ditugaskan.
+        """
+        ids: set[int] = set()
+        for m in milestones:
+            for t in m.tasks or []:
+                for a in t.assignees or []:
+                    uid = getattr(a, "user_id", None)
+                    if uid is not None:
+                        ids.add(uid)
+                for st in t.sub_tasks or []:
+                    for a in st.assignees or []:
+                        uid = getattr(a, "user_id", None)
+                        if uid is not None:
+                            ids.add(uid)
+        return ids
+
+    async def _get_user_info_map(
+        self, assignee_ids: set[int]
+    ) -> dict[int, PegawaiInfo | None]:
+        """Mengambil informasi pegawai berdasarkan ID pengguna yang ditugaskan.
+
+        Args:
+            assignee_ids (set[int]): Kumpulan ID pengguna yang ditugaskan.
+
+        Returns:
+            dict[int, PegawaiInfo | None]: Peta ID pengguna ke informasi pegawai.
+        """
+        if not assignee_ids:
+            return {}
+        pegawai_service = PegawaiService()
+        unique_ids = sorted(assignee_ids)
+        users = await pegawai_service.list_user_by_ids(unique_ids)
+        return dict(zip(unique_ids, users, strict=False))
+
+    @staticmethod
+    def _map_assignees(
+        task_like: Task, user_info_map: dict[int, PegawaiInfo | None]
+    ) -> list[UserTaskAssignmentResponse]:
+        """Memetakan penugasan pengguna untuk tugas tertentu.
+
+        Args:
+            task_like (Task): Tugas yang akan dipetakan.
+            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+                informasi pegawai.
+
+        Returns:
+            list[UserTaskAssignmentResponse]: Daftar respons penugasan pengguna.
+        """
+        items: list[UserTaskAssignmentResponse] = []
+        for a in task_like.assignees or []:
+            info = user_info_map.get(getattr(a, "user_id", 0))
+            if info is None:
+                continue
+            items.append(
+                UserTaskAssignmentResponse(
+                    user_id=info.id,
+                    name=info.name,
+                    email=info.email or "",
+                    profile_url=info.profile_url or "",
+                )
+            )
+        return items
+
+    def _map_subtask(
+        self, st: Task, user_info_map: dict[int, PegawaiInfo | None]
+    ) -> MilestoneSubtaskResponse:
+        """Memetakan sub-tugas untuk respons milestone.
+
+        Args:
+            st (Task): Sub-tugas yang akan dipetakan.
+            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+                informasi pegawai.
+
+        Returns:
+            MilestoneSubtaskResponse: Respons sub-tugas yang dipetakan.
+        """
+        return MilestoneSubtaskResponse(
+            task_id=st.id,
+            name=st.name,
+            status=st.status,
+            priority=st.priority,
+            display_order=st.display_order,
+            due_date=st.due_date,
+            start_date=st.start_date,
+            assignees=self._map_assignees(st, user_info_map),
+        )
+
+    def _map_task(
+        self, t: Task, user_info_map: dict[int, PegawaiInfo | None]
+    ) -> MilestoneTaskResponse:
+        """Memetakan tugas untuk respons milestone.
+
+        Args:
+            t (Task): Tugas yang akan dipetakan.
+            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+                informasi pegawai.
+
+        Returns:
+            MilestoneTaskResponse: Respons tugas yang dipetakan.
+        """
+        sub_tasks_sorted = sorted(
+            (t.sub_tasks or []), key=lambda st: st.display_order
+        )
+        sub_tasks_resp = [
+            self._map_subtask(st, user_info_map) for st in sub_tasks_sorted
+        ]
+        return MilestoneTaskResponse(
+            task_id=t.id,
+            name=t.name,
+            status=t.status,
+            priority=t.priority,
+            display_order=t.display_order,
+            due_date=t.due_date,
+            start_date=t.start_date,
+            assignees=self._map_assignees(t, user_info_map),
+            sub_tasks=sub_tasks_resp,
+        )
+
+    def _map_milestone(
+        self, m: Milestone, user_info_map: dict[int, PegawaiInfo | None]
+    ) -> MilestoneResponse:
+        """Memetakan milestone untuk respons milestone.
+
+        Args:
+            m (Milestone): Milestone yang akan dipetakan.
+            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+                informasi pegawai.
+
+        Returns:
+            MilestoneResponse: Respons milestone yang dipetakan.
+        """
+        top_level_tasks = sorted(
+            (t for t in (m.tasks or []) if getattr(t, "parent_id", None) is None),
+            key=lambda t: t.display_order,
+        )
+        tasks_resp = [self._map_task(t, user_info_map) for t in top_level_tasks]
+        return MilestoneResponse(
+            id=m.id,
+            project_id=m.project_id,
+            title=m.title,
+            display_order=m.display_order,
+            created_at=m.created_at,
+            updated_at=m.updated_at,
+            tasks=tasks_resp,
+        )
+
+    async def list_milestones(
+        self, *, user: User, project_id: int
+    ) -> list[MilestoneResponse]:
+        """Mengambil daftar milestone untuk proyek tertentu.
+
+        Args:
+            user (User): Pengguna yang meminta daftar milestone.
+            project_id (int): ID proyek yang dimaksud.
+
+        Returns:
+            list[MilestoneResponse]: Daftar respons milestone yang dipetakan.
+        """
+        await self._ensure_member(user=user, project_id=project_id)
+        milestones = await self._fetch_milestones(project_id=project_id)
+        assignee_ids = self._collect_assignee_ids(milestones)
+        user_info_map = await self._get_user_info_map(assignee_ids)
+        return [self._map_milestone(m, user_info_map) for m in milestones]
 
     async def create_milestone(
         self, *, user: User, project_id: int, payload: MilestoneCreate
