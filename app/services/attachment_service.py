@@ -38,13 +38,12 @@ class AttachmentService:
         """Mendapatkan semua attachment untuk task tertentu."""
         return await self.repo.list(task_id=task_id)
 
-    async def create_attachment(
+    async def create_task_attachment(
         self,
         *,
         file: UploadFile,
         task_id: int,
         actor: User,
-        comment_id: int | None = None,
         is_admin: bool = False,
     ) -> Attachment:
         if not is_admin:
@@ -59,19 +58,40 @@ class AttachmentService:
                 "Tipe file tidak didukung. Hanya PNG, JPG/JPEG, PDF, dan WORD."
             )
 
-        data = await file.read()
-        if len(data) > MAX_SIZE:
+        file_bytes = await file.read()
+        file_size = len(file_bytes)
+        if file_size > MAX_SIZE:
             raise exceptions.FileTooLargeError(
                 "Ukuran file melebihi batas yang diizinkan."
             )
 
+        return await self.upload_attachment(
+            user=actor,
+            file=file,
+            file_bytes=file_bytes,
+            task_id=task_id,
+            file_size=str(file_size),
+            comment_id=None,
+        )
+
+    async def upload_attachment(
+        self,
+        *,
+        user: User,
+        file: UploadFile,
+        file_bytes: bytes,
+        file_size: str,
+        task_id: int,
+        comment_id: int | None = None,
+    ) -> Attachment:
+        """Mengupload attachment baru."""
         att: Attachment = await self.repo.create(
             payload={
-                "user_id": actor.id,
+                "user_id": user.id,
                 "task_id": task_id,
                 "comment_id": comment_id,
                 "file_name": file.filename or "attachment",
-                "file_size": str(len(data)),
+                "file_size": file_size,
                 "file_path": "Progress Upload ...",
                 "mime_type": file.content_type or "application/octet-stream",
             }
@@ -81,9 +101,9 @@ class AttachmentService:
             AttachmentUploadRequestedEvent(
                 attachment_id=att.id,
                 task_id=task_id,
-                user_id=actor.id,
+                user_id=user.id,
                 comment_id=comment_id,
-                file_bytes=data,
+                file_bytes=file_bytes,
                 content_type=file.content_type or "application/octet-stream",
                 original_filename=file.filename or "attachment",
             )
