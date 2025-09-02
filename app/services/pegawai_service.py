@@ -159,6 +159,28 @@ class _PegawaiApiClient:
             logger.error("Error during get_pegawai_me request: %s", e)
             return None
 
+    @staticmethod
+    async def get_pegawai_detail(*, user_id: int, token: str | None = None):
+        token = token or _get_bearer_from_ctx()
+        if not token:
+            logger.warning("get_pegawai_detail: token tidak tersedia di context/header.")
+            return None
+
+        request = request_object.get()
+        try:
+            start_time = time()
+            async with request.app.requests_client.get(  # type: ignore
+                f"api/pegawai/{user_id}", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
+            ) as res:
+                res.raise_for_status()
+                data = await res.json()
+                logger.debug("response get_pegawai_detail: %s", data)
+                logger.debug("time request api/pegawai/%d: %s", user_id, time() - start_time)
+                return data
+        except (ValueError, aiohttp.ClientError) as e:
+            logger.error("Error during get_pegawai_me request: %s", e)
+            return None
+
 class PegawaiService:
     def __init__(self) -> None:
         self.api_url = get_settings().API_PEGAWAI
@@ -170,10 +192,11 @@ class PegawaiService:
 
     async def get_user_info(self, user_id: int):
         """Ambil info user berdasarkan user_id, tanpa access_token."""
-        user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
+        result = await asyncio.gather(_PegawaiApiClient.get_pegawai_detail(user_id=user_id))
+        user = result[0]
         if not user:
             return None
-        return self._map_to_user_profile(user.copy())
+        return await self.map_to_pegawai_info(user.copy())
 
     async def get_user_info_by_token(self, token: str):
         """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
