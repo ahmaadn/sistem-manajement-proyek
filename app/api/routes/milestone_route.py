@@ -5,7 +5,11 @@ from app.api.dependencies.services import get_milestone_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.milestone import MilestoneCreate, MilestoneResponse
+from app.schemas.milestone import (
+    MilestoneCreate,
+    MilestoneResponse,
+    SimpleMilestoneResponse,
+)
 from app.schemas.user import User
 from app.services.milestone_service import MilestoneService
 from app.utils.exceptions import AppErrorResponse
@@ -52,7 +56,7 @@ class _Milestone:
 
     @r.post(
         "/projects/{project_id}/milestone",
-        response_model=MilestoneResponse,
+        response_model=SimpleMilestoneResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_403_FORBIDDEN: {

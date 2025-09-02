@@ -16,6 +16,15 @@ class MilestoneCreate(MilestoneBase):
     pass
 
 
+class SimpleMilestoneResponse(MilestoneBase):
+    id: int
+    project_id: int
+    title: str
+    display_order: int
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
 class MilestoneUpdate(BaseSchema):
     title: Optional[str] = Field(None, max_length=255)
 
