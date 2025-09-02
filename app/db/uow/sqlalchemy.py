@@ -119,6 +119,5 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             exc (Exception): Exception yang terjadi, jika ada.
             tb (Traceback): Traceback dari exception yang terjadi, jika ada.
         """
-        if exc or not self._committed:
+        if exc:
             await self.rollback()
-        await self.close()
