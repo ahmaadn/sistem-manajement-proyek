@@ -37,6 +37,17 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
+    async def fetch_attachments_for_task(self, *, task_id: int) -> list[Attachment]:
+        """Daftar Attachment berdasarkan ID task.
+
+        Args:
+            task_id: ID task untuk memfilter.
+
+        Returns:
+            List Attachment terurut menurun berdasarkan ID.
+        """
+        ...
+
     async def count(
         self, *, task_id: Optional[int] = None, comment_id: Optional[int] = None
     ) -> int:
@@ -131,6 +142,13 @@ class AttachmentSQLAlchemyRepository:
             stmt = stmt.where(Attachment.comment_id == comment_id)
         stmt = stmt.order_by(Attachment.id.desc())
         res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def fetch_attachments_for_task(self, *, task_id: int):
+        q = select(Attachment).where(
+            Attachment.task_id == task_id, Attachment.comment_id.is_(None)
+        )
+        res = await self.session.execute(q)
         return list(res.scalars().all())
 
     async def count(
