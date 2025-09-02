@@ -38,13 +38,12 @@ class AttachmentService:
         """Mendapatkan semua attachment untuk task tertentu."""
         return await self.repo.list(task_id=task_id)
 
-    async def create_attachment(
+    async def create_task_attachment(
         self,
         *,
         file: UploadFile,
         task_id: int,
         actor: User,
-        comment_id: int | None = None,
         is_admin: bool = False,
     ) -> Attachment:
         if not is_admin:
@@ -59,28 +58,90 @@ class AttachmentService:
                 "Tipe file tidak didukung. Hanya PNG, JPG/JPEG, PDF, dan WORD."
             )
 
-        data = await file.read()
-        if len(data) > MAX_SIZE:
+        file_bytes = await file.read()
+        file_size = len(file_bytes)
+        if file_size > MAX_SIZE:
             raise exceptions.FileTooLargeError(
                 "Ukuran file melebihi batas yang diizinkan."
             )
 
-        att: Attachment = await self.repo.create(
-            user_id=actor.id,
+        return await self.upload_attachment(
+            user=actor,
+            file=file,
+            file_bytes=file_bytes,
             task_id=task_id,
+            file_size=str(file_size),
+            comment_id=None,
+        )
+
+    async def create_comment_attachment(
+        self,
+        *,
+        file: UploadFile,
+        comment_id: int,
+        actor: User,
+    ) -> Attachment:
+        comment = await self.uow.comment_repo.get_by_id(comment_id=comment_id)
+
+        if comment is None:
+            raise exceptions.CommentNotFoundError("Komentar tidak ditemukan.")
+
+        if comment.user_id != actor.id:
+            raise exceptions.ForbiddenError(
+                "Anda tidak memiliki izin untuk mengunggah lampiran ini."
+            )
+
+        if file.content_type not in ALLOWED_EXTENSIONS:
+            raise exceptions.MediaNotSupportedError(
+                "Tipe file tidak didukung. Hanya PNG, JPG/JPEG, PDF, dan WORD."
+            )
+
+        file_bytes = await file.read()
+        file_size = len(file_bytes)
+        if file_size > MAX_SIZE:
+            raise exceptions.FileTooLargeError(
+                "Ukuran file melebihi batas yang diizinkan."
+            )
+
+        return await self.upload_attachment(
+            user=actor,
+            file=file,
+            file_bytes=file_bytes,
+            task_id=comment.task_id,
+            file_size=str(file_size),
             comment_id=comment_id,
-            file_name=file.filename or "attachment",
-            file_size=str(len(data)),
-            file_path="Progress Upload ...",
+        )
+
+    async def upload_attachment(
+        self,
+        *,
+        user: User,
+        file: UploadFile,
+        file_bytes: bytes,
+        file_size: str,
+        task_id: int,
+        comment_id: int | None = None,
+    ) -> Attachment:
+        """Mengupload attachment baru."""
+        att: Attachment = await self.repo.create(
+            payload={
+                "user_id": user.id,
+                "task_id": task_id,
+                "comment_id": comment_id,
+                "file_name": file.filename or "attachment",
+                "file_size": file_size,
+                "file_path": "Progress Upload ...",
+                "mime_type": file.content_type or "application/octet-stream",
+            }
         )
 
         self.uow.add_event(
             AttachmentUploadRequestedEvent(
                 attachment_id=att.id,
                 task_id=task_id,
-                user_id=actor.id,
+                user_id=user.id,
                 comment_id=comment_id,
-                file_bytes=data,
+                file_bytes=file_bytes,
                 content_type=file.content_type or "application/octet-stream",
                 original_filename=file.filename or "attachment",
             )

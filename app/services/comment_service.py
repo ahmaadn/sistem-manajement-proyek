@@ -66,13 +66,15 @@ class CommentService:
         Returns:
             Sequence[Comment]: Daftar komentar yang ditemukan.
         """
-        is_member = await self.uow.task_repo.is_member_of_task_project(
-            user_id, task_id
-        )
-        if not is_member and not is_admin:
-            raise exceptions.ForbiddenError(
-                "Anda tidak memiliki izin untuk melihat komentar ini"
+        if not is_admin:
+            is_member = await self.uow.task_repo.is_member_of_task_project(
+                task_id=task_id, user_id=user_id
             )
+            if not is_member:
+                raise exceptions.ForbiddenError(
+                    "Anda tidak memiliki izin untuk melihat komentar ini"
+                )
+
         return await self.uow.comment_repo.list_by_task(task_id=task_id)
 
     async def get_comment(

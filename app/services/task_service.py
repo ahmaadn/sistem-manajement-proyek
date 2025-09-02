@@ -21,6 +21,7 @@ from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
+    TaskAttachmentResponse,
     TaskCreate,
     TaskDetailResponse,
     TaskUpdate,
@@ -75,7 +76,11 @@ class TaskService:
         """
         task = await self.repo.get(
             task_id,
-            options=[selectinload(Task.assignees), selectinload(Task.sub_tasks)],
+            options=[
+                selectinload(Task.assignees),
+                selectinload(Task.sub_tasks),
+                selectinload(Task.attachments),
+            ],
         )
         if task is None:
             raise exceptions.TaskNotFoundError
@@ -105,6 +110,20 @@ class TaskService:
             if user
         ]
 
+        # attachments
+        attachments = [
+            TaskAttachmentResponse(
+                attachment_id=attachment.id,
+                file_name=attachment.file_name,
+                file_path=attachment.file_path,
+                file_size=attachment.file_size,
+                created_at=attachment.created_at,
+            )
+            for attachment in await self.uow.attachment_repo.fetch_attachments_for_task(
+                task_id=task.id
+            )
+        ]
+
         return TaskDetailResponse(
             id=task.id,
             name=task.name,
@@ -117,6 +136,7 @@ class TaskService:
             estimated_duration=task.estimated_duration,
             assignees=users,
             sub_tasks=task.sub_tasks,  # type: ignore # auto cast ke type list[SubSubTaskResponse]
+            attachments=attachments,
         )
 
     async def list_task(

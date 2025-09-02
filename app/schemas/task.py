@@ -45,32 +45,29 @@ class BaseTaskResponse(BaseSchema):
     estimated_duration: int | None = Field(default=None)
 
 
-class SubSubTaskResponse(BaseTaskResponse):
-    """Response schema untuk sub-subtask."""
-
-
-class SubTaskResponse(BaseTaskResponse):
-    """Response schema untuk subtask."""
-
-    # subtask level 2
-    sub_tasks: List[SubSubTaskResponse] = Field(
-        default_factory=list,
-        description="Daftar subtask level 2 dari subtask ini.",
-    )
-
-
-class TaskResponse(BaseTaskResponse):
-    """Response schema untuk tugas."""
-
-    # subtask level 1
-    sub_tasks: List[SubTaskResponse] = Field(
-        default_factory=list,
-        description="Daftar subtask dari tugas ini.",
-    )
-
-
 class SimpleTaskResponse(BaseTaskResponse):
     """Response schema untuk tugas tanpa subtask."""
+
+
+class SubTaskResponse(BaseSchema):
+    """Response schema untuk sub-subtask."""
+
+    id: int
+    name: str = Field(default="Untitled Task")
+    status: StatusTask | None = Field(default=None)
+    priority: PriorityLevel | None = Field(default=None)
+    display_order: int | None = Field(default=None)
+    due_date: datetime.datetime | None = Field(default=None)
+    start_date: datetime.datetime | None = Field(default=None)
+    estimated_duration: int | None = Field(default=None)
+
+
+class TaskAttachmentResponse(BaseSchema):
+    attachment_id: int
+    file_name: str
+    file_path: str
+    file_size: str
+    created_at: datetime.datetime
 
 
 class UserTaskAssignmentResponse(BaseSchema):
@@ -90,7 +87,12 @@ class TaskDetailResponse(BaseTaskResponse):
         description="Daftar pengguna yang ditugaskan pada tugas ini.",
     )
 
-    sub_tasks: List[SubSubTaskResponse] = Field(
+    sub_tasks: List[SubTaskResponse] = Field(
         default_factory=list,
         description="Daftar subtask dari tugas ini.",
+    )
+
+    attachments: list[TaskAttachmentResponse] = Field(
+        default_factory=list,
+        description="Daftar lampiran untuk tugas ini.",
     )

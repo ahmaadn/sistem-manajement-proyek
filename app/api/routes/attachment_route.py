@@ -1,14 +1,6 @@
 from __future__ import annotations
 
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    File,
-    Query,
-    UploadFile,
-    status,
-)
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.services import get_attachment_service
@@ -32,7 +24,7 @@ class _Attachment:
     attachment_service: AttachmentService = Depends(get_attachment_service)
 
     @r.post(
-        "/attachment",
+        "/tasks/{task_id}/attachment/upload-file",
         response_model=AttachmentResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
@@ -59,13 +51,10 @@ class _Attachment:
             },
         },
     )
-    async def upload_attachment(
+    async def upload_task_attachment(
         self,
-        bg_tasks: BackgroundTasks,  # FastAPI auto-injects this
-        task_id: int = Query(..., description="Task ID"),
-        comment_id: int | None = Query(
-            default=None, description="Comment ID (opsional)"
-        ),
+        bg_tasks: BackgroundTasks,
+        task_id: int,
         file: UploadFile = File(...),
     ):
         """
@@ -77,12 +66,62 @@ class _Attachment:
         set_event_background(bg_tasks)
 
         async with self.uow:
-            att = await self.attachment_service.create_attachment(
+            att = await self.attachment_service.create_task_attachment(
                 file=file,
                 task_id=task_id,
                 actor=self.user,
-                comment_id=comment_id,
                 is_admin=self.user.role == Role.ADMIN,
+            )
+            await self.uow.commit()
+        return att
+
+    @r.post(
+        "/comments/{comment_id}/attachment/upload-file",
+        response_model=AttachmentResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            status.HTTP_201_CREATED: {
+                "description": (
+                    "Membuat lampiran. url tidak akan langsung muncul disebabkan "
+                    "proses latar belakang. setelah upoload selesai sistem akan "
+                    "mengirim ke event sse dan pusher. "
+                    "type event: **attachment.uploaded**"
+                ),
+                "model": AttachmentResponse,
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "description": "User is not a member of the project",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: {
+                "description": "Invalid file type",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: {
+                "description": "File too large",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def upload_comment_attachment(
+        self,
+        bg_tasks: BackgroundTasks,
+        comment_id: int,
+        file: UploadFile = File(...),
+    ):
+        """
+        Upload file. extensi yang di ijinkan pdf, word, png, jpeg. masksimal 5MB.
+        komentar dapat di sisipkan di task atau comment (tambahkan commen_id)
+
+        **Akses**: Orang yang berkomentar
+        """
+        set_event_background(bg_tasks)
+
+        async with self.uow:
+            att = await self.attachment_service.create_comment_attachment(
+                file=file,
+                comment_id=comment_id,
+                actor=self.user,
             )
             await self.uow.commit()
         return att
