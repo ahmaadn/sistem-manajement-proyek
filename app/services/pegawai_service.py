@@ -203,6 +203,30 @@ class _PegawaiApiClient:
             logger.error("Error during get_list_pegawai request: %s", e)
             return None
 
+    @staticmethod
+    async def get_bulk_pegawai(*, ids: list[int], token: str | None = None):
+        token = token or _get_bearer_from_ctx()
+        if not token:
+            logger.warning("get_bulk_pegawai: token tidak tersedia di context/header.")
+            return None
+
+        request = request_object.get()
+        try:
+            start_time = time()
+            async with request.app.requests_client.post(  # type: ignore
+                "api/pegawai/bulk", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'},
+                json={"ids": ids}
+            ) as res:
+                res.raise_for_status()
+                data = await res.json()
+                logger.debug("response get_bulk_pegawai: %s", data)
+                logger.debug("time request /pegawai-bulk: %s", time() - start_time)
+                return data
+        except (ValueError, aiohttp.ClientError) as e:
+            logger.error("Error during get_bulk_pegawai request: %s", e)
+            return None
+
+
 class PegawaiService:
     def __init__(self) -> None:
         self.api_url = get_settings().API_PEGAWAI
@@ -260,8 +284,9 @@ class PegawaiService:
                     'nama': data.get('email'),
                     'position': data.get('position')
                 }
-            name = pegawai['nama']
-            position = pegawai['jabatan']
+
+            name = pegawai.get('nama', pegawai.get('nama_lengkap', ''))
+            position = pegawai.get('jabatan', '')
 
         # handle profile_url
         profile_photo_path = data.get("profile_photo_path")
@@ -316,11 +341,19 @@ class PegawaiService:
         Returns:
             list[PegawaiInfo | None]: Daftar info pegawai atau None sesuai urutan ID.
         """
-        result: list[PegawaiInfo | None] = []
-        for user_id in data:
-            user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
-            result.append(self._map_to_user_profile(user.copy()) if user else None)
-        return result
+        result = await asyncio.gather(_PegawaiApiClient.get_bulk_pegawai(ids=data))
+        users = result[0]
+        if not users or len(users) == 0:
+            return []
+
+        map_users = []
+        for user in  users:
+            if user:
+                print(user)
+                map_users.append(await self.map_to_pegawai_info(user))
+            else:
+                map_users.append(None)
+        return map_users
 
 
 def _singleton(cls):
