@@ -1,26 +1,22 @@
 from types import NoneType
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.api.dependencies.services import get_project_service, get_task_service
+from app.api.dependencies.services import get_task_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm
-from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.task_model import StatusTask, Task
+from app.db.models.task_model import StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
     SimpleTaskResponse,
-    SubTaskResponse,
     TaskCreate,
-    TaskResponse,
+    TaskDetailResponse,
     TaskUpdate,
 )
 from app.schemas.user import User
-from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
 from app.utils import exceptions
 
@@ -31,94 +27,11 @@ r = router = APIRouter(tags=["Task"])
 class _Task:
     user: User = Depends(get_current_user)
     task_service: TaskService = Depends(get_task_service)
-    project_service: ProjectService = Depends(get_project_service)
     session: AsyncSession = Depends(get_async_session)
     uow: UnitOfWork = Depends(get_uow)
 
-    # Helper: pastikan user adalah member project
-    async def _ensure_project_member(self, project_id: int) -> ProjectMember:
-        try:
-            return await self.project_service.get_member(project_id, self.user.id)
-        except exceptions.MemberNotFoundError:
-            raise exceptions.UserNotInProjectError from None
-
-    async def _ensure_project_owner(self, project_id: int) -> ProjectMember:
-        project_member = await self._ensure_project_member(project_id)
-        if project_member.role != RoleProject.OWNER:
-            raise exceptions.ForbiddenError
-        return project_member
-
-    @r.get(
-        "/projects/{project_id}/tasks",
-        response_model=list[TaskResponse],
-        status_code=status.HTTP_200_OK,
-        responses={
-            status.HTTP_200_OK: {
-                "description": "Daftar tugas berhasil diambil",
-                "model": list[TaskResponse],
-            },
-            status.HTTP_403_FORBIDDEN: {
-                "description": "User tidak memiliki akses ke proyek ini",
-                "model": exceptions.AppErrorResponse,
-            },
-        },
-    )
-    async def get_tasks(self, project_id: int):
-        """
-        Mendapatkan daftar tugas untuk proyek tertentu.
-        - Hanya user yang terdaftar sebagai anggota proyek yang dapat mengakses
-            tugas.
-        - Project yang di delete masih bisa lihat task
-
-        **Akses** : Anggota Proyek (Member, Project Manager, Admin)
-        """
-
-        # pastikan user adalah member project
-        await self._ensure_project_member(project_id)
-
-        return await self.task_service.list(
-            filters={"project_id": project_id, "parent_id": None},
-            order_by=Task.display_order,
-            custom_query=lambda s: s.options(
-                selectinload(Task.sub_tasks, recursion_depth=1)
-            ),
-        )
-
-    @r.get(
-        "/projects/{project_id}/tasks/{task_id}/subtasks",
-        status_code=status.HTTP_200_OK,
-        response_model=list[SubTaskResponse],
-        responses={
-            status.HTTP_200_OK: {
-                "description": "Daftar sub-tugas berhasil diambil",
-                "model": list[SubTaskResponse],
-            },
-            status.HTTP_403_FORBIDDEN: {
-                "description": "User tidak memiliki akses ke proyek ini",
-                "model": exceptions.AppErrorResponse,
-            },
-        },
-    )
-    async def get_subtasks(self, project_id: int, task_id: int):
-        """
-        Mendapatkan daftar sub-tugas untuk tugas tertentu.
-                - Masih bisa menambahkan task walaupun project telah di delete
-
-
-        **Akses** : Semua Anggota Project
-        """
-
-        # pastikan user adalah member project
-        await self._ensure_project_member(project_id)
-
-        return await self.task_service.list(
-            filters={"parent_id": task_id},
-            order_by=Task.display_order,
-            custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
-        )
-
     @r.post(
-        "/tasks",
+        "/milestones/{milestone_id}/tasks",
         response_model=SimpleTaskResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
@@ -132,48 +45,64 @@ class _Task:
             },
         },
     )
-    async def create_task(
-        self,
-        payload: TaskCreate,
-        parent_task_id: int | None = Query(
-            default=None, description="ID tugas induk jika ada"
-        ),
-        user: User = Depends(get_user_pm),
-    ):
+    async def create_task(self, milestone_id: int, payload: TaskCreate):
         """
         Membuat tugas baru untuk proyek tertentu.
         - Akses hanya bisa dilakukan oleh project manager (Owner).
         - Masih bisa menambahkan task walaupun project telah di delete
 
-        **Akses** : Project Manager (Owner)
+        **Akses** : Owner Project
         """
-
-        # pastikan Owner
-        await self._ensure_project_owner(payload.project_id)
-
         # display_order handled in service
         async with self.uow:
             task = await self.task_service.create_task(
-                payload, parent_task_id=parent_task_id, actor=self.user
+                user=self.user, milestone_id=milestone_id, payload=payload
+            )
+            await self.uow.commit()
+        return task
+
+    @r.post(
+        "/tasks/{task_id}/subtasks",
+        response_model=SimpleTaskResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            status.HTTP_201_CREATED: {
+                "description": "Task berhasil dibuat",
+                "model": SimpleTaskResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Project tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def create_subtask(self, task_id: int, payload: TaskCreate):
+        """
+        Membuat tugas baru untuk proyek tertentu.
+        - Akses hanya bisa dilakukan oleh project manager (Owner).
+        - Masih bisa menambahkan task walaupun project telah di delete
+
+        **Akses** : Owner Project
+        """
+        # display_order handled in service
+        async with self.uow:
+            task = await self.task_service.create_subtask(
+                user=self.user, task_id=task_id, payload=payload
             )
             await self.uow.commit()
         return task
 
     @r.get(
         "/tasks/{task_id}",
-        response_model=SimpleTaskResponse,
+        response_model=TaskDetailResponse,
         status_code=status.HTTP_200_OK,
         responses={
-            status.HTTP_200_OK: {
-                "description": "Task detail retrieved successfully",
-                "model": SimpleTaskResponse,
-            },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User tidak memiliki akses ke proyek ini",
                 "model": exceptions.AppErrorResponse,
             },
             status.HTTP_404_NOT_FOUND: {
-                "description": "Task not found",
+                "description": "Task atau project tidak ditemukan",
                 "model": exceptions.AppErrorResponse,
             },
         },
@@ -182,17 +111,11 @@ class _Task:
         """
         Mendapatkan detail tugas untuk proyek tertentu.
 
-        **Akses** : Semua Anggota Project
+        **Akses** : Semua Anggota Project, Admin
         """
-
-        task = await self.task_service.get(task_id)
-        if task is None:
-            raise exceptions.TaskNotFoundError
-
-        # pastikan user adalah member project
-        await self._ensure_project_member(task.project_id)
-
-        return task
+        return await self.task_service.get_detail_task(
+            user=self.user, task_id=task_id
+        )
 
     @r.delete(
         "/tasks/{task_id}",
@@ -216,15 +139,8 @@ class _Task:
         **Akses** : Project Manager (Owner)
         """
 
-        task = await self.task_service.get(
-            task_id, options=[selectinload(Task.sub_tasks)]
-        )
-        if task is None:
-            raise exceptions.TaskNotFoundError
-        await self._ensure_project_owner(task.project_id)
-
         async with self.uow:
-            await self.task_service.delete_task(self.user.id, task_id)
+            await self.task_service.delete_task(user=self.user, task_id=task_id)
             await self.uow.commit()
 
     @r.put(
@@ -247,18 +163,12 @@ class _Task:
     ):
         """Mengupdate tugas tertentu.
 
-        **Akses** : Project Manager (Owner)
+        **Akses** : Owner Project
         """
-
-        task = await self.task_service.get(task_id)
-        if task is None:
-            raise exceptions.TaskNotFoundError
-
-        await self._ensure_project_owner(task.project_id)
 
         async with self.uow:
             updated = await self.task_service.update_task(
-                self.user.id, task_id, payload
+                user=self.user, task_id=task_id, payload=payload
             )
             await self.uow.commit()
         return updated
@@ -282,29 +192,31 @@ class _Task:
             },
         },
     )
-    async def update_task_status(
-        self, task_id: int, status: StatusTask = Body(..., embed=True)
-    ):
+    async def update_task_status(self, task_id: int, status: StatusTask):
         """
         Mengupdate status tugas tertentu.
         - Bisa digunakan untuk checkbox
         - Untuk Owner bisa menggunakan endpoint **PUT /v1/tasks/{task_id}**
 
 
-        **Akses** : Anggota Assigned
+        **Akses** : Anggota Assigned (Anggota yang ditugaskan)
         """
-
-        task = await self.task_service.get(
-            task_id, options=[selectinload(Task.assignees)]
-        )
-        if task is None:
-            raise exceptions.TaskNotFoundError
-
-        await self._ensure_project_member(task.project_id)
-
         async with self.uow:
             updated = await self.task_service.change_status(
                 task_id, new_status=status, actor_user_id=self.user.id
             )
             await self.uow.commit()
         return updated
+
+    @r.get(
+        "/users/me/tasks",
+        response_model=list[SimpleTaskResponse],
+        status_code=status.HTTP_200_OK,
+    )
+    async def get_user_tasks(self):
+        """
+        Mendapatkan daftar tugas yang ditugaskan kepada pengguna tertentu.
+
+        **Akses** : Semua Anggota Project yang ditugaskan
+        """
+        return await self.task_service.list_user_tasks(user=self.user)

@@ -17,6 +17,10 @@ from app.db.repositories.dashboard_repository import (
     DashboardSQLAlchemyReadRepository,
     InterfaceDashboardReadRepository,
 )
+from app.db.repositories.milestone_repository import (
+    InterfaceMilestoneRepository,
+    MilestoneSQLAlchemyRepository,
+)
 from app.db.repositories.project_repository import (
     InterfaceProjectRepository,
     ProjectSQLAlchemyRepository,
@@ -44,6 +48,7 @@ class UnitOfWork(Protocol):
     dashboard_repository: InterfaceDashboardReadRepository
     user_repository: InterfaceUserRepository
     attachment_repo: InterfaceAttachmentRepository
+    milestone_repo: InterfaceMilestoneRepository
 
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
@@ -65,6 +70,9 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.dashboard_repository = DashboardSQLAlchemyReadRepository(self.session)
         self.user_repository = UserSQLAlchemyRepository(self.session)
         self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
+        self.milestone_repo: InterfaceMilestoneRepository = (
+            MilestoneSQLAlchemyRepository(self.session)
+        )
 
     def add_event(self, event: "DomainEvent") -> None:
         """Menambahkan event ke dalam unit of work.

@@ -92,6 +92,51 @@ class InterfaceProjectRepository(
             bool: True jika pengguna adalah pemilik proyek, False jika tidak
         """
 
+    @abstractmethod
+    async def ensure_member_in_project(
+        self,
+        *,
+        user_id: int,
+        project_id: int,
+        required_role: RoleProject | None = None,
+    ) -> bool:
+        """
+        Memastikan anggota ada di proyek. bisa custom role untuk memastikan juga
+        member dengan role tertentu
+
+        Args:
+            user_id (int): ID pengguna.
+            project_id (int): ID proyek.
+            required_role (RoleProject | None): Peran proyek. Defaults to
+                None.
+
+        Returns:
+            bool: True jika anggota ada di proyek, False jika tidak.
+        """
+
+    @abstractmethod
+    async def get_membership_flags(
+        self,
+        *,
+        user_id: int,
+        project_id: int,
+        required_role: RoleProject | None = None,
+    ) -> tuple[bool, bool]:
+        """
+        Mengembalikan dua flag:
+        - project_exists: proyek ada dan tidak terhapus
+        - allowed: user adalah member (dan cocok role jika required_role diisi)
+
+        Args:
+            user_id (int): ID pengguna.
+            project_id (int): ID proyek.
+            required_role (RoleProject | None, optional): Peran yang diperlukan.
+                Defaults to None.
+
+        Returns:
+            tuple[bool, bool]: (project_exists, allowed)
+        """
+
 
 class ProjectSQLAlchemyRepository(
     InterfaceProjectRepository,
@@ -335,3 +380,54 @@ class ProjectSQLAlchemyRepository(
         )
         result = await self.session.execute(stmt)
         return result.scalar_one()
+
+    async def ensure_member_in_project(
+        self,
+        *,
+        user_id: int,
+        project_id: int,
+        required_role: RoleProject | None = None,
+    ) -> bool:
+        conditions = [
+            ProjectMember.project_id == Project.id,
+            ProjectMember.user_id == user_id,
+            Project.id == project_id,
+            Project.deleted_at.is_(None),
+        ]
+        if required_role is not None:
+            conditions.append(ProjectMember.role == required_role)
+
+        stmt = select(exists().where(*conditions))
+        return (await self.session.execute(stmt)).scalar_one()
+
+    async def get_membership_flags(
+        self,
+        *,
+        user_id: int,
+        project_id: int,
+        required_role: RoleProject | None = None,
+    ) -> tuple[bool, bool]:
+        role_condition = (
+            [ProjectMember.role == required_role]
+            if required_role is not None
+            else []
+        )
+
+        stmt = select(
+            exists(
+                select(1).where(
+                    Project.id == project_id,
+                    Project.deleted_at.is_(None),
+                )
+            ).label("project_exists"),
+            exists(
+                select(1).where(
+                    ProjectMember.project_id == project_id,
+                    ProjectMember.user_id == user_id,
+                    *role_condition,
+                )
+            ).label("allowed"),
+        )
+        res = await self.session.execute(stmt)
+        row = res.one()
+        return bool(row.project_exists), bool(row.allowed)

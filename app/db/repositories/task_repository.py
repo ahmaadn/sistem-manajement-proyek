@@ -10,7 +10,7 @@ from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.task import TaskUpdate
 
 
 @runtime_checkable
@@ -46,9 +46,7 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def create(
-        self, payload: TaskCreate, *, extra_fields: dict[str, Any]
-    ) -> Task:
+    async def create(self, *, payload: dict[str, Any]) -> Task:
         """
         Membuat Task baru dari payload dan field tambahan (mis. project_id,
         display_order). Mengembalikan entitas Task yang sudah dipersist.
@@ -63,7 +61,7 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def soft_delete(self, task: Task) -> None:
+    async def delete(self, task: Task) -> None:
         """
         Melakukan soft delete pada Task dengan mengisi kolom deleted_at.
         """
@@ -188,7 +186,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
     async def get(
         self, task_id: int, *, options: list[Any] | None = None
     ) -> Task | None:
-        stmt = select(Task).where(Task.id == task_id, Task.deleted_at.is_(None))
+        stmt = select(Task).where(Task.id == task_id)
         if options:
             stmt = stmt.options(*options)
         res = await self.session.execute(stmt)
@@ -201,7 +199,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         order_by: Any | None = None,
         custom_query: Callable[[Select], Select] | None = None,
     ) -> list[Task]:
-        stmt = select(Task).where(Task.deleted_at.is_(None))
+        stmt = select(Task)
         if filters:
             for k, v in filters.items():
                 stmt = stmt.where(getattr(Task, k) == v)
@@ -212,11 +210,8 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         res = await self.session.execute(stmt)
         return list(res.scalars())
 
-    async def create(
-        self, payload: TaskCreate, *, extra_fields: dict[str, Any]
-    ) -> Task:
-        data = {**payload.model_dump(), **extra_fields}
-        task = Task(**data)
+    async def create(self, *, payload: dict[str, Any]) -> Task:
+        task = Task(**payload)
         self.session.add(task)
         await self.session.flush()
         await self.session.refresh(task)
@@ -235,15 +230,14 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         await self.session.refresh(task)
         return task
 
-    async def soft_delete(self, task: Task) -> None:
-        task.deleted_at = func.now()
-        self.session.add(task)
+    async def delete(self, task: Task) -> None:
+        await self.session.delete(task)
         await self.session.flush()
 
     async def next_display_order(self, project_id: int) -> int:
         q = await self.session.execute(
             select(Task)
-            .where(Task.project_id == project_id, Task.deleted_at.is_(None))
+            .where(Task.project_id == project_id)
             .order_by(Task.display_order.desc())
         )
         last = q.scalars().first()
@@ -260,7 +254,6 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             .where(
                 Task.project_id == project_id,
                 Task.display_order == display_order,
-                Task.deleted_at.is_(None),
             )
             .limit(1)
         )
@@ -297,7 +290,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
     async def list_subtasks(self, parent_id: int) -> list[Task]:
         res = await self.session.execute(
             select(Task).where(
-                Task.parent_id == parent_id, Task.deleted_at.is_(None)
+                Task.parent_id == parent_id,
             )
         )
         return list(res.scalars())
@@ -315,7 +308,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
     async def cascade_soft_delete_subtasks(self, parent_task_id: int) -> int:
         subtasks = await self.list_subtasks(parent_task_id)
         for st in subtasks:
-            await self.soft_delete(st)
+            await self.delete(st)
         return len(subtasks)
 
     async def get_user_task_statistics(self, user_id: int) -> dict:
@@ -336,7 +329,6 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             .join(Project, Project.id == Task.project_id)
             .where(
                 TaskAssignee.user_id == user_id,
-                Task.deleted_at.is_(None),
                 Task.status.not_in([StatusTask.PENDING]),
                 Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
                 Project.deleted_at.is_(None),
@@ -389,8 +381,6 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
                 Task.id == task_id,
                 # Task berada di project yang aktif
                 Project.status == StatusProject.ACTIVE,
-                # Task tidak dihapus
-                Task.deleted_at.is_(None),
             )
             .limit(1)
         )

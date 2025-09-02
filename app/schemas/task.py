@@ -3,17 +3,15 @@ from typing import List
 
 from pydantic import Field
 
-from app.db.models.task_model import PriorityLevel, ResourceType, StatusTask
+from app.db.models.task_model import PriorityLevel, StatusTask
 from app.schemas.base import BaseSchema
 
 
 class TaskCreate(BaseSchema):
     """Class untuk membuat tugas baru."""
 
-    project_id: int = Field(..., description="ID proyek tempat tugas ini dibuat")
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
-    resource_type: ResourceType = Field(default=ResourceType.TASK)
     status: StatusTask | None = Field(default=StatusTask.IN_PROGRESS)
     priority: PriorityLevel | None = Field(default=None)
     display_order: int = Field(default=0)
@@ -39,7 +37,6 @@ class BaseTaskResponse(BaseSchema):
     id: int
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
-    resource_type: ResourceType = Field(default=ResourceType.TASK)
     status: StatusTask | None = Field(default=None)
     priority: PriorityLevel | None = Field(default=None)
     display_order: int | None = Field(default=None)
@@ -74,3 +71,26 @@ class TaskResponse(BaseTaskResponse):
 
 class SimpleTaskResponse(BaseTaskResponse):
     """Response schema untuk tugas tanpa subtask."""
+
+
+class UserTaskAssignmentResponse(BaseSchema):
+    """Response schema untuk penugasan tugas."""
+
+    user_id: int
+    name: str
+    email: str
+    profile_url: str = Field(..., description="URL profil pengguna")
+
+
+class TaskDetailResponse(BaseTaskResponse):
+    """Response schema untuk detail tugas."""
+
+    assignees: List[UserTaskAssignmentResponse] = Field(
+        default_factory=list,
+        description="Daftar pengguna yang ditugaskan pada tugas ini.",
+    )
+
+    sub_tasks: List[SubSubTaskResponse] = Field(
+        default_factory=list,
+        description="Daftar subtask dari tugas ini.",
+    )

@@ -10,6 +10,7 @@ from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.audit_model import AuditLog
+    from app.db.models.milestone_model import Milestone
     from app.db.models.project_member_model import ProjectMember
     from app.db.models.task_model import Task
 
@@ -71,4 +72,12 @@ class Project(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Daftar log audit yang terkait dengan proyek ini.
     relasi one to many (satu proyek memiliki banyak log audit)
+    """
+
+    milestones: Mapped[List["Milestone"]] = relationship(
+        "Milestone", back_populates="project"
+    )
+    """
+    Daftar tonggak yang terkait dengan proyek ini.
+    relasi one to many (satu proyek memiliki banyak tonggak)
     """

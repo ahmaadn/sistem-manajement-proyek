@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import ResourceType, StatusTask, Task
+from app.db.models.task_model import StatusTask, Task
 
 
 class InterfaceDashboardReadRepository(Protocol):
@@ -167,9 +167,7 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                     select(func.count())
                     .where(
                         Task.project_id == Project.id,
-                        Task.deleted_at.is_(None),
                         Task.status != StatusTask.PENDING,
-                        Task.resource_type == ResourceType.TASK,
                     )
                     .scalar_subquery()
                 ).label("task_count"),
@@ -177,9 +175,7 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                     select(func.count())
                     .where(
                         Task.project_id == Project.id,
-                        Task.deleted_at.is_(None),
                         Task.status == StatusTask.IN_PROGRESS,
-                        Task.resource_type != ResourceType.TASK,
                     )
                     .scalar_subquery()
                 ).label("task_in_progress"),
@@ -217,7 +213,6 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                 # user yang di assign
                 TaskAssignee.user_id == user_id,
                 # task tidak di hapus
-                Task.deleted_at.is_(None),
                 # proyek yang tidak di hapus
                 Project.deleted_at.is_(None),
                 # proyek yang aktif
