@@ -165,7 +165,7 @@ class PegawaiService:
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""
         result = await asyncio.gather(_PegawaiApiClient.validation_token(token=token))
-        return result[0]
+        return bool(result[0])
 
     async def get_user_info(self, user_id: int):
         """Ambil info user berdasarkan user_id, tanpa access_token."""
