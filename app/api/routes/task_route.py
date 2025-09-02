@@ -1,6 +1,6 @@
 from types import NoneType
 
-from fastapi import APIRouter, Body, Depends, status
+from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -192,9 +192,7 @@ class _Task:
             },
         },
     )
-    async def update_task_status(
-        self, task_id: int, status: StatusTask = Body(..., embed=True)
-    ):
+    async def update_task_status(self, task_id: int, status: StatusTask):
         """
         Mengupdate status tugas tertentu.
         - Bisa digunakan untuk checkbox
