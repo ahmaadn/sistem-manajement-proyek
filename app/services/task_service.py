@@ -20,8 +20,14 @@ from app.db.models.role_model import Role
 from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.task import TaskCreate, TaskUpdate
+from app.schemas.task import (
+    TaskCreate,
+    TaskDetailResponse,
+    TaskUpdate,
+    UserTaskAssignmentResponse,
+)
 from app.schemas.user import User
+from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 if TYPE_CHECKING:
@@ -32,6 +38,8 @@ class TaskService:
     def __init__(self, uow: UnitOfWork) -> None:
         self.uow = uow
         self.repo = uow.task_repo
+
+        self.pegawai_service = PegawaiService()
 
     async def get(
         self, task_id: int, *, options: list[Any] | None = None
@@ -48,7 +56,9 @@ class TaskService:
         """
         return await self.repo.get(task_id, options=options)
 
-    async def get_detail_task(self, *, user: User, task_id: int) -> Task:
+    async def get_detail_task(
+        self, *, user: User, task_id: int
+    ) -> TaskDetailResponse:
         """Mendapatkan detail tugas untuk proyek tertentu.
 
         Args:
@@ -63,24 +73,51 @@ class TaskService:
         Returns:
             Task: Tugas yang diminta.
         """
-        task = await self.get(task_id)
+        task = await self.repo.get(
+            task_id,
+            options=[selectinload(Task.assignees), selectinload(Task.sub_tasks)],
+        )
         if task is None:
             raise exceptions.TaskNotFoundError
 
-        # pastikan user adalah member project
-        project_exists, is_member = await self.uow.project_repo.get_membership_flags(
+        # pastikan user adalah member proyek
+        is_member = await self.uow.project_repo.ensure_member_in_project(
             user_id=user.id, project_id=task.project_id
         )
-
-        if not project_exists:
-            raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
-
         if not is_member and user.role != Role.ADMIN:
             raise exceptions.ForbiddenError(
                 "hanya anggota proyek yang dapat mengakses sub-tugas"
             )
 
-        return task
+        # get user
+        assigns_user_ids = [assignee.user_id for assignee in task.assignees]
+        assigns_users = await self.pegawai_service.list_user_by_ids(
+            data=assigns_user_ids
+        )
+        users = [
+            UserTaskAssignmentResponse(
+                user_id=user.id,
+                name=user.name,
+                email=user.email,
+                profile_url=user.profile_url,
+            )
+            for user in assigns_users
+            if user
+        ]
+
+        return TaskDetailResponse(
+            id=task.id,
+            name=task.name,
+            description=task.description,
+            status=task.status,
+            priority=task.priority,
+            display_order=task.display_order,
+            due_date=task.due_date,
+            start_date=task.start_date,
+            estimated_duration=task.estimated_duration,
+            assignees=users,
+            sub_tasks=task.sub_tasks,  # type: ignore # auto cast ke type list[SubSubTaskResponse]
+        )
 
     async def list_task(
         self,

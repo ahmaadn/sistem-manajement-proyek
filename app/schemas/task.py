@@ -72,3 +72,26 @@ class TaskResponse(BaseTaskResponse):
 
 class SimpleTaskResponse(BaseTaskResponse):
     """Response schema untuk tugas tanpa subtask."""
+
+
+class UserTaskAssignmentResponse(BaseSchema):
+    """Response schema untuk penugasan tugas."""
+
+    user_id: int
+    name: str
+    email: str
+    profile_url: str = Field(..., description="URL profil pengguna")
+
+
+class TaskDetailResponse(BaseTaskResponse):
+    """Response schema untuk detail tugas."""
+
+    assignees: List[UserTaskAssignmentResponse] = Field(
+        default_factory=list,
+        description="Daftar pengguna yang ditugaskan pada tugas ini.",
+    )
+
+    sub_tasks: List[SubSubTaskResponse] = Field(
+        default_factory=list,
+        description="Daftar subtask dari tugas ini.",
+    )
