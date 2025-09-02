@@ -92,28 +92,28 @@ class _PegawaiApiClient:
 
     @staticmethod
     async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
-            request = request_object.get()
-            try:
-                start_time = time()
-                async with request.app.requests_client.post(  # type: ignore
-                    "api/login", json=payload, headers={"Accept": "application/json"}
-                ) as res:
-                    res.raise_for_status()
-                    data = await res.json()
+        request = request_object.get()
+        try:
+            start_time = time()
+            async with request.app.requests_client.post(  # type: ignore
+                "api/login", json=payload, headers={"Accept": "application/json"}
+            ) as res:
+                res.raise_for_status()
+                data = await res.json()
 
-                    # mendapatkan token
-                    token = data.get("token").split("|")[-1]
+                # mendapatkan token
+                token = data.get("token").split("|")[-1]
 
-                    # get data user
-                    user = data.get("user")
-                    user_id = user.get("id")
+                # get data user
+                user = data.get("user")
+                user_id = user.get("id")
 
-                    logger.debug("response login: %s", data)
-                    logger.debug("time request /api/login: %s", time() - start_time)
-                    return {"access_token": token, "user": user, "user_id": user_id}
-            except (ValueError, aiohttp.ClientError) as e:
-                logger.error("Error during login request: %s", e)
-                return None
+                logger.debug("response login: %s", data)
+                logger.debug("time request /api/login: %s", time() - start_time)
+                return {"access_token": token, "user": user, "user_id": user_id}
+        except (ValueError, aiohttp.ClientError) as e:
+            logger.error("Error during login request: %s", e)
+            return None
 
     @staticmethod
     async def validation_token(*, token: str | None = None):
@@ -121,6 +121,8 @@ class _PegawaiApiClient:
         if not token:
             logger.warning("get_pegawai_me: token tidak tersedia di context/header.")
             return None
+
+        request = request_object.get()
         try:
             start_time = time()
             async with request.app.requests_client.post(  # type: ignore
