@@ -167,7 +167,6 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                     select(func.count())
                     .where(
                         Task.project_id == Project.id,
-                        Task.deleted_at.is_(None),
                         Task.status != StatusTask.PENDING,
                     )
                     .scalar_subquery()
@@ -176,7 +175,6 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                     select(func.count())
                     .where(
                         Task.project_id == Project.id,
-                        Task.deleted_at.is_(None),
                         Task.status == StatusTask.IN_PROGRESS,
                     )
                     .scalar_subquery()
@@ -215,7 +213,6 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                 # user yang di assign
                 TaskAssignee.user_id == user_id,
                 # task tidak di hapus
-                Task.deleted_at.is_(None),
                 # proyek yang tidak di hapus
                 Project.deleted_at.is_(None),
                 # proyek yang aktif

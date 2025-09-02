@@ -6,7 +6,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
+from app.db.models.mixin import TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.attachment_model import Attachment
@@ -35,7 +35,7 @@ class PriorityLevel(StrEnum):
     HIGH = "high"
 
 
-class Task(Base, TimeStampMixin, SoftDeleteMixin):
+class Task(Base, TimeStampMixin):
     __tablename__ = "task"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -130,7 +130,6 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
                 # Task berada di project yang aktif
                 Project.status == StatusProject.ACTIVE,
                 # Task tidak dihapus
-                Task.deleted_at.is_(None),
             )
             .limit(1)
         )
