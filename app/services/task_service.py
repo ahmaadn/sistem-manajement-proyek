@@ -7,8 +7,6 @@ from app.core.domain.events.assignee_task import (
     TaskAssignedRemovedEvent,
 )
 from app.core.domain.events.task import (
-    TaskCreatedEvent,
-    TaskDeletedEvent,
     TaskRenameEvent,
     TaskStatusChangedEvent,
     TaskUpdatedEvent,
@@ -20,8 +18,7 @@ from app.core.domain.policies.task import (
 from app.db.models.project_member_model import RoleProject
 from app.db.models.role_model import Role
 from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import ResourceType, StatusTask, Task
-from app.db.repositories.task_repository import InterfaceTaskRepository
+from app.db.models.task_model import StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.user import User
@@ -32,9 +29,9 @@ if TYPE_CHECKING:
 
 
 class TaskService:
-    def __init__(self, uow: UnitOfWork, repo: InterfaceTaskRepository) -> None:
+    def __init__(self, uow: UnitOfWork) -> None:
         self.uow = uow
-        self.repo = repo
+        self.repo = uow.task_repo
 
     async def get(
         self, task_id: int, *, options: list[Any] | None = None
@@ -141,76 +138,93 @@ class TaskService:
         )
 
     async def create_task(
-        self, *, user: User, parent_id: int, project_id: int, payload: TaskCreate
+        self, *, user: User, milestone_id: int, payload: TaskCreate
     ) -> Task:
         """Membuat tugas baru.
 
         Args:
+            user (User): Pengguna yang membuat tugas.
             payload (TaskCreate): Data untuk tugas baru.
-            parent_task_id (int | None): ID tugas induk, jika ada.
-            actor (User): Pengguna yang membuat tugas.
+            milestone_id (int | None): ID milestone
 
         Returns:
             Task: Tugas yang telah dibuat.
         """
+        # get milestone
+        milestone = await self.uow.milestone_repo.get_by_id(
+            milestone_id=milestone_id
+        )
+        if not milestone:
+            raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
 
-        project_exists, is_owner = await self.uow.project_repo.get_membership_flags(
-            user_id=user.id, project_id=project_id, required_role=RoleProject.OWNER
+        # Cek status member
+        is_owner = await self.uow.project_repo.is_project_owner(
+            user_id=user.id, project_id=milestone.project_id
         )
 
-        if not project_exists:
-            raise exceptions.ProjectNotFoundError("Project tidak ditemukan")
-
-        if not is_owner and user.role != Role.ADMIN:
+        if not is_owner:
             raise exceptions.ForbiddenError(
                 "Hanya owner proyek yang dapat membuat task dalam milestone"
             )
 
-        # Validasi parent: boleh milestone atau task biasa
-        parent = await self.uow.task_repo.get(parent_id)
-        if (
-            not parent
-            or parent.project_id != project_id
-            or parent.resource_type
-            not in (ResourceType.MILESTONE, ResourceType.TASK)
-            or getattr(parent, "deleted_at", None)
-        ):
-            raise exceptions.TaskNotFoundError("Milestone tidak ditemukan")
-
-        # Jika parent adalah task biasa, pastikan ia terhubung ke milestone
-        if parent.resource_type == ResourceType.TASK:
-            milestone = await self.uow.task_repo.is_under_milestone(parent.id)
-            if not milestone:
-                # Ubah ke BadRequestError jika punya
-                raise exceptions.TaskNotFoundError(
-                    "Parent belum terhubung ke milestone"
-                )
-
-        payload.display_order = await self.repo.validate_display_order(
-            project_id=project_id, display_order=payload.display_order
-        )
-
-        task = await self.uow.task_repo.create(
-            payload=payload,
-            extra_fields={
-                "project_id": project_id,
+        # buat task
+        data = payload.model_dump(exclude_unset=True)
+        data.update(
+            {
                 "created_by": user.id,
-                "parent_id": parent_id,
-                "resource_type": ResourceType.TASK,
-            },
+                "milestone_id": milestone.id,
+                "project_id": milestone.project_id,
+                "display_order": await self.repo.validate_display_order(
+                    project_id=milestone.project_id,
+                    display_order=payload.display_order,
+                ),
+            }
+        )
+        return await self.uow.task_repo.create(payload=data)
+
+    async def create_subtask(
+        self, *, user: User, task_id: int, payload: TaskCreate
+    ) -> Task:
+        """Membuat tugas baru.
+
+        Args:
+            user (User): Pengguna yang membuat tugas.
+            payload (TaskCreate): Data untuk tugas baru.
+            milestone_id (int | None): ID milestone
+
+        Returns:
+            Task: Tugas yang telah dibuat.
+        """
+        # get milestone
+        parent_task = await self.repo.get(task_id)
+        if not parent_task:
+            raise exceptions.TaskNotFoundError("Task tidak ditemukan")
+
+        # Cek status member
+        is_owner = await self.uow.project_repo.is_project_owner(
+            user_id=user.id, project_id=parent_task.project_id
         )
 
-        self.uow.add_event(
-            TaskCreatedEvent(
-                performed_by=task.id,
-                project_id=task.project_id,
-                task_id=task.id,
-                created_by=user.id,
-                item_type=task.resource_type,
-                task_name=task.name,
+        if not is_owner:
+            raise exceptions.ForbiddenError(
+                "Hanya owner proyek yang dapat membuat task dalam milestone"
             )
+
+        # buat task
+        data = payload.model_dump(exclude_unset=True)
+        data.update(
+            {
+                "created_by": user.id,
+                "milestone_id": parent_task.milestone_id,
+                "project_id": parent_task.project_id,
+                "parent_id": parent_task.id,
+                "display_order": await self.repo.validate_display_order(
+                    project_id=parent_task.project_id,
+                    display_order=payload.display_order,
+                ),
+            }
         )
-        return task
+        return await self.uow.task_repo.create(payload=data)
 
     async def update_task(
         self, *, user: User, task_id: int, payload: TaskUpdate
@@ -299,36 +313,13 @@ class TaskService:
             required_role=RoleProject.OWNER,
         )
 
-        if not is_owner and user.role != Role.ADMIN:
+        if not is_owner:
             raise exceptions.ForbiddenError("Tidak punya akses untuk menghapus task")
 
-        if task.resource_type == ResourceType.MILESTONE:
-            # Cegah delete jika masih ada child task yang belum terhapus
-            has_children = any(
-                st
-                for st in task.sub_tasks
-                if getattr(st, "deleted_at", None) is None
-            )
-            if has_children:
-                raise exceptions.ForbiddenError(
-                    (
-                        "Milestone masih memiliki task. Hapus atau pindahkan task"
-                        "terlebih dahulu."
-                    )
-                )
-        else:
-            # Task biasa: hapus semua subtask secara cascade (soft delete)
-            await self.repo.cascade_soft_delete_subtasks(task.id)
-
-        await self.repo.soft_delete(task)
-        self.uow.add_event(
-            TaskDeletedEvent(
-                performed_by=task.id,
-                project_id=task.project_id,
-                task_name=task.name,
-                deleted_by=user.id,
-            )
-        )
+        # delete subtask
+        await self.repo.cascade_soft_delete_subtasks(task.id)
+        # kemudian delete task
+        await self.repo.delete(task)
 
     # Status change
     async def change_status(

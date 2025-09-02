@@ -119,7 +119,7 @@ class Task(Base, TimeStampMixin, SoftDeleteMixin):
     """
 
     assignees: Mapped[List["TaskAssignee"]] = relationship(
-        "TaskAssignee", back_populates="task"
+        "TaskAssignee", back_populates="task", cascade="all, delete-orphan"
     )
     """
     Relasi ke pengguna yang ditugaskan untuk tugas ini,

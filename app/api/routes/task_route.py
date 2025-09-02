@@ -10,12 +10,7 @@ from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm
 from app.db.models.task_model import StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.task import (
-    SimpleTaskResponse,
-    SubTaskResponse,
-    TaskCreate,
-    TaskUpdate,
-)
+from app.schemas.task import SimpleTaskResponse, TaskCreate, TaskUpdate
 from app.schemas.user import User
 from app.services.task_service import TaskService
 from app.utils import exceptions
@@ -30,38 +25,8 @@ class _Task:
     session: AsyncSession = Depends(get_async_session)
     uow: UnitOfWork = Depends(get_uow)
 
-    @r.get(
-        "/tasks/{parent_id}/subtasks",
-        status_code=status.HTTP_200_OK,
-        response_model=list[SubTaskResponse],
-        responses={
-            status.HTTP_200_OK: {
-                "description": "Daftar sub-tugas berhasil diambil",
-                "model": list[SubTaskResponse],
-            },
-            status.HTTP_403_FORBIDDEN: {
-                "description": "User tidak memiliki akses ke proyek ini",
-                "model": exceptions.AppErrorResponse,
-            },
-            status.HTTP_404_NOT_FOUND: {
-                "description": "Task atau Project tidak ditemukan",
-                "model": exceptions.AppErrorResponse,
-            },
-        },
-    )
-    async def get_subtasks(self, parent_id: int):
-        """
-        Mendapatkan daftar sub-tugas untuk tugas tertentu.
-
-        **Akses** : Semua Anggota Project, Admin
-        """
-
-        return await self.task_service.list_subtask(
-            user=self.user, task_id=parent_id
-        )
-
     @r.post(
-        "/projects/{project_id}/tasks/{parent_id}",
+        "/milestones/{milestone_id}/tasks",
         response_model=SimpleTaskResponse,
         status_code=status.HTTP_201_CREATED,
         responses={
@@ -75,9 +40,7 @@ class _Task:
             },
         },
     )
-    async def create_task(
-        self, project_id: int, parent_id: int, payload: TaskCreate
-    ):
+    async def create_task(self, milestone_id: int, payload: TaskCreate):
         """
         Membuat tugas baru untuk proyek tertentu.
         - Akses hanya bisa dilakukan oleh project manager (Owner).
@@ -88,10 +51,38 @@ class _Task:
         # display_order handled in service
         async with self.uow:
             task = await self.task_service.create_task(
-                user=self.user,
-                project_id=project_id,
-                parent_id=parent_id,
-                payload=payload,
+                user=self.user, milestone_id=milestone_id, payload=payload
+            )
+            await self.uow.commit()
+        return task
+
+    @r.post(
+        "/tasks/{task_id}/subtasks",
+        response_model=SimpleTaskResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            status.HTTP_201_CREATED: {
+                "description": "Task berhasil dibuat",
+                "model": SimpleTaskResponse,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Project tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def create_subtask(self, task_id: int, payload: TaskCreate):
+        """
+        Membuat tugas baru untuk proyek tertentu.
+        - Akses hanya bisa dilakukan oleh project manager (Owner).
+        - Masih bisa menambahkan task walaupun project telah di delete
+
+        **Akses** : Owner Project
+        """
+        # display_order handled in service
+        async with self.uow:
+            task = await self.task_service.create_subtask(
+                user=self.user, task_id=task_id, payload=payload
             )
             await self.uow.commit()
         return task
