@@ -7,7 +7,6 @@ import logging
 from time import time
 from typing import Any
 import urllib.parse
-
 import aiohttp
 
 from app.core.config.settings import get_settings
@@ -97,7 +96,7 @@ class _PegawaiApiClient:
             try:
                 start_time = time()
                 async with request.app.requests_client.post(  # type: ignore
-                    "api/login", json=payload
+                    "api/login", json=payload, headers={"Accept": "application/json"}
                 ) as res:
                     res.raise_for_status()
                     data = await res.json()
@@ -125,7 +124,7 @@ class _PegawaiApiClient:
         try:
             start_time = time()
             async with request.app.requests_client.post(  # type: ignore
-                "api/auth/validation", headers={"Authorization": f"Bearer {token}"}
+                "api/auth/validation", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
@@ -147,7 +146,7 @@ class _PegawaiApiClient:
         try:
             start_time = time()
             async with request.app.requests_client.get(  # type: ignore
-                "api/pegawai/me", headers={"Authorization": f"Bearer {token}"}
+                "api/pegawai/me", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
