@@ -2,21 +2,13 @@ from datetime import datetime
 
 from pydantic import Field
 
+from app.schemas.attachment import AttachmentResponse
 from app.schemas.base import BaseSchema
 
 
 class CommentCreate(BaseSchema):
     task_id: int = Field(..., description="ID tugas")
     content: str = Field(..., description="Isi komentar")
-
-
-class CommentAttachmentResponse(BaseSchema):
-    attachment_id: int
-    file_name: str
-    file_path: str
-    file_size: str
-    user_id: int
-    created_at: datetime
 
 
 class CommentResponse(BaseSchema):
@@ -28,4 +20,4 @@ class CommentResponse(BaseSchema):
 
 
 class CommentWithAttachmentResponse(CommentResponse):
-    attachment: CommentAttachmentResponse | None = None
+    attachments: list[AttachmentResponse] = Field(default_factory=list)

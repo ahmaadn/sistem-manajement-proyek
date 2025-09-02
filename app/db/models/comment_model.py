@@ -36,6 +36,9 @@ class Comment(Base, CreateStampMixin):
     oleh 1 task.
     """
 
-    attachment: Mapped["Attachment"] = relationship(
-        "Attachment", back_populates="comment", uselist=False
+    attachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment", back_populates="comment"
     )
+    """
+    Lampiran yang terkait dengan komentar. Relasi bersifat one-to-many.
+    """

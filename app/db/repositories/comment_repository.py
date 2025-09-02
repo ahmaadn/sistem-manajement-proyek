@@ -110,7 +110,7 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
         result = await self.session.execute(
             select(Comment)
             .where(Comment.task_id == task_id)
-            .options(selectinload(Comment.attachment))
+            .options(selectinload(Comment.attachments))
         )
         return result.scalars().all()
 
