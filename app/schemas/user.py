@@ -11,8 +11,8 @@ class PegawaiInfo(BaseSchema):
     employee_role: str = Field(..., description="Jabatan pengguna")
     email: str = Field(..., description="Email pengguna")
     position: str = Field(..., description="Posisi pengguna")
-    work_unit: str = Field(..., description="Unit kerja pengguna")
-    address: str = Field(..., description="Alamat pengguna")
+    # work_unit: str = Field(..., description="Unit kerja pengguna")
+    # address: str = Field(..., description="Alamat pengguna")
     profile_url: str = Field(..., description="URL profil pengguna")
 
 

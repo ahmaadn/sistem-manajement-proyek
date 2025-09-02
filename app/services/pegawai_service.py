@@ -79,29 +79,63 @@ class _PegawaiApiClient:
 
     @staticmethod
     async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
+            request = request_object.get()
+            try:
+                start_time = time()
+                async with request.app.requests_client.post(  # type: ignore
+                    "api/login", json=payload
+                ) as res:
+                    res.raise_for_status()
+                    data = await res.json()
+
+                    # mendapatkan token
+                    token = data.get("token").split("|")[-1]
+
+                    # get data user
+                    user = data.get("user")
+                    user_id = user.get("id")
+
+                    logger.debug("response login: %s", data)
+                    logger.debug("time request /api/login: %s", time() - start_time)
+                    return {"access_token": token, "user": user, "user_id": user_id}
+            except (ValueError, aiohttp.ClientError) as e:
+                logger.error("Error during login request: %s", e)
+                return None
+
+    @staticmethod
+    async def validation_token(*, token: str):
         request = request_object.get()
         try:
             start_time = time()
             async with request.app.requests_client.post(  # type: ignore
-                "api/login", json=payload
+                "api/auth/validation", headers={"Authorization": f"Bearer {token}"}
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
 
-                # mendapatkan token
-                token = data.get("token").split("|")[-1]
-
-                # get data user
-                user = data.get("user")
-                user_id = user.get("id")
-
-                logger.debug("response login: %s", data)
-                logger.debug("time request /api/login: %s", time() - start_time)
-                return {"access_token": token, "user": user, "user_id": user_id}
+                logger.debug("response validate_token: %s", data)
+                logger.debug("time request /auth/validation: %s", time() - start_time)
+                return True
         except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during login request: %s", e)
-            return None
+            logger.error("Error during validate_token request: %s", e)
+            return False
 
+    @staticmethod
+    async def get_pegawai_me(*, token: str):
+        request = request_object.get()
+        try:
+            start_time = time()
+            async with request.app.requests_client.get(  # type: ignore
+                "api/pegawai/me", headers={"Authorization": f"Bearer {token}"}
+            ) as res:
+                res.raise_for_status()
+                data = await res.json()
+                logger.debug("response get_pegawai_me: %s", data)
+                logger.debug("time request /pegawai/me: %s", time() - start_time)
+                return data
+        except (ValueError, aiohttp.ClientError) as e:
+            logger.error("Error during get_pegawai_me request: %s", e)
+            return None
 
 class PegawaiService:
     def __init__(self) -> None:
@@ -109,7 +143,8 @@ class PegawaiService:
 
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""
-        return any(user["access_token"] == token for user in FAKE_USERS)
+        result = await asyncio.gather(_PegawaiApiClient.validation_token(token=token))
+        return result[0]
 
     async def get_user_info(self, user_id: int):
         """Ambil info user berdasarkan user_id, tanpa access_token."""
@@ -120,10 +155,11 @@ class PegawaiService:
 
     async def get_user_info_by_token(self, token: str):
         """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
-        user = next((u for u in FAKE_USERS if u["access_token"] == token), None)
+        result = await asyncio.gather(_PegawaiApiClient.get_pegawai_me(token=token))
+        user = result[0]
         if not user:
             return None
-        return self._map_to_user_profile(user.copy())
+        return await self.map_to_pegawai_info(user.copy())
 
     async def login(self, email: str, password: str):
         """
@@ -135,18 +171,46 @@ class PegawaiService:
         return result[0]
 
     async def map_to_pegawai_info(self, data):
-        name = (data.get("nama") or "").strip()
-        encoded_name = urllib.parse.quote_plus(name)
+        """Map API response to PegawaiInfo.
+
+        Args:
+            data (dict): API response data.
+
+        Returns:
+            PegawaiInfo: Mapped PegawaiInfo object.
+        """
+
+        role = data.get("role")
+
+        if role == 'admin':
+            name = data['email']
+            position = data['role']
+        else:
+        # handle pegawai
+            pegawai = data.get("pegawai")
+            if not pegawai:
+                pegawai = {
+                    'nama': data.get('email'),
+                    'position': data.get('position')
+                }
+            name = pegawai['nama']
+            position = pegawai['jabatan']
+
+        # handle profile_url
+        profile_photo_path = data.get("profile_photo_path")
+        safe_name = name.strip()
+        encoded_name = urllib.parse.quote_plus(safe_name)
         dummy_profile_url = f"https://ui-avatars.com/api/?name={encoded_name}&background=random&bold=true&size=256"
+
         return PegawaiInfo(
             id=data.get("id"),
-            name=data.get("nama"),
+            name=name,
             employee_role=data.get("role"),
             email=data.get("email"),
-            position=data.get("jabatan"),
-            work_unit=data.get("unit_kerja"),
-            address=data.get("alamat"),
-            profile_url=data.get("profile_photo_path", dummy_profile_url),
+            position=position,
+            # work_unit=data.get("unit_kerja"),
+            # address=data.get("alamat"),
+            profile_url=profile_photo_path or dummy_profile_url,
         )
 
     def _map_to_user_profile(self, data):
@@ -156,8 +220,8 @@ class PegawaiService:
             employee_role=data.get("role"),
             email=data.get("email"),
             position=data.get("jabatan"),
-            work_unit=data.get("unit_kerja"),
-            address=data.get("alamat"),
+            # work_unit=data.get("unit_kerja"),
+            # address=data.get("alamat"),
             profile_url=data.get("profile_url"),
         )
 

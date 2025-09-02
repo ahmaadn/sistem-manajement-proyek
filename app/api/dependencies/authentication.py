@@ -1,6 +1,8 @@
+from typing import Any
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
+from app.schemas.user import PegawaiInfo
 from app.services import pegawai_service
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
@@ -16,7 +18,7 @@ class AuthHandler:
         self,
         username_or_email: str,
         password: str,
-    ):
+    )->tuple[dict[str, Any], PegawaiInfo]:
         """Otentikasi pengguna dengan nama pengguna atau email dan kata sandi.
 
         Args:
@@ -28,12 +30,10 @@ class AuthHandler:
         """
 
         payload = await self.pegawai_service.login(username_or_email, password)
-
         if not payload:
             raise exceptions.UnauthorizedError
 
         # get user info setelah mendapatkan token
-        user_id = payload["user_id"]
         user_info = await self.pegawai_service.map_to_pegawai_info(payload["user"])
         return payload, user_info
 
