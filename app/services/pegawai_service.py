@@ -75,6 +75,20 @@ FAKE_USERS = [
 ]
 
 
+def _get_bearer_from_ctx() -> str | None:
+    """Ambil Bearer token dari request saat ini (Authorization header)."""
+    try:
+        req = request_object.get()
+    except Exception:
+        return None
+    auth = req.headers.get("authorization") or req.headers.get("Authorization")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return None
+
 class _PegawaiApiClient:
 
     @staticmethod
@@ -103,8 +117,11 @@ class _PegawaiApiClient:
                 return None
 
     @staticmethod
-    async def validation_token(*, token: str):
-        request = request_object.get()
+    async def validation_token(*, token: str | None = None):
+        token = token or _get_bearer_from_ctx()
+        if not token:
+            logger.warning("get_pegawai_me: token tidak tersedia di context/header.")
+            return None
         try:
             start_time = time()
             async with request.app.requests_client.post(  # type: ignore
@@ -121,7 +138,11 @@ class _PegawaiApiClient:
             return False
 
     @staticmethod
-    async def get_pegawai_me(*, token: str):
+    async def get_pegawai_me(*, token: str | None = None):
+        token = token or _get_bearer_from_ctx()
+        if not token:
+            logger.warning("get_pegawai_me: token tidak tersedia di context/header.")
+            return None
         request = request_object.get()
         try:
             start_time = time()
