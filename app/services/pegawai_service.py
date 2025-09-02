@@ -181,6 +181,28 @@ class _PegawaiApiClient:
             logger.error("Error during get_pegawai_me request: %s", e)
             return None
 
+    @staticmethod
+    async def get_list_pegawai(*, token: str | None = None):
+        token = token or _get_bearer_from_ctx()
+        if not token:
+            logger.warning("get_list_pegawai: token tidak tersedia di context/header.")
+            return None
+
+        request = request_object.get()
+        try:
+            start_time = time()
+            async with request.app.requests_client.get(  # type: ignore
+                "api/pegawai-list", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
+            ) as res:
+                res.raise_for_status()
+                data = await res.json()
+                logger.debug("response get_list_pegawai: %s", data)
+                logger.debug("time request /pegawai: %s", time() - start_time)
+                return data
+        except (ValueError, aiohttp.ClientError) as e:
+            logger.error("Error during get_list_pegawai request: %s", e)
+            return None
+
 class PegawaiService:
     def __init__(self) -> None:
         self.api_url = get_settings().API_PEGAWAI
@@ -276,7 +298,13 @@ class PegawaiService:
         Returns:
             list[PegawaiInfo]: Daftar informasi pegawai.
         """
-        return [self._map_to_user_profile(user) for user in FAKE_USERS]
+        result = await asyncio.gather(_PegawaiApiClient.get_list_pegawai())
+        result = result[0]
+        if not result:
+            return []
+
+        users = result.get('data', [])
+        return [await self.map_to_pegawai_info(user) for user in users]
 
     async def list_user_by_ids(self, data: list[int]) -> list[PegawaiInfo | None]:
         """Mendapatkan daftar user berdasarkan list ID yang diberikan.
