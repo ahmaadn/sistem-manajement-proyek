@@ -109,7 +109,7 @@ class AttachmentService:
             file_bytes=file_bytes,
             task_id=comment.task_id,
             file_size=str(file_size),
-            comment_id=None,
+            comment_id=comment_id,
         )
 
     async def upload_attachment(
