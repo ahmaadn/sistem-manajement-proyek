@@ -34,12 +34,12 @@ class _Milestone:
             },
         },
     )
-    async def get_tasks(self, project_id: int):
+    async def get_milestones(self, project_id: int):
         """
-        Mendapatkan daftar tugas untuk proyek tertentu.
+        Mendapatkan daftar milestone untuk proyek tertentu.
         - Hanya user yang terdaftar sebagai anggota proyek yang dapat mengakses
-            tugas.
-        - Project yang di delete masih bisa lihat task
+            milestone.
+        - Project yang di delete masih bisa lihat milestone
         - Admin dapat melihat semua task
 
         **Akses** : Anggota Proyek dan Admin
