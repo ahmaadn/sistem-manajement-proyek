@@ -2,6 +2,7 @@ from typing import Protocol, Sequence, runtime_checkable
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models.comment_model import Comment
 from app.db.models.project_model import Project, StatusProject
@@ -57,6 +58,17 @@ class InterfaceCommentRepository(Protocol):
         """
         ...
 
+    async def get_by_id(self, *, comment_id: int) -> "Comment | None":
+        """
+        Mengambil satu komentar berdasarkan ID komentar dan ID task-nya.
+
+        Args:
+            comment_id: ID komentar yang dicari.
+        Returns:
+            Comment | None: Entitas komentar jika ditemukan, None jika tidak ada.
+        """
+        ...
+
     async def delete_by_id(self, *, comment_id: int, task_id: int) -> bool:
         """
         Menghapus sebuah komentar berdasarkan ID komentar dan ID task-nya.
@@ -96,7 +108,9 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
 
     async def list_by_task(self, *, task_id: int) -> Sequence[Comment]:
         result = await self.session.execute(
-            select(Comment).where(Comment.task_id == task_id)
+            select(Comment)
+            .where(Comment.task_id == task_id)
+            .options(selectinload(Comment.attachments))
         )
         return result.scalars().all()
 
@@ -105,6 +119,14 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
             select(Comment).where(
                 Comment.id == comment_id,
                 Comment.task_id == task_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_id(self, *, comment_id: int) -> Comment | None:
+        result = await self.session.execute(
+            select(Comment).where(
+                Comment.id == comment_id,
             )
         )
         return result.scalar_one_or_none()
