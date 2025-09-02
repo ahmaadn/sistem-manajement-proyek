@@ -45,3 +45,6 @@ class ErrorCode(StrEnum):
     MEDIA_NOT_SUPPORTED = auto()
     FILE_TOO_LARGE = auto()
     ATTACHMENT_NOT_FOUND = auto()
+
+    # milestone
+    MILESTONE_NOT_FOUND = auto()

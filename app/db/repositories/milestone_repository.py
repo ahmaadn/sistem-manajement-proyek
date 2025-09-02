@@ -10,11 +10,35 @@ CustomQuery = Callable[[Select], Select]
 
 @runtime_checkable
 class InterfaceMilestoneRepository(Protocol):
+    async def get_by_id(
+        self, *, milestone_id: int, options: list[Any] | None = None
+    ) -> Milestone | None:
+        """Mendapatkan milestone berdasarkan ID.
+
+        Args:
+            milestone_id (int): ID milestone.
+
+        Returns:
+            Milestone | None: Milestone yang ditemukan atau None jika tidak ada.
+        """
+        ...
+
     async def create(self, *, payload: dict[str, Any]) -> Milestone:
         """Membuat milestone baru
 
         Args:
             payload (dict[str, Any]): _description_
+        """
+        ...
+
+    async def delete(
+        self, *, milestone_id: int | None = None, milestone: Milestone | None = None
+    ) -> bool:
+        """Menghapus milestone berdasarkan ID dan project.
+
+        Args:
+            milestone_id (int): ID milestone.
+            milestone (Milestone): Objek milestone yang akan dihapus.
         """
         ...
 
@@ -76,11 +100,40 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def get_by_id(
+        self, *, milestone_id: int, options: list[Any] | None = None
+    ) -> Milestone | None:
+        return await self.session.get(Milestone, milestone_id, options=options)
+
     async def create(self, *, payload: dict[str, Any]) -> Milestone:
         milestone = Milestone(**payload)
         self.session.add(milestone)
         await self.session.commit()
         return milestone
+
+    async def delete(
+        self, *, milestone_id: int | None = None, milestone: Milestone | None = None
+    ) -> bool:
+        if milestone_id is None and milestone is None:
+            return False
+
+        if milestone is not None:
+            await self.session.delete(milestone)
+            return True
+
+        stmt = (
+            select(Milestone)
+            .where(
+                Milestone.id == milestone_id,
+            )
+            .limit(1)
+        )
+        res = await self.session.execute(stmt)
+        milestone = res.scalar_one_or_none()
+        if milestone:
+            await self.session.delete(milestone)
+            return True
+        return False
 
     async def list_by_project(
         self,

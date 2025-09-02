@@ -77,3 +77,29 @@ class _Milestone:
             )
             await self.uow.commit()
         return milestone
+
+    @r.delete(
+        "/milestones/{milestone_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        responses={
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Milestone tidak ditemukan",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "description": "Hanya pemilik proyek yang dapat menghapus milestone",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def delete_milestone(self, milestone_id: int):
+        """
+        Menghapus milestone berdasarkan ID.
+
+        **Akses**: Owner Project
+        """
+        async with self.uow:
+            await self.milestone_service.delete_milestone(
+                user=self.user, milestone_id=milestone_id
+            )
+            await self.uow.commit()
