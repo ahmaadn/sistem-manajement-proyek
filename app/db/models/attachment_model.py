@@ -54,6 +54,11 @@ class Attachment(Base, CreateStampMixin):
     Ukuran file lampiran. Dalam satuan byte.
     """
 
+    mime_type: Mapped[str] = mapped_column(String, nullable=False)
+    """
+    Tipe MIME dari lampiran.
+    """
+
     task: Mapped["Task"] = relationship("Task", back_populates="attachments")
     """
     Tugas yang dilampirkan. relasi bersifat Many to one. beberapa lampiran hanya bisa

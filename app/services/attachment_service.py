@@ -66,12 +66,15 @@ class AttachmentService:
             )
 
         att: Attachment = await self.repo.create(
-            user_id=actor.id,
-            task_id=task_id,
-            comment_id=comment_id,
-            file_name=file.filename or "attachment",
-            file_size=str(len(data)),
-            file_path="Progress Upload ...",
+            payload={
+                "user_id": actor.id,
+                "task_id": task_id,
+                "comment_id": comment_id,
+                "file_name": file.filename or "attachment",
+                "file_size": str(len(data)),
+                "file_path": "Progress Upload ...",
+                "mime_type": file.content_type or "application/octet-stream",
+            }
         )
 
         self.uow.add_event(

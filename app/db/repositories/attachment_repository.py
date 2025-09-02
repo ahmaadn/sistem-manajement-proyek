@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -62,16 +62,7 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def create(
-        self,
-        *,
-        user_id: int,
-        task_id: int,
-        comment_id: Optional[int],
-        file_name: str,
-        file_size: str,
-        file_path: str = "",
-    ) -> Attachment:
+    async def create(self, *, payload: dict[str, Any]) -> Attachment:
         """Buat Attachment baru.
 
         Catatan: Penyimpanan permanen bergantung pada commit transaksi
@@ -162,24 +153,8 @@ class AttachmentSQLAlchemyRepository:
         res = await self.session.execute(stmt)
         return int(res.scalar_one() or 0)
 
-    async def create(
-        self,
-        *,
-        user_id: int,
-        task_id: int,
-        comment_id: Optional[int],
-        file_name: str,
-        file_size: str,
-        file_path: str = "",
-    ) -> Attachment:
-        att = Attachment(
-            user_id=user_id,
-            task_id=task_id,
-            comment_id=comment_id,
-            file_name=file_name,
-            file_path=file_path,
-            file_size=file_size,
-        )
+    async def create(self, *, payload: dict[str, Any]) -> Attachment:
+        att = Attachment(**payload)
         self.session.add(att)
         await self.session.flush()
         return att
