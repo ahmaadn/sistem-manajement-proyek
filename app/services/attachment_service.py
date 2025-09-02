@@ -74,6 +74,44 @@ class AttachmentService:
             comment_id=None,
         )
 
+    async def create_comment_attachment(
+        self,
+        *,
+        file: UploadFile,
+        comment_id: int,
+        actor: User,
+    ) -> Attachment:
+        comment = await self.uow.comment_repo.get_by_id(comment_id=comment_id)
+
+        if comment is None:
+            raise exceptions.CommentNotFoundError("Komentar tidak ditemukan.")
+
+        if comment.user_id != actor.id:
+            raise exceptions.ForbiddenError(
+                "Anda tidak memiliki izin untuk mengunggah lampiran ini."
+            )
+
+        if file.content_type not in ALLOWED_EXTENSIONS:
+            raise exceptions.MediaNotSupportedError(
+                "Tipe file tidak didukung. Hanya PNG, JPG/JPEG, PDF, dan WORD."
+            )
+
+        file_bytes = await file.read()
+        file_size = len(file_bytes)
+        if file_size > MAX_SIZE:
+            raise exceptions.FileTooLargeError(
+                "Ukuran file melebihi batas yang diizinkan."
+            )
+
+        return await self.upload_attachment(
+            user=actor,
+            file=file,
+            file_bytes=file_bytes,
+            task_id=comment.task_id,
+            file_size=str(file_size),
+            comment_id=None,
+        )
+
     async def upload_attachment(
         self,
         *,

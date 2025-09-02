@@ -57,6 +57,17 @@ class InterfaceCommentRepository(Protocol):
         """
         ...
 
+    async def get_by_id(self, *, comment_id: int) -> "Comment | None":
+        """
+        Mengambil satu komentar berdasarkan ID komentar dan ID task-nya.
+
+        Args:
+            comment_id: ID komentar yang dicari.
+        Returns:
+            Comment | None: Entitas komentar jika ditemukan, None jika tidak ada.
+        """
+        ...
+
     async def delete_by_id(self, *, comment_id: int, task_id: int) -> bool:
         """
         Menghapus sebuah komentar berdasarkan ID komentar dan ID task-nya.
@@ -105,6 +116,14 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
             select(Comment).where(
                 Comment.id == comment_id,
                 Comment.task_id == task_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_id(self, *, comment_id: int) -> Comment | None:
+        result = await self.session.execute(
+            select(Comment).where(
+                Comment.id == comment_id,
             )
         )
         return result.scalar_one_or_none()
