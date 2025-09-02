@@ -115,3 +115,19 @@ class PegawaiService:
             list[PegawaiInfo]: Daftar informasi pegawai.
         """
         return [self._cast_to_user_info(user) for user in FAKE_USERS]
+
+    async def list_user_by_ids(self, data: list[int]) -> list[PegawaiInfo | None]:
+        """Mendapatkan daftar user berdasarkan list ID yang diberikan.
+        Jika suatu ID tidak ditemukan di data, kembalikan None pada posisi tersebut.
+
+        Args:
+            data (list[int]): Daftar ID pegawai.
+
+        Returns:
+            list[PegawaiInfo | None]: Daftar info pegawai atau None sesuai urutan ID.
+        """
+        result: list[PegawaiInfo | None] = []
+        for user_id in data:
+            user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
+            result.append(self._cast_to_user_info(user.copy()) if user else None)
+        return result

@@ -7,6 +7,7 @@ from .routes import attachment_route as attachment
 from .routes import auth_route as auth
 from .routes import comment_route as comment
 from .routes import dashboard_route as dashboard
+from .routes import milestone_route as milestone
 from .routes import project_member_route as project_member
 from .routes import project_route as proyek
 from .routes import task_route as task
@@ -20,6 +21,7 @@ router.include_router(user.router)
 router.include_router(proyek.router)
 router.include_router(project_member.router)
 router.include_router(task.router)
+router.include_router(milestone.router)
 router.include_router(assignee_task.router)
 router.include_router(dashboard.router)
 router.include_router(comment.router)
