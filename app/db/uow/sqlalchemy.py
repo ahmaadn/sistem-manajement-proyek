@@ -62,6 +62,7 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.session = session
         self._events: List["DomainEvent"] = []
         self._closed = False
+        self._committed = False
 
         # init repo
         self.comment_repo = CommentSQLAlchemyRepository(self.session)
@@ -92,12 +93,13 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             await dispatch_pending_events()
         finally:
             self._events.clear()
-        self._closed = True
+        self._committed = True
 
     async def rollback(self) -> None:
         """Rollback the current transaction."""
         await self.session.rollback()
         self._events.clear()
+        self._committed = False
 
     async def close(self) -> None:
         """Close the database session."""
@@ -117,6 +119,6 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             exc (Exception): Exception yang terjadi, jika ada.
             tb (Traceback): Traceback dari exception yang terjadi, jika ada.
         """
-        if exc or not self._closed:
+        if exc or not self._committed:
             await self.rollback()
         await self.close()
