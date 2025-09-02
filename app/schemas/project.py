@@ -56,12 +56,6 @@ class ProjectStatsResponse(BaseSchema):
     total_completed_tasks: int = Field(
         default=0, description="Jumlah tugas yang telah selesai"
     )
-    total_milestones: int = Field(
-        default=0, description="Jumlah milestone dalam proyek"
-    )
-    task_milestones_completed: int = Field(
-        default=0, description="Jumlah milestone yang telah selesai"
-    )
 
 
 class ProjectMemberResponse(BaseSchema):

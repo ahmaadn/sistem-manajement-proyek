@@ -18,7 +18,7 @@ from app.core.domain.policies.project_member import (
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project
 from app.db.models.role_model import Role
-from app.db.models.task_model import ResourceType, StatusTask
+from app.db.models.task_model import StatusTask
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
@@ -313,23 +313,11 @@ class ProjectService:
         if not project:
             raise exceptions.ProjectNotFoundError
 
-        tasks = await task_service.list_task(
-            filters={"project_id": project_id, "resource_type": ResourceType.TASK},
-        )
-        milestones = await task_service.list_task(
-            filters={
-                "project_id": project_id,
-                "resource_type": ResourceType.MILESTONE,
-            },
-        )
+        tasks = await task_service.list_task(filters={"project_id": project_id})
 
         total_tasks = len(tasks)
         total_completed_tasks = sum(
             1 for t in tasks if t.status == StatusTask.COMPLETED
-        )
-        total_milestones = len(milestones)
-        task_milestones_completed = sum(
-            1 for m in milestones if m.status == StatusTask.COMPLETED
         )
 
         members: list[ProjectMemberResponse] = []
@@ -360,8 +348,6 @@ class ProjectService:
             stats=ProjectStatsResponse(
                 total_tasks=total_tasks,
                 total_completed_tasks=total_completed_tasks,
-                total_milestones=total_milestones,
-                task_milestones_completed=task_milestones_completed,
             ),
         )
 
