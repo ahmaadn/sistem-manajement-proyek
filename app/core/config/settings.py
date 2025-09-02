@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Template FastApi Backend"
     VERSION_API: int = 1
 
+    API_PEGAWAI: str = ""
+
     DB_DRIVER: str
     DB_SERVER: str
     DB_PORT: int

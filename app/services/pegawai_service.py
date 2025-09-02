@@ -2,7 +2,19 @@
 # implementasi service pegawai akan di kerjakan setalah
 # api dari sistem pegawai siap digunakan
 
+import asyncio
+import logging
+from time import time
+from typing import Any
+import urllib.parse
+
+import aiohttp
+
+from app.core.config.settings import get_settings
+from app.middleware.request import request_object
 from app.schemas.user import PegawaiInfo
+
+logger = logging.getLogger(__name__)
 
 FAKE_USERS = [
     {
@@ -63,9 +75,37 @@ FAKE_USERS = [
 ]
 
 
+class _PegawaiApiClient:
+
+    @staticmethod
+    async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
+        request = request_object.get()
+        try:
+            start_time = time()
+            async with request.app.requests_client.post(  # type: ignore
+                "api/login", json=payload
+            ) as res:
+                res.raise_for_status()
+                data = await res.json()
+
+                # mendapatkan token
+                token = data.get("token").split("|")[-1]
+
+                # get data user
+                user = data.get("user")
+                user_id = user.get("id")
+
+                logger.debug("response login: %s", data)
+                logger.debug("time request /api/login: %s", time() - start_time)
+                return {"access_token": token, "user": user, "user_id": user_id}
+        except (ValueError, aiohttp.ClientError) as e:
+            logger.error("Error during login request: %s", e)
+            return None
+
+
 class PegawaiService:
     def __init__(self) -> None:
-        self.api_url = "https://localhost:3000/"
+        self.api_url = get_settings().API_PEGAWAI
 
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""
@@ -76,27 +116,40 @@ class PegawaiService:
         user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
         if not user:
             return None
-        return self._cast_to_user_info(user.copy())
+        return self._map_to_user_profile(user.copy())
 
     async def get_user_info_by_token(self, token: str):
         """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
         user = next((u for u in FAKE_USERS if u["access_token"] == token), None)
         if not user:
             return None
-        return self._cast_to_user_info(user.copy())
+        return self._map_to_user_profile(user.copy())
 
     async def login(self, email: str, password: str):
-        """Login: cek email dan password, return access_token jika cocok."""
-        # Untuk dummy, password diabaikan, hanya cek email
-        user = next(
-            (u for u in FAKE_USERS if u["email"] == email),
-            None,
-        )
-        if not user:
-            return None
-        return {"access_token": user["access_token"], "user_id": user["user_id"]}
+        """
+        Login via API_PEGAWAI: POST {api_url}/login. Return access_token jika
+        berhasil.
+        """
+        payload = {"email": email, "password": password}
+        result = await asyncio.gather(_PegawaiApiClient.login(payload=payload))
+        return result[0]
 
-    def _cast_to_user_info(self, data):
+    async def map_to_pegawai_info(self, data):
+        name = (data.get("nama") or "").strip()
+        encoded_name = urllib.parse.quote_plus(name)
+        dummy_profile_url = f"https://ui-avatars.com/api/?name={encoded_name}&background=random&bold=true&size=256"
+        return PegawaiInfo(
+            id=data.get("id"),
+            name=data.get("nama"),
+            employee_role=data.get("role"),
+            email=data.get("email"),
+            position=data.get("jabatan"),
+            work_unit=data.get("unit_kerja"),
+            address=data.get("alamat"),
+            profile_url=data.get("profile_photo_path", dummy_profile_url),
+        )
+
+    def _map_to_user_profile(self, data):
         return PegawaiInfo(
             id=data.get("user_id"),
             name=data.get("nama"),
@@ -114,7 +167,7 @@ class PegawaiService:
         Returns:
             list[PegawaiInfo]: Daftar informasi pegawai.
         """
-        return [self._cast_to_user_info(user) for user in FAKE_USERS]
+        return [self._map_to_user_profile(user) for user in FAKE_USERS]
 
     async def list_user_by_ids(self, data: list[int]) -> list[PegawaiInfo | None]:
         """Mendapatkan daftar user berdasarkan list ID yang diberikan.
@@ -129,5 +182,19 @@ class PegawaiService:
         result: list[PegawaiInfo | None] = []
         for user_id in data:
             user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
-            result.append(self._cast_to_user_info(user.copy()) if user else None)
+            result.append(self._map_to_user_profile(user.copy()) if user else None)
         return result
+
+
+def _singleton(cls):
+    _instances = {}
+
+    def warp():
+        if cls not in _instances:
+            _instances[cls] = cls()
+        return _instances[cls]
+
+    return warp
+
+
+PegawaiService = _singleton(PegawaiService)  # type: ignore

@@ -1,6 +1,7 @@
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
+from app.services import pegawai_service
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -33,13 +34,7 @@ class AuthHandler:
 
         # get user info setelah mendapatkan token
         user_id = payload["user_id"]
-        user_info = await self.pegawai_service.get_user_info(user_id)
-
-        # Tidak ada user info yang di dapatkan dari service
-        # ini bisa jadi user telah dihapus atau dinonaktifkan
-        if not user_info:
-            raise exceptions.UnauthorizedError
-
+        user_info = await self.pegawai_service.map_to_pegawai_info(payload["user"])
         return payload, user_info
 
 
