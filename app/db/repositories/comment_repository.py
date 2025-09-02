@@ -2,6 +2,7 @@ from typing import Protocol, Sequence, runtime_checkable
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.db.models.comment_model import Comment
 from app.db.models.project_model import Project, StatusProject
@@ -107,7 +108,9 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
 
     async def list_by_task(self, *, task_id: int) -> Sequence[Comment]:
         result = await self.session.execute(
-            select(Comment).where(Comment.task_id == task_id)
+            select(Comment)
+            .where(Comment.task_id == task_id)
+            .options(selectinload(Comment.attachment))
         )
         return result.scalars().all()
 
