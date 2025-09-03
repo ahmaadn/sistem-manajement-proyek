@@ -8,6 +8,7 @@ from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import (
     MilestoneCreate,
     MilestoneResponse,
+    MilestoneUpdate,
     SimpleMilestoneResponse,
 )
 from app.schemas.user import User
@@ -107,3 +108,33 @@ class _Milestone:
                 user=self.user, milestone_id=milestone_id
             )
             await self.uow.commit()
+
+    @r.put(
+        "/milestones/{milestone_id}",
+        status_code=status.HTTP_200_OK,
+        response_model=SimpleMilestoneResponse,
+        responses={
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Milestone tidak ditemukan",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "description": "Hanya pemilik proyek yang dapat menghapus milestone",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def update_milestone(self, milestone_id: int, payload: MilestoneUpdate):
+        """
+        Menghapus milestone berdasarkan ID.
+
+        **Akses**: Owner Project
+        """
+        async with self.uow:
+            result = await self.milestone_service.update_milestone(
+                user=self.user,
+                milestone_id=milestone_id,
+                payload=payload.model_dump(exclude_unset=True),
+            )
+            await self.uow.commit()
+        return result

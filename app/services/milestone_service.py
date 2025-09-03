@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy.orm import selectinload
 
 from app.db.models.milestone_model import Milestone
@@ -308,7 +310,7 @@ class MilestoneService:
         if not milestone:
             raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
 
-        is_owner = self.uow.project_repo.is_project_owner(
+        is_owner = await self.uow.project_repo.is_project_owner(
             project_id=milestone.project_id, user_id=user.id
         )
 
@@ -326,3 +328,37 @@ class MilestoneService:
         if not result:
             raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
         return result
+
+    async def update_milestone(
+        self, *, user: User, milestone_id: int, payload: dict[str, Any]
+    ) -> Milestone:
+        """Mengupdate milestone berdasarkan ID dan project.
+
+        Args:
+            user (User): Pengguna yang meminta penghapusan milestone.
+            project_id (int): ID proyek yang dimaksud.
+            milestone_id (int): ID milestone yang akan dihapus.
+
+        Raises:
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan.
+            exceptions.ForbiddenError: Jika pengguna tidak memiliki akses ke proyek.
+
+        Returns:
+            bool: True jika milestone berhasil dihapus, False jika tidak ditemukan.
+        """
+        milestone = await self.repo.get_by_id(
+            milestone_id=milestone_id, options=[selectinload(Milestone.tasks)]
+        )
+        if not milestone:
+            raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
+
+        is_owner = await self.uow.project_repo.is_project_owner(
+            project_id=milestone.project_id, user_id=user.id
+        )
+
+        if not is_owner:
+            raise exceptions.ForbiddenError(
+                "Hanya owner proyek yang dapat menghapus milestone"
+            )
+
+        return await self.repo.update(milestone=milestone, payload=payload)

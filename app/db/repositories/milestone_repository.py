@@ -42,6 +42,10 @@ class InterfaceMilestoneRepository(Protocol):
         """
         ...
 
+    async def update(
+        self, *, milestone: Milestone, payload: dict[str, Any]
+    ) -> Milestone: ...
+
     async def list_by_project(
         self,
         *,
@@ -191,3 +195,13 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
         if exists_same.first():
             return await self.next_display_order(project_id)
         return display_order
+
+    async def update(
+        self, *, milestone: Milestone, payload: dict[str, Any]
+    ) -> Milestone:
+        for key, value in payload.items():
+            setattr(milestone, key, value)
+        self.session.add(milestone)
+        await self.session.flush()
+        await self.session.refresh(milestone)
+        return milestone
