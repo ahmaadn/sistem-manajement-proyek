@@ -75,7 +75,7 @@ class InterfaceProjectRepository(
 
     @abstractmethod
     async def get_project_detail_for_user(
-        self, user_id: int, is_admin_or_pm: bool, project_id: int
+        self, user_id: int, is_admin: bool, project_id: int
     ) -> Project | None:
         """Detail proyek untuk pengguna."""
 
@@ -334,25 +334,37 @@ class ProjectSQLAlchemyRepository(
         return {pid: role for pid, role in rows}  # noqa: C416
 
     async def get_project_detail_for_user(
-        self, user_id: int, is_admin_or_pm: bool, project_id: int
+        self, user_id: int, is_admin: bool, project_id: int
     ) -> Project | None:
-        conditions = [
-            Project.id == project_id,
-            Project.deleted_at.is_(None),
-            exists(
-                select(1)
-                .select_from(ProjectMember)
-                .where(
-                    ProjectMember.project_id == Project.id,
-                    ProjectMember.user_id == user_id,
-                )
-            ),
-        ]
-        if not is_admin_or_pm:
-            conditions.append(
-                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
+        conditions = [Project.id == project_id, Project.deleted_at.is_(None)]
+        if not is_admin:
+            conditions.extend(
+                [
+                    Project.status.in_(
+                        [StatusProject.ACTIVE, StatusProject.COMPLETED]
+                    ),
+                    exists(
+                        select(1)
+                        .select_from(ProjectMember)
+                        .where(
+                            ProjectMember.project_id == Project.id,
+                            ProjectMember.user_id == user_id,
+                        )
+                    ),
+                ]
             )
-
+        else:
+            conditions.extend(
+                [
+                    exists(
+                        select(1)
+                        .select_from(ProjectMember)
+                        .where(
+                            ProjectMember.project_id == Project.id,
+                        )
+                    ),
+                ]
+            )
         stmt = (
             select(Project).options(selectinload(Project.members)).where(*conditions)
         )
