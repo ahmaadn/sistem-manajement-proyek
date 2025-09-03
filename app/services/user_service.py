@@ -137,6 +137,42 @@ class UserService:
             statistics=statistics,
         )
 
+    async def get_detail_me(self, *, user: User) -> UserDetail:
+        """Mendapatkan detail pengguna.
+
+        Args:
+            task_service (TaskService): Layanan untuk mengelola tugas.
+            project_service (ProjectService): Layanan untuk mengelola proyek.
+            user_id (int | None, optional): ID pengguna. Defaults to None.
+            user_data (UserRead | None, optional): Data pengguna. Defaults to None.
+        """
+
+        if user.role == Role.ADMIN:
+            project_stats = (
+                await self.uow.project_repo.get_overall_project_statistics()
+            )
+            task_stats = await self.uow.task_repo.get_overall_task_statistics()
+        else:
+            project_stats = await self.uow.project_repo.get_user_project_statistics(
+                user_id=user.id
+            )
+            task_stats = await self.uow.task_repo.get_user_task_statistics(user.id)
+
+        statistics = ProjectSummary(
+            total_project=project_stats["total_project"],
+            project_active=project_stats["project_active"],
+            project_completed=project_stats["project_completed"],
+            total_task=task_stats["total_task"],
+            task_in_progress=task_stats["task_in_progress"],
+            task_completed=task_stats["task_completed"],
+            task_cancelled=task_stats["task_cancelled"],
+        )
+
+        return UserDetail(
+            **user.model_dump(),
+            statistics=statistics,
+        )
+
     async def list_user(self) -> list[User]:
         """
         Ambil semua pegawai dari provider eksternal, sinkronkan role jika belum ada

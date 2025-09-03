@@ -45,11 +45,7 @@ class _User:
 
         **Akses**: Semua User
         """
-        detail = await self.user_service.get_user_detail(
-            user_data=user,
-            project_service=self.project_service,
-            task_service=self.task_service,
-        )
+        detail = await self.user_service.get_detail_me(user=user)
         await self.uow.commit()  # commit jika ada role baru dibuat
         return detail
 

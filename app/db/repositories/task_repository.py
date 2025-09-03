@@ -136,6 +136,18 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
+    async def get_overall_task_statistics(self) -> dict:
+        """
+        Mengembalikan statistik semua tugas:
+        - total_task
+        - task_in_progress
+        - task_completed
+        - task_cancelled
+        Hanya menghitung task dan project yang belum dihapus, serta status
+        project/task tertentu.
+        """
+        ...
+
     async def unassign_user(self, user_id: int, task_id: int) -> None:
         """
         Menghapus penugasan user dari sebuah task.
@@ -329,6 +341,43 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             .join(Project, Project.id == Task.project_id)
             .where(
                 TaskAssignee.user_id == user_id,
+                Task.status.not_in([StatusTask.PENDING]),
+                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
+                Project.deleted_at.is_(None),
+            )
+        )
+        res = await self.session.execute(stmt)
+        row = res.first()
+        if not row:
+            return {
+                "total_task": 0,
+                "task_in_progress": 0,
+                "task_completed": 0,
+                "task_cancelled": 0,
+            }
+        return {
+            "total_task": row.total_task or 0,
+            "task_in_progress": row.task_in_progress or 0,
+            "task_completed": row.task_completed or 0,
+            "task_cancelled": row.task_cancelled or 0,
+        }
+
+    async def get_overall_task_statistics(self) -> dict:
+        stmt = (
+            select(
+                func.count().label("total_task"),
+                func.sum(
+                    case((Task.status == StatusTask.IN_PROGRESS, 1), else_=0)
+                ).label("task_in_progress"),
+                func.sum(
+                    case((Task.status == StatusTask.COMPLETED, 1), else_=0)
+                ).label("task_completed"),
+                func.sum(
+                    case((Task.status == StatusTask.CANCELLED, 1), else_=0)
+                ).label("task_cancelled"),
+            )
+            .join(Project, Project.id == Task.project_id)
+            .where(
                 Task.status.not_in([StatusTask.PENDING]),
                 Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
                 Project.deleted_at.is_(None),

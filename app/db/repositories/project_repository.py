@@ -51,6 +51,10 @@ class InterfaceProjectRepository(
         """Statistik proyek pengguna."""
 
     @abstractmethod
+    async def get_overall_project_statistics(self) -> dict[str, int]:
+        """Statistik semua proyek."""
+
+    @abstractmethod
     async def list_user_project_participants_rows(
         self, user_id: int
     ) -> Sequence[Row[tuple[int, str, RoleProject]]]:
@@ -245,6 +249,35 @@ class ProjectSQLAlchemyRepository(
                 Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
                 Project.deleted_at.is_(None),
             )
+        )
+        res = await self.session.execute(stmt)
+        row = res.first()
+        if not row:
+            return {"total_project": 0, "project_active": 0, "project_completed": 0}
+        return {
+            "total_project": row.total_project or 0,
+            "project_active": row.project_active or 0,
+            "project_completed": row.project_completed or 0,
+        }
+
+    async def get_overall_project_statistics(self) -> dict[str, int]:
+        stmt = select(
+            func.count().label("total_project"),
+            func.sum(
+                case(
+                    (Project.status == StatusProject.ACTIVE, 1),
+                    else_=0,
+                )
+            ).label("project_active"),
+            func.sum(
+                case(
+                    (Project.status == StatusProject.COMPLETED, 1),
+                    else_=0,
+                )
+            ).label("project_completed"),
+        ).where(
+            Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED]),
+            Project.deleted_at.is_(None),
         )
         res = await self.session.execute(stmt)
         row = res.first()
