@@ -307,7 +307,10 @@ class ProjectService:
         user_service: "UserService",
     ) -> ProjectDetailResponse:
         project = await self.repo.get_project_detail_for_user(
-            user_id=user.id, is_admin=user.role == Role.ADMIN, project_id=project_id
+            user_id=user.id,
+            project_id=project_id,
+            is_admin=user.role == Role.ADMIN,
+            is_pm=user.role == Role.PROJECT_MANAGER,
         )
         if not project:
             raise exceptions.ProjectNotFoundError
