@@ -390,7 +390,7 @@ class ProjectSQLAlchemyRepository(
                 ),
             )
 
-            if is_pm:
+            if not is_pm:
                 conditions.append(
                     Project.status.in_(
                         [StatusProject.ACTIVE, StatusProject.COMPLETED]
