@@ -2,6 +2,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models.milestone_model import Milestone
 from app.db.models.project_member_model import RoleProject
+from app.db.models.role_model import Role
 from app.db.models.task_model import Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import (
@@ -242,7 +243,9 @@ class MilestoneService:
         Returns:
             list[MilestoneResponse]: Daftar respons milestone yang dipetakan.
         """
-        await self._ensure_member(user=user, project_id=project_id)
+        if user.role != Role.ADMIN:
+            await self._ensure_member(user=user, project_id=project_id)
+
         milestones = await self._fetch_milestones(project_id=project_id)
         assignee_ids = self._collect_assignee_ids(milestones)
         user_info_map = await self._get_user_info_map(assignee_ids)
