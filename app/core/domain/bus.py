@@ -72,7 +72,7 @@ class EventBus:
     def subscribe(self, event_type: Type[DomainEvent], handler: Handler) -> None:
         self._handlers[event_type].append((handler, HandlerMode.IMMEDIATE))
 
-        logger.info(
+        logger.debug(
             "event.subscribe immediate %s -> %s",
             event_type.__name__,
             getattr(handler, "__name__", str(handler)),
