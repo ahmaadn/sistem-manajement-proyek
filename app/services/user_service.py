@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from app.core.domain.events.user import UserRoleAssignedEvent
-from app.core.domain.policies.user_role import (
+from app.core.policies.user_role import (
     ensure_admin_not_change_own_role,
     ensure_not_demote_last_admin,
     map_employee_role_to_app_role,

@@ -10,7 +10,7 @@ from app.core.domain.events.project_member import (
     ProjectMemberRemovedEvent,
     ProjectMemberUpdatedEvent,
 )
-from app.core.domain.policies.project_member import (
+from app.core.policies.project_member import (
     ensure_actor_can_remove_member,
     ensure_can_assign_member_role,
     ensure_can_change_member_role,

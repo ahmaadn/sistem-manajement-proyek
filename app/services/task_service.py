@@ -11,7 +11,7 @@ from app.core.domain.events.task import (
     TaskStatusChangedEvent,
     TaskUpdatedEvent,
 )
-from app.core.domain.policies.task import (
+from app.core.policies.task import (
     ensure_assignee_is_project_member,
     ensure_only_assignee_can_change_status,
 )
