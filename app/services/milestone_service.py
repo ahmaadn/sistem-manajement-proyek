@@ -278,7 +278,9 @@ class MilestoneService:
             return value.casefold()
         return value
 
-    def _sort_key(self, obj: Any, field: str, descending: bool) -> tuple[int, Any]:
+    def _sort_key(
+        self, obj: Any, field: str, descending: bool
+    ) -> tuple[int, int, Any]:
         """Return a key that keeps None at the end for both asc/desc."""
         if field == "title":
             field = "name"
@@ -291,7 +293,7 @@ class MilestoneService:
         none_rank = (
             (1 if is_none else 0) if not descending else (0 if is_none else 1)
         )
-        return (none_rank, primary)
+        return (obj.id, none_rank, primary)
 
     async def list_milestones(
         self, *, user: User, project_id: int, sort_by: str, descending: bool
