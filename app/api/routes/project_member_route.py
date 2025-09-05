@@ -11,7 +11,7 @@ from app.api.dependencies.user import get_user_service, permission_required
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.base import MessageSuccessSchema
-from app.schemas.project_member import AddMemberProject, ChangeRoleProject
+from app.schemas.project_member import ProjectMemberAdd, ProjectMemberRoleUpdate
 from app.schemas.user import User
 from app.services.project_service import ProjectService
 from app.services.user_service import UserService
@@ -54,7 +54,7 @@ class _Project:
             },
         },
     )
-    async def add_member(self, project_id: int, payload: AddMemberProject):
+    async def add_member(self, project_id: int, payload: ProjectMemberAdd):
         """
         Menambahkan anggota ke proyek
 
@@ -130,7 +130,7 @@ class _Project:
         },
     )
     async def change_role_project_member(
-        self, project_id: int, user_id: int, payload: ChangeRoleProject
+        self, project_id: int, user_id: int, payload: ProjectMemberRoleUpdate
     ) -> NoneType:
         """
         Mengganti Role Project

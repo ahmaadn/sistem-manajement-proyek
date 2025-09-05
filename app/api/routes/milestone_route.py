@@ -7,9 +7,9 @@ from app.api.dependencies.user import get_current_user
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import (
     MilestoneCreate,
-    MilestoneResponse,
+    MilestoneDetail,
+    MilestoneRead,
     MilestoneUpdate,
-    SimpleMilestoneResponse,
 )
 from app.schemas.user import User
 from app.services.milestone_service import MilestoneService
@@ -26,12 +26,12 @@ class _Milestone:
 
     @r.get(
         "/projects/{project_id}/milestone",
-        response_model=list[MilestoneResponse],
+        response_model=list[MilestoneDetail],
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "Daftar tugas berhasil diambil",
-                "model": list[MilestoneResponse],
+                "model": list[MilestoneDetail],
             },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User tidak memiliki akses ke proyek ini",
@@ -57,7 +57,7 @@ class _Milestone:
 
     @r.post(
         "/projects/{project_id}/milestone",
-        response_model=SimpleMilestoneResponse,
+        response_model=MilestoneRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_403_FORBIDDEN: {
@@ -112,7 +112,7 @@ class _Milestone:
     @r.put(
         "/milestones/{milestone_id}",
         status_code=status.HTTP_200_OK,
-        response_model=SimpleMilestoneResponse,
+        response_model=MilestoneRead,
         responses={
             status.HTTP_404_NOT_FOUND: {
                 "description": "Milestone tidak ditemukan",

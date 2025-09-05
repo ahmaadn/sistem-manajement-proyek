@@ -5,7 +5,7 @@ from pydantic import Field
 
 from app.db.models.task_model import PriorityLevel, StatusTask
 from app.schemas.base import BaseSchema
-from app.schemas.task import UserTaskAssignmentResponse
+from app.schemas.task import TaskAssigneeRead
 
 
 class MilestoneBase(BaseSchema):
@@ -16,7 +16,7 @@ class MilestoneCreate(MilestoneBase):
     pass
 
 
-class SimpleMilestoneResponse(MilestoneBase):
+class MilestoneRead(MilestoneBase):
     id: int
     project_id: int
     title: str
@@ -29,8 +29,8 @@ class MilestoneUpdate(BaseSchema):
     title: Optional[str] = Field(None, max_length=255)
 
 
-class _MilestoneTaskBase(BaseSchema):
-    task_id: int
+class MilestoneTaskBase(BaseSchema):
+    id: int
     name: str = Field(default="Untitled Task")
     status: StatusTask | None = Field(default=None)
     priority: PriorityLevel | None = Field(default=None)
@@ -38,30 +38,30 @@ class _MilestoneTaskBase(BaseSchema):
     due_date: datetime | None = Field(default=None)
     start_date: datetime | None = Field(default=None)
 
-    assignees: List[UserTaskAssignmentResponse] = Field(
+    assignees: List[TaskAssigneeRead] = Field(
         default_factory=list,
         description="Daftar pengguna yang ditugaskan pada tugas ini.",
     )
 
 
-class MilestoneSubtaskResponse(_MilestoneTaskBase):
+class MilestoneSubTaskRead(MilestoneTaskBase):
     """Response schema untuk subtask dalam milestone."""
 
 
-class MilestoneTaskResponse(_MilestoneTaskBase):
+class MilestoneTaskRead(MilestoneTaskBase):
     """Response schema untuk subtask dalam milestone."""
 
-    sub_tasks: List[MilestoneSubtaskResponse] = Field(
+    sub_tasks: List[MilestoneSubTaskRead] = Field(
         default_factory=list,
         description="Daftar subtask dari tugas ini.",
     )
 
 
-class MilestoneResponse(BaseSchema):
+class MilestoneDetail(BaseSchema):
     id: int
     project_id: int
     title: str
     display_order: int
     created_at: datetime
     updated_at: datetime | None = None
-    tasks: list[MilestoneTaskResponse]
+    tasks: list[MilestoneTaskRead]

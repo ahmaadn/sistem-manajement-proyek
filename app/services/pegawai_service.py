@@ -2,7 +2,7 @@
 # implementasi service pegawai akan di kerjakan setalah
 # api dari sistem pegawai siap digunakan
 
-from app.schemas.user import PegawaiInfo
+from app.schemas.user import UserBase
 
 FAKE_USERS = [
     {
@@ -97,7 +97,7 @@ class PegawaiService:
         return {"access_token": user["access_token"], "user_id": user["user_id"]}
 
     def _cast_to_user_info(self, data):
-        return PegawaiInfo(
+        return UserBase(
             id=data.get("user_id"),
             name=data.get("nama"),
             employee_role=data.get("role"),
@@ -108,7 +108,7 @@ class PegawaiService:
             profile_url=data.get("profile_url"),
         )
 
-    async def list_user(self) -> list[PegawaiInfo]:
+    async def list_user(self) -> list[UserBase]:
         """Mendapatkan daftar semua pengguna.
 
         Returns:
@@ -116,7 +116,7 @@ class PegawaiService:
         """
         return [self._cast_to_user_info(user) for user in FAKE_USERS]
 
-    async def list_user_by_ids(self, data: list[int]) -> list[PegawaiInfo | None]:
+    async def list_user_by_ids(self, data: list[int]) -> list[UserBase | None]:
         """Mendapatkan daftar user berdasarkan list ID yang diberikan.
         Jika suatu ID tidak ditemukan di data, kembalikan None pada posisi tersebut.
 
@@ -126,7 +126,7 @@ class PegawaiService:
         Returns:
             list[PegawaiInfo | None]: Daftar info pegawai atau None sesuai urutan ID.
         """
-        result: list[PegawaiInfo | None] = []
+        result: list[UserBase | None] = []
         for user_id in data:
             user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
             result.append(self._cast_to_user_info(user.copy()) if user else None)

@@ -18,10 +18,10 @@ from app.db.models.project_model import StatusProject
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.project import (
-    PaginationProjectResponse,
     ProjectCreate,
-    ProjectDetailResponse,
-    ProjectResponse,
+    ProjectDetail,
+    ProjectListPage,
+    ProjectRead,
     ProjectUpdate,
 )
 from app.schemas.user import User
@@ -43,7 +43,7 @@ class _Project:
     @r.get(
         "/projects",
         status_code=status.HTTP_200_OK,
-        response_model=PaginationProjectResponse,
+        response_model=ProjectListPage,
     )
     async def list_projects(
         self,
@@ -78,12 +78,12 @@ class _Project:
 
     @r.get(
         "/projects/{project_id}",
-        response_model=ProjectDetailResponse,
+        response_model=ProjectDetail,
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "Proyek ditemukan",
-                "model": ProjectDetailResponse,
+                "model": ProjectDetail,
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Proyek tidak ditemukan",
@@ -117,11 +117,11 @@ class _Project:
     @r.put(
         "/projects/{project_id}",
         status_code=status.HTTP_200_OK,
-        response_model=ProjectResponse,
+        response_model=ProjectRead,
         responses={
             status.HTTP_200_OK: {
                 "description": "Proyek berhasil diperbarui",
-                "model": ProjectResponse,
+                "model": ProjectRead,
             },
             status.HTTP_401_UNAUTHORIZED: {
                 "description": "User tidak memiliki akses.",
@@ -188,11 +188,11 @@ class _Project:
     @r.post(
         "/projects",
         status_code=status.HTTP_201_CREATED,
-        response_model=ProjectResponse,
+        response_model=ProjectRead,
         responses={
             status.HTTP_201_CREATED: {
                 "description": "proyek berhasil dibuat",
-                "model": ProjectResponse,
+                "model": ProjectRead,
             }
         },
         dependencies=[Depends(get_user_pm)],

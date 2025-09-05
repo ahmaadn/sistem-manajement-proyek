@@ -34,7 +34,7 @@ class ProjectUpdate(BaseSchema):
     status: StatusProject | None = Field(default=None, description="Status proyek")
 
 
-class ProjectResponse(BaseSchema):
+class ProjectRead(BaseSchema):
     id: int = Field(..., description="ID proyek")
     title: str = Field(..., description="Judul proyek")
     description: str | None = Field(default=None, description="Deskripsi proyek")
@@ -50,7 +50,7 @@ class ProjectResponse(BaseSchema):
     created_by: int = Field(..., description="ID pembuat proyek")
 
 
-class ProjectStatsResponse(BaseSchema):
+class ProjectStats(BaseSchema):
     total_tasks: int = Field(
         default=0, description="Jumlah total tugas dalam proyek"
     )
@@ -59,19 +59,19 @@ class ProjectStatsResponse(BaseSchema):
     )
 
 
-class ProjectMemberResponse(BaseSchema):
+class ProjectMemberRead(BaseSchema):
     user_id: int = Field(..., description="ID pengguna")
     name: str = Field(..., description="Nama pengguna")
     email: str = Field(..., description="Email pengguna")
     project_role: RoleProject = Field(..., description="Peran dalam proyek")
 
 
-class ProjectDetailResponse(ProjectResponse):
-    members: list[ProjectMemberResponse] = Field(
+class ProjectDetail(ProjectRead):
+    members: list[ProjectMemberRead] = Field(
         default_factory=list, description="Anggota proyek"
     )
 
-    stats: ProjectStatsResponse = Field(..., description="Statistik proyek")
+    stats: ProjectStats = Field(..., description="Statistik proyek")
 
 
 class ProjectSummary(BaseSchema):
@@ -82,5 +82,5 @@ class ProjectSummary(BaseSchema):
     project_cancel: int = Field(0, description="Proyek batal")
 
 
-class PaginationProjectResponse(PaginationSchema[ProjectResponse]):
+class ProjectListPage(PaginationSchema[ProjectRead]):
     summary: ProjectSummary = Field(..., description="Ringkasan proyek")

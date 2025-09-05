@@ -9,7 +9,7 @@ from app.api.dependencies.user import get_current_user
 from app.core.domain.bus import set_event_background
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.attachment import AttachmentResponse
+from app.schemas.attachment import AttachmentRead
 from app.schemas.user import User
 from app.services.attachment_service import AttachmentService
 from app.utils.exceptions import AppErrorResponse
@@ -25,7 +25,7 @@ class _Attachment:
 
     @r.post(
         "/tasks/{task_id}/attachment/upload-file",
-        response_model=AttachmentResponse,
+        response_model=AttachmentRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_201_CREATED: {
@@ -35,7 +35,7 @@ class _Attachment:
                     "mengirim ke event sse dan pusher. "
                     "type event: **attachment.uploaded**"
                 ),
-                "model": AttachmentResponse,
+                "model": AttachmentRead,
             },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User is not a member of the project",
@@ -77,7 +77,7 @@ class _Attachment:
 
     @r.post(
         "/comments/{comment_id}/attachment/upload-file",
-        response_model=AttachmentResponse,
+        response_model=AttachmentRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_201_CREATED: {
@@ -87,7 +87,7 @@ class _Attachment:
                     "mengirim ke event sse dan pusher. "
                     "type event: **attachment.uploaded**"
                 ),
-                "model": AttachmentResponse,
+                "model": AttachmentRead,
             },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User is not a member of the project",

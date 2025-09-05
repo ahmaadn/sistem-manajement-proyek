@@ -9,12 +9,12 @@ from app.db.models.task_model import Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import (
     MilestoneCreate,
-    MilestoneResponse,
-    MilestoneSubtaskResponse,
-    MilestoneTaskResponse,
+    MilestoneDetail,
+    MilestoneSubTaskRead,
+    MilestoneTaskRead,
 )
-from app.schemas.task import UserTaskAssignmentResponse
-from app.schemas.user import PegawaiInfo, User
+from app.schemas.task import TaskAssigneeRead
+from app.schemas.user import User, UserBase
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -105,7 +105,7 @@ class MilestoneService:
 
     async def _get_user_info_map(
         self, assignee_ids: set[int]
-    ) -> dict[int, PegawaiInfo | None]:
+    ) -> dict[int, UserBase | None]:
         """Mengambil informasi pegawai berdasarkan ID pengguna yang ditugaskan.
 
         Args:
@@ -123,8 +123,8 @@ class MilestoneService:
 
     @staticmethod
     def _map_assignees(
-        task_like: Task, user_info_map: dict[int, PegawaiInfo | None]
-    ) -> list[UserTaskAssignmentResponse]:
+        task_like: Task, user_info_map: dict[int, UserBase | None]
+    ) -> list[TaskAssigneeRead]:
         """Memetakan penugasan pengguna untuk tugas tertentu.
 
         Args:
@@ -135,13 +135,13 @@ class MilestoneService:
         Returns:
             list[UserTaskAssignmentResponse]: Daftar respons penugasan pengguna.
         """
-        items: list[UserTaskAssignmentResponse] = []
+        items: list[TaskAssigneeRead] = []
         for a in task_like.assignees or []:
             info = user_info_map.get(getattr(a, "user_id", 0))
             if info is None:
                 continue
             items.append(
-                UserTaskAssignmentResponse(
+                TaskAssigneeRead(
                     user_id=info.id,
                     name=info.name,
                     email=info.email or "",
@@ -151,8 +151,8 @@ class MilestoneService:
         return items
 
     def _map_subtask(
-        self, st: Task, user_info_map: dict[int, PegawaiInfo | None]
-    ) -> MilestoneSubtaskResponse:
+        self, st: Task, user_info_map: dict[int, UserBase | None]
+    ) -> MilestoneSubTaskRead:
         """Memetakan sub-tugas untuk respons milestone.
 
         Args:
@@ -163,8 +163,8 @@ class MilestoneService:
         Returns:
             MilestoneSubtaskResponse: Respons sub-tugas yang dipetakan.
         """
-        return MilestoneSubtaskResponse(
-            task_id=st.id,
+        return MilestoneSubTaskRead(
+            id=st.id,
             name=st.name,
             status=st.status,
             priority=st.priority,
@@ -175,8 +175,8 @@ class MilestoneService:
         )
 
     def _map_task(
-        self, t: Task, user_info_map: dict[int, PegawaiInfo | None]
-    ) -> MilestoneTaskResponse:
+        self, t: Task, user_info_map: dict[int, UserBase | None]
+    ) -> MilestoneTaskRead:
         """Memetakan tugas untuk respons milestone.
 
         Args:
@@ -193,8 +193,8 @@ class MilestoneService:
         sub_tasks_resp = [
             self._map_subtask(st, user_info_map) for st in sub_tasks_sorted
         ]
-        return MilestoneTaskResponse(
-            task_id=t.id,
+        return MilestoneTaskRead(
+            id=t.id,
             name=t.name,
             status=t.status,
             priority=t.priority,
@@ -206,8 +206,8 @@ class MilestoneService:
         )
 
     def _map_milestone(
-        self, m: Milestone, user_info_map: dict[int, PegawaiInfo | None]
-    ) -> MilestoneResponse:
+        self, m: Milestone, user_info_map: dict[int, UserBase | None]
+    ) -> MilestoneDetail:
         """Memetakan milestone untuk respons milestone.
 
         Args:
@@ -223,7 +223,7 @@ class MilestoneService:
             key=lambda t: t.display_order,
         )
         tasks_resp = [self._map_task(t, user_info_map) for t in top_level_tasks]
-        return MilestoneResponse(
+        return MilestoneDetail(
             id=m.id,
             project_id=m.project_id,
             title=m.title,
@@ -235,7 +235,7 @@ class MilestoneService:
 
     async def list_milestones(
         self, *, user: User, project_id: int
-    ) -> list[MilestoneResponse]:
+    ) -> list[MilestoneDetail]:
         """Mengambil daftar milestone untuk proyek tertentu.
 
         Args:

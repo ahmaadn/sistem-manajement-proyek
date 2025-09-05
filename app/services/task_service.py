@@ -21,11 +21,11 @@ from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
-    TaskAttachmentResponse,
+    TaskAssigneeRead,
+    TaskAttachmentRead,
     TaskCreate,
-    TaskDetailResponse,
+    TaskDetail,
     TaskUpdate,
-    UserTaskAssignmentResponse,
 )
 from app.schemas.user import User
 from app.services.pegawai_service import PegawaiService
@@ -57,9 +57,7 @@ class TaskService:
         """
         return await self.repo.get(task_id, options=options)
 
-    async def get_detail_task(
-        self, *, user: User, task_id: int
-    ) -> TaskDetailResponse:
+    async def get_detail_task(self, *, user: User, task_id: int) -> TaskDetail:
         """Mendapatkan detail tugas untuk proyek tertentu.
 
         Args:
@@ -100,7 +98,7 @@ class TaskService:
             data=assigns_user_ids
         )
         users = [
-            UserTaskAssignmentResponse(
+            TaskAssigneeRead(
                 user_id=user.id,
                 name=user.name,
                 email=user.email,
@@ -112,8 +110,8 @@ class TaskService:
 
         # attachments
         attachments = [
-            TaskAttachmentResponse(
-                attachment_id=attachment.id,
+            TaskAttachmentRead(
+                id=attachment.id,
                 file_name=attachment.file_name,
                 file_path=attachment.file_path,
                 file_size=attachment.file_size,
@@ -124,7 +122,7 @@ class TaskService:
             )
         ]
 
-        return TaskDetailResponse(
+        return TaskDetail(
             id=task.id,
             name=task.name,
             description=task.description,

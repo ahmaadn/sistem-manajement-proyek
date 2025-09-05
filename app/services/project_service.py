@@ -27,16 +27,16 @@ from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
-    PaginationProjectResponse,
     ProjectCreate,
-    ProjectDetailResponse,
-    ProjectMemberResponse,
-    ProjectResponse,
-    ProjectStatsResponse,
+    ProjectDetail,
+    ProjectListPage,
+    ProjectMemberRead,
+    ProjectRead,
+    ProjectStats,
     ProjectSummary,
     ProjectUpdate,
 )
-from app.schemas.user import ProjectParticipant, User
+from app.schemas.user import ProjectParticipation, User
 from app.utils import exceptions
 
 if TYPE_CHECKING:
@@ -247,7 +247,7 @@ class ProjectService:
 
     async def get_user_project_participants(
         self, user_id: int
-    ) -> list[ProjectParticipant]:
+    ) -> list[ProjectParticipation]:
         """Mengambil daftar partisipan proyek untuk pengguna.
 
         Args:
@@ -258,7 +258,7 @@ class ProjectService:
         """
         rows = await self.repo.list_user_project_participants_rows(user_id)
         return [
-            ProjectParticipant(
+            ProjectParticipation(
                 project_id=row.project_id,
                 project_name=row.project_name,
                 user_role=row.user_role,
@@ -275,7 +275,7 @@ class ProjectService:
         status_project: StatusProject,
         start_year: int | None = None,
         end_year: int | None = None,
-    ) -> PaginationSchema[ProjectResponse]:
+    ) -> PaginationSchema[ProjectRead]:
         """Mengambil daftar proyek untuk pengguna.
 
         Args:
@@ -303,7 +303,7 @@ class ProjectService:
         )
 
         items = [
-            ProjectResponse(
+            ProjectRead(
                 id=item.id,
                 title=item.title,
                 description=item.description,
@@ -315,7 +315,7 @@ class ProjectService:
             for item in paginate["items"]
         ]
         paginate.update({"items": items})
-        return PaginationProjectResponse(
+        return ProjectListPage(
             **paginate,
             summary=await self.summarize_user_projects(
                 user=user, start_year=norm_start, end_year=norm_end
@@ -368,7 +368,7 @@ class ProjectService:
         project_id: int,
         task_service: "TaskService",
         user_service: "UserService",
-    ) -> ProjectDetailResponse:
+    ) -> ProjectDetail:
         project = await self.repo.get_project_detail_for_user(
             user_id=user.id,
             project_id=project_id,
@@ -385,7 +385,7 @@ class ProjectService:
             1 for t in tasks if t.status == StatusTask.COMPLETED
         )
 
-        members: list[ProjectMemberResponse] = []
+        members: list[ProjectMemberRead] = []
         users = await user_service.list_user()
         for team_member in project.members:
             detail_member = next(
@@ -393,7 +393,7 @@ class ProjectService:
             )
             if detail_member:
                 members.append(
-                    ProjectMemberResponse(
+                    ProjectMemberRead(
                         user_id=detail_member.id,
                         name=detail_member.name,
                         email=detail_member.email,
@@ -401,7 +401,7 @@ class ProjectService:
                     )
                 )
 
-        return ProjectDetailResponse(
+        return ProjectDetail(
             id=project.id,
             title=project.title,
             description=project.description,
@@ -410,7 +410,7 @@ class ProjectService:
             status=project.status,
             created_by=project.created_by,
             members=members,
-            stats=ProjectStatsResponse(
+            stats=ProjectStats(
                 total_tasks=total_tasks,
                 total_completed_tasks=total_completed_tasks,
             ),

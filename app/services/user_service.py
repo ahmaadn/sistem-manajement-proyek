@@ -9,7 +9,7 @@ from app.core.policies.user_role import (
 from app.db.models.role_model import Role, UserRole
 from app.db.repositories.user_repository import InterfaceUserRepository
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.user import PegawaiInfo, ProjectSummary, User, UserDetail
+from app.schemas.user import User, UserBase, UserDetail, UserProjectStats
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -42,7 +42,7 @@ class UserService:
         return await self.repo.get_user_role(user_id)
 
     async def assign_role_to_user(
-        self, user_id: int, user: PegawaiInfo, actor_id: int | None = None
+        self, user_id: int, user: UserBase, actor_id: int | None = None
     ) -> UserRole:
         """Menetapkan peran kepada pengguna.
 
@@ -122,7 +122,7 @@ class UserService:
         project_stats = await project_service.get_user_project_statistics(user_id)
         task_stats = await task_service.get_user_task_statistics(user_id)
 
-        statistics = ProjectSummary(
+        statistics = UserProjectStats(
             total_project=project_stats["total_project"],
             project_active=project_stats["project_active"],
             project_completed=project_stats["project_completed"],
@@ -158,7 +158,7 @@ class UserService:
             )
             task_stats = await self.uow.task_repo.get_user_task_statistics(user.id)
 
-        statistics = ProjectSummary(
+        statistics = UserProjectStats(
             total_project=project_stats["total_project"],
             project_active=project_stats["project_active"],
             project_completed=project_stats["project_completed"],

@@ -16,8 +16,8 @@ from app.schemas.dashboard import (
     UserDashboardResponse,
     YearlySummary,
 )
-from app.schemas.task import SimpleTaskResponse
-from app.schemas.user import ProjectSummary
+from app.schemas.task import TaskRead
+from app.schemas.user import UserProjectStats
 
 if TYPE_CHECKING:
     from app.services.project_service import ProjectService
@@ -112,7 +112,7 @@ class DashboardService:
         project_stats = await project_service.get_user_project_statistics(user_id)
         task_stats = await task_service.get_user_task_statistics(user_id)
 
-        project_summary = ProjectSummary(
+        project_summary = UserProjectStats(
             total_project=project_stats.get("total_project", 0),
             project_active=project_stats.get("project_active", 0),
             project_completed=project_stats.get("project_completed", 0),
@@ -126,8 +126,8 @@ class DashboardService:
         )
 
         # cast ke type SimpleTaskResponse
-        upcoming_tasks: list[SimpleTaskResponse] = [
-            SimpleTaskResponse.model_validate(t, from_attributes=True)
+        upcoming_tasks: list[TaskRead] = [
+            TaskRead.model_validate(t, from_attributes=True)
             for t in _upcoming_task_models
         ]
 

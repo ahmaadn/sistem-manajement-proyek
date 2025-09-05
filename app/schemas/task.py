@@ -33,7 +33,7 @@ class TaskUpdate(BaseSchema):
     estimated_duration: int | None = Field(default=None)
 
 
-class BaseTaskResponse(BaseSchema):
+class TaskRead(BaseSchema):
     id: int
     name: str = Field(default="Untitled Task")
     description: str | None = Field(default=None)
@@ -45,11 +45,7 @@ class BaseTaskResponse(BaseSchema):
     estimated_duration: int | None = Field(default=None)
 
 
-class SimpleTaskResponse(BaseTaskResponse):
-    """Response schema untuk tugas tanpa subtask."""
-
-
-class SubTaskResponse(BaseSchema):
+class SubTaskRead(BaseSchema):
     """Response schema untuk sub-subtask."""
 
     id: int
@@ -62,15 +58,15 @@ class SubTaskResponse(BaseSchema):
     estimated_duration: int | None = Field(default=None)
 
 
-class TaskAttachmentResponse(BaseSchema):
-    attachment_id: int
+class TaskAttachmentRead(BaseSchema):
+    id: int
     file_name: str
     file_path: str
     file_size: str
     created_at: datetime.datetime
 
 
-class UserTaskAssignmentResponse(BaseSchema):
+class TaskAssigneeRead(BaseSchema):
     """Response schema untuk penugasan tugas."""
 
     user_id: int
@@ -79,20 +75,20 @@ class UserTaskAssignmentResponse(BaseSchema):
     profile_url: str = Field(..., description="URL profil pengguna")
 
 
-class TaskDetailResponse(BaseTaskResponse):
+class TaskDetail(TaskRead):
     """Response schema untuk detail tugas."""
 
-    assignees: List[UserTaskAssignmentResponse] = Field(
+    assignees: List[TaskAssigneeRead] = Field(
         default_factory=list,
         description="Daftar pengguna yang ditugaskan pada tugas ini.",
     )
 
-    sub_tasks: List[SubTaskResponse] = Field(
+    sub_tasks: List[SubTaskRead] = Field(
         default_factory=list,
         description="Daftar subtask dari tugas ini.",
     )
 
-    attachments: list[TaskAttachmentResponse] = Field(
+    attachments: list[TaskAttachmentRead] = Field(
         default_factory=list,
         description="Daftar lampiran untuk tugas ini.",
     )
