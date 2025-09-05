@@ -15,19 +15,25 @@ from app.core.policies.project_member import (
     ensure_can_assign_member_role,
     ensure_can_change_member_role,
 )
+from app.core.policies.query_policies import (
+    normalize_year_range,
+    validate_status_by_role,
+)
 from app.db.models.project_member_model import ProjectMember, RoleProject
-from app.db.models.project_model import Project
+from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
 from app.db.models.task_model import StatusTask
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
+    PaginationProjectResponse,
     ProjectCreate,
     ProjectDetailResponse,
     ProjectMemberResponse,
-    ProjectPublicResponse,
+    ProjectResponse,
     ProjectStatsResponse,
+    ProjectSummary,
     ProjectUpdate,
 )
 from app.schemas.user import ProjectParticipant, User
@@ -261,8 +267,15 @@ class ProjectService:
         ]
 
     async def get_user_projects(
-        self, user: User, page: int = 1, per_page: int = 10
-    ) -> PaginationSchema[ProjectPublicResponse]:
+        self,
+        *,
+        user: User,
+        page: int = 1,
+        per_page: int = 10,
+        status_project: StatusProject,
+        start_year: int | None = None,
+        end_year: int | None = None,
+    ) -> PaginationSchema[ProjectResponse]:
         """Mengambil daftar proyek untuk pengguna.
 
         Args:
@@ -271,20 +284,26 @@ class ProjectService:
             per_page (int, optional): Jumlah proyek per halaman. Defaults to 10.
 
         Returns:
-            PaginationSchema[ProjectPublicResponse]: Daftar proyek untuk pengguna.
+            PaginationSchema[ProjectResponse]: Daftar proyek untuk pengguna.
         """
-        is_admin_or_pm = user.role in (Role.PROJECT_MANAGER, Role.ADMIN)
+        validate_status_by_role(user=user, status_project=status_project)
+
+        norm_start, norm_end = normalize_year_range(
+            start_year=start_year, end_year=end_year
+        )
+
         paginate = await self.repo.paginate_user_projects(
-            user.id, is_admin_or_pm, page, per_page, user.role == Role.ADMIN
+            user_id=user.id,
+            user_role=user.role,
+            page=page,
+            per_page=per_page,
+            status_filter=status_project,
+            start_year=norm_start,
+            end_year=norm_end,
         )
 
-        project_ids = [p.id for p in paginate["items"]]
-        role_map = await self.repo.get_roles_map_for_user_in_projects(
-            user.id, project_ids
-        )
-
-        items: list[ProjectPublicResponse] = [
-            ProjectPublicResponse(
+        items = [
+            ProjectResponse(
                 id=item.id,
                 title=item.title,
                 description=item.description,
@@ -292,12 +311,56 @@ class ProjectService:
                 end_date=item.end_date,
                 status=item.status,
                 created_by=item.created_by,
-                project_role=role_map.get(item.id, RoleProject.VIEWER),
             )
             for item in paginate["items"]
         ]
         paginate.update({"items": items})
-        return PaginationSchema[ProjectPublicResponse](**paginate)
+        return PaginationProjectResponse(
+            **paginate,
+            summary=await self.summarize_user_projects(
+                user=user, start_year=norm_start, end_year=norm_end
+            ),
+        )
+
+    async def summarize_user_projects(
+        self,
+        *,
+        user: User,
+        start_year: int | None = None,
+        end_year: int | None = None,
+    ) -> ProjectSummary:
+        """Menyediakan ringkasan proyek untuk pengguna.
+
+        Args:
+            user (User): Pengguna yang proyeknya akan diringkas.
+            start_year (int | None, optional): Tahun awal untuk filter. Defaults to
+                None.
+            end_year (int | None, optional): Tahun akhir untuk filter. Defaults to
+                None.
+
+        Returns:
+            ProjectSummary: Ringkasan proyek untuk pengguna.
+        """
+        raw = await self.repo.summarize_user_projects(
+            user_id=user.id,
+            not_admin=(user.role != Role.ADMIN),
+            start_year=start_year,
+            end_year=end_year,
+        )
+        is_admin_or_pm = user.role in (Role.PROJECT_MANAGER, Role.ADMIN)
+        total_project = (
+            raw.get("total_project", 0)
+            if is_admin_or_pm
+            else sum([raw.get("project_active", 0), raw.get("project_completed", 0)])
+        )
+
+        return ProjectSummary(
+            total_project=total_project,
+            project_active=raw.get("project_active", 0),
+            project_completed=raw.get("project_completed", 0),
+            project_tender=(raw.get("project_tender", 0) if is_admin_or_pm else 0),
+            project_cancel=(raw.get("project_cancel", 0) if is_admin_or_pm else 0),
+        )
 
     async def get_project_detail(
         self,

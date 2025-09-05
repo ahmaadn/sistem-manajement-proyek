@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import NoneType
 
 from fastapi import APIRouter, Depends, Query, status
@@ -13,13 +14,13 @@ from app.api.dependencies.user import (
     get_user_service,
     permission_required,
 )
+from app.db.models.project_model import StatusProject
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
+    PaginationProjectResponse,
     ProjectCreate,
     ProjectDetailResponse,
-    ProjectPublicResponse,
     ProjectResponse,
     ProjectUpdate,
 )
@@ -42,12 +43,21 @@ class _Project:
     @r.get(
         "/projects",
         status_code=status.HTTP_200_OK,
-        response_model=PaginationSchema[ProjectPublicResponse],
+        response_model=PaginationProjectResponse,
     )
     async def list_projects(
         self,
         page: int = Query(default=1, ge=1),
         per_page: int = Query(default=10, ge=1, le=100),
+        status_project: StatusProject = Query(default=StatusProject.ACTIVE),
+        start_year: int | None = Query(
+            default=None, ge=1970, description="Tahun mulai (mis. 2010)"
+        ),
+        end_year: int | None = Query(
+            default=None,
+            ge=1970,
+            description=f"Tahun akhir (<= {datetime.now().year})",
+        ),
     ):
         """
         Mengambil daftar project yang terkait. **PM/Admin**: semua project yang
@@ -56,8 +66,14 @@ class _Project:
 
         **Akses** : User, Project Manajer, Admin
         """
+
         return await self.project_service.get_user_projects(
-            self.user, page, per_page
+            user=self.user,
+            page=page,
+            per_page=per_page,
+            status_project=status_project,
+            start_year=start_year,
+            end_year=end_year,
         )
 
     @r.get(

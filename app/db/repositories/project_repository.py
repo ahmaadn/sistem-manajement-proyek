@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from datetime import date
 from typing import Any, Sequence
 
 from sqlalchemy import Row, case, exists, func, select
@@ -6,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
+from app.db.models.role_model import Role
 from app.db.repositories.generic_repository import (
     InterfaceRepository,
     SQLAlchemyGenericRepository,
@@ -63,13 +65,27 @@ class InterfaceProjectRepository(
     @abstractmethod
     async def paginate_user_projects(
         self,
+        *,
         user_id: int,
-        is_admin_or_pm: bool,
+        user_role: Role,
         page: int,
         per_page: int,
-        is_admin: bool = False,
+        status_filter: StatusProject | None = None,
+        start_year: int | None = None,
+        end_year: int | None = None,
     ) -> dict[str, Any]:
         """Paginasi proyek pengguna."""
+
+    @abstractmethod
+    async def summarize_user_projects(
+        self,
+        *,
+        user_id: int,
+        not_admin: bool = True,
+        start_year: int | None = None,
+        end_year: int | None = None,
+    ) -> dict[str, int]:
+        """Ringkasan proyek per status dengan filter yang sama."""
 
     @abstractmethod
     async def get_roles_map_for_user_in_projects(
@@ -315,11 +331,14 @@ class ProjectSQLAlchemyRepository(
 
     async def paginate_user_projects(
         self,
+        *,
         user_id: int,
-        is_admin_or_pm: bool,
+        user_role: Role,
         page: int,
         per_page: int,
-        is_admin: bool = False,
+        status_filter: StatusProject | None = None,
+        start_year: int | None = None,
+        end_year: int | None = None,
     ) -> dict[str, Any]:
         """
         - Admin: semua project (tanpa syarat member, semua status)
@@ -330,7 +349,7 @@ class ProjectSQLAlchemyRepository(
         conditions: list[Any] = [Project.deleted_at.is_(None)]
 
         # Scope membership
-        if not is_admin:
+        if user_role != Role.ADMIN:
             conditions.append(
                 exists(
                     select(1)
@@ -343,11 +362,21 @@ class ProjectSQLAlchemyRepository(
             )
 
         # Scope status
-        if not (is_admin or is_admin_or_pm):
+        if status_filter is not None:
+            conditions.append(Project.status == status_filter)
+        elif user_role not in (Role.ADMIN, Role.PROJECT_MANAGER):
             conditions.append(
                 Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
             )
 
+        # Filter tahun mulai
+        if start_year is not None or end_year is not None:
+            sy = start_year or 1970
+            ey = end_year or date.today().year
+            conditions.append(Project.start_date >= date(sy, 1, 1))
+            conditions.append(Project.start_date <= date(ey, 12, 31))
+
+        # Paginatiion
         return await self.pagination(
             page=page,
             per_page=per_page,
@@ -355,6 +384,61 @@ class ProjectSQLAlchemyRepository(
                 Project.start_date.desc()
             ),
         )
+
+    async def summarize_user_projects(
+        self,
+        *,
+        user_id: int,
+        not_admin: bool = True,
+        start_year: int | None = None,
+        end_year: int | None = None,
+    ) -> dict[str, int]:
+        conditions: list[Any] = [Project.deleted_at.is_(None)]
+
+        if not_admin:
+            conditions.append(
+                exists(
+                    select(1)
+                    .select_from(ProjectMember)
+                    .where(
+                        ProjectMember.project_id == Project.id,
+                        ProjectMember.user_id == user_id,
+                    )
+                )
+            )
+
+        # Filter range tahun berdasarkan start_date
+        if start_year is not None or end_year is not None:
+            sy = start_year or 1970
+            ey = end_year or date.today().year
+            conditions.append(Project.start_date >= date(sy, 1, 1))
+            conditions.append(Project.start_date <= date(ey, 12, 31))
+
+        stmt = select(
+            func.count().label("total_project"),
+            func.sum(
+                case((Project.status == StatusProject.ACTIVE, 1), else_=0)
+            ).label("project_active"),
+            func.sum(
+                case((Project.status == StatusProject.COMPLETED, 1), else_=0)
+            ).label("project_completed"),
+            func.sum(
+                case((Project.status == StatusProject.TENDER, 1), else_=0)
+            ).label("project_tender"),
+            func.sum(
+                case((Project.status == StatusProject.CANCEL, 1), else_=0)
+            ).label("project_cancel"),
+        ).where(*conditions)
+
+        res = await self.session.execute(stmt)
+        row = res.first()
+        return {
+            "total_project": (row.total_project if row else 0) or 0,
+            "project_active": (row.project_active if row else 0) or 0,
+            "project_completed": (row.project_completed if row else 0) or 0,
+            "project_tender": (row.project_tender if row else 0) or 0,
+            "project_cancel": (row.project_cancel if row else 0) or 0,
+        }
 
     async def get_roles_map_for_user_in_projects(
         self, user_id: int, project_ids: list[int]

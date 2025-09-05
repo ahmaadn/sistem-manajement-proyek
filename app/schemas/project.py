@@ -5,6 +5,7 @@ from pydantic import Field
 from app.db.models.project_member_model import RoleProject
 from app.db.models.project_model import StatusProject
 from app.schemas.base import BaseSchema
+from app.schemas.pagination import PaginationSchema
 
 
 class ProjectCreate(BaseSchema):
@@ -73,5 +74,13 @@ class ProjectDetailResponse(ProjectResponse):
     stats: ProjectStatsResponse = Field(..., description="Statistik proyek")
 
 
-class ProjectPublicResponse(ProjectResponse):
-    project_role: RoleProject = Field(..., description="Peran dalam proyek")
+class ProjectSummary(BaseSchema):
+    total_project: int = Field(..., description="Total proyek")
+    project_active: int = Field(..., description="Proyek aktif")
+    project_completed: int = Field(..., description="Proyek selesai")
+    project_tender: int = Field(0, description="Proyek tender")
+    project_cancel: int = Field(0, description="Proyek batal")
+
+
+class PaginationProjectResponse(PaginationSchema[ProjectResponse]):
+    summary: ProjectSummary = Field(..., description="Ringkasan proyek")
