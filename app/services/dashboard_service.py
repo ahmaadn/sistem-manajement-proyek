@@ -63,10 +63,10 @@ class DashboardService:
         summary = await self.repo.get_pm_project_status_summary(
             user_id=user_id, start_of_this_month=start_of_this_month
         )
-        yearly_rows = await self.repo.get_pm_yearly_summary(
+        yearly_rows = await self.repo.get_pm_yearly_project_summary(
             user_id=user_id, one_year_ago=one_year_ago
         )
-        upcoming_deadlines_rows = await self.repo.list_upcoming_project_deadlines(
+        upcoming_deadlines_rows = await self.repo.list_pm_upcoming_project_deadlines(
             user_id=user_id, skip=skip_deadline, limit=limit_deadline
         )
         upcoming_deadlines = [

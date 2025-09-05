@@ -9,7 +9,7 @@ from app.db.models.role_model import Role, UserRole
 
 class InterfaceUserRepository(ABC):
     @abstractmethod
-    async def get_user_role(self, user_id: int) -> UserRole | None:
+    async def get_role_by_user_id(self, user_id: int) -> UserRole | None:
         """Mendapatkan role pengguna berdasarkan ID.
 
         Args:
@@ -20,7 +20,7 @@ class InterfaceUserRepository(ABC):
         """
 
     @abstractmethod
-    async def create_user_role(self, user_id: int, role: Role) -> UserRole:
+    async def assign_role_to_user(self, user_id: int, role: Role) -> UserRole:
         """Menetapkan peran kepada pengguna.
 
         Args:
@@ -33,7 +33,9 @@ class InterfaceUserRepository(ABC):
         """
 
     @abstractmethod
-    async def list_roles_for_users(self, user_ids: Iterable[int]) -> dict[int, Role]:
+    async def list_roles_by_user_ids(
+        self, user_ids: Iterable[int]
+    ) -> dict[int, Role]:
         """Mendapatkan daftar peran untuk pengguna berdasarkan ID.
 
         Args:
@@ -44,7 +46,7 @@ class InterfaceUserRepository(ABC):
         """
 
     @abstractmethod
-    async def bulk_create_user_roles(
+    async def bulk_assign_roles_to_users(
         self, items: list[tuple[int, Role]]
     ) -> list[UserRole] | None:
         """
@@ -56,13 +58,13 @@ class InterfaceUserRepository(ABC):
         """
 
     @abstractmethod
-    async def change_user_role(self, user_id: int, new_role: Role) -> UserRole:
+    async def upsert_user_role(self, user_id: int, new_role: Role) -> UserRole:
         """
         Mengubah role pengguna berdasarkan ID.
         """
 
     @abstractmethod
-    async def count_users_with_role(self, role: Role) -> int:
+    async def count_users_by_role(self, role: Role) -> int:
         """
         Menghitung jumlah pengguna dengan peran tertentu.
         """
@@ -72,20 +74,22 @@ class UserSQLAlchemyRepository(InterfaceUserRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_user_role(self, user_id: int) -> UserRole | None:
+    async def get_role_by_user_id(self, user_id: int) -> UserRole | None:
         res = await self.session.execute(
             select(UserRole).where(UserRole.user_id == user_id)
         )
         return res.scalar_one_or_none()
 
-    async def create_user_role(self, user_id: int, role: Role) -> UserRole:
+    async def assign_role_to_user(self, user_id: int, role: Role) -> UserRole:
         ur = UserRole(user_id=user_id, role=role)
         self.session.add(ur)
         # flush saja, commit di UoW boundary
         await self.session.flush()
         return ur
 
-    async def list_roles_for_users(self, user_ids: Iterable[int]) -> dict[int, Role]:
+    async def list_roles_by_user_ids(
+        self, user_ids: Iterable[int]
+    ) -> dict[int, Role]:
         if not user_ids:
             return {}
         res = await self.session.execute(
@@ -93,7 +97,7 @@ class UserSQLAlchemyRepository(InterfaceUserRepository):
         )
         return {ur.user_id: ur.role for ur in res.scalars()}
 
-    async def bulk_create_user_roles(
+    async def bulk_assign_roles_to_users(
         self, items: list[tuple[int, Role]]
     ) -> list[UserRole] | None:
         if not items:
@@ -105,7 +109,7 @@ class UserSQLAlchemyRepository(InterfaceUserRepository):
 
         return user_role_list
 
-    async def change_user_role(self, user_id: int, new_role: Role) -> UserRole:
+    async def upsert_user_role(self, user_id: int, new_role: Role) -> UserRole:
         """
         Update atau buat role untuk user_id tertentu.
         """
@@ -124,7 +128,7 @@ class UserSQLAlchemyRepository(InterfaceUserRepository):
         await self.session.refresh(ur)
         return ur
 
-    async def count_users_with_role(self, role: Role) -> int:
+    async def count_users_by_role(self, role: Role) -> int:
         res = await self.session.execute(
             select(func.count()).select_from(UserRole).where(UserRole.role == role)
         )

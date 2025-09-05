@@ -31,7 +31,7 @@ async def on_attachment_upload_requested(ev: AttachmentUploadRequestedEvent) -> 
 
         async with async_session_maker() as session:
             repo = AttachmentSQLAlchemyRepository(session)
-            await repo.set_uploaded_result(
+            await repo.finalize_upload(
                 attachment_id=ev.attachment_id,
                 file_path=url,
                 file_size=str(bytes_size),
@@ -44,7 +44,7 @@ async def on_attachment_upload_requested(ev: AttachmentUploadRequestedEvent) -> 
         logger.exception("attachment.upload.failed", extra={"error": str(e)})
         async with async_session_maker() as session:
             repo = AttachmentSQLAlchemyRepository(session)
-            await repo.set_uploaded_result(
+            await repo.finalize_upload(
                 attachment_id=ev.attachment_id,
                 file_path="Error Uploading",
                 file_size=str(0),

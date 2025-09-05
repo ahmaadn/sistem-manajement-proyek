@@ -51,7 +51,10 @@ class MilestoneService:
             exceptions.ForbiddenError: Jika pengguna tidak memiliki akses ke proyek
                 ini.
         """
-        project_exists, is_member = await self.uow.project_repo.get_membership_flags(
+        (
+            project_exists,
+            is_member,
+        ) = await self.uow.project_repo.get_project_membership_flags(
             user_id=user.id, project_id=project_id
         )
         if not project_exists:
@@ -270,7 +273,10 @@ class MilestoneService:
         Returns:
             Milestone: Milestone yang berhasil dibuat.
         """
-        project_exists, is_owner = await self.uow.project_repo.get_membership_flags(
+        (
+            project_exists,
+            is_owner,
+        ) = await self.uow.project_repo.get_project_membership_flags(
             user_id=user.id, project_id=project_id, required_role=RoleProject.OWNER
         )
 
@@ -287,7 +293,7 @@ class MilestoneService:
         milestone_data["display_order"] = await self.repo.validate_display_order(
             project_id=project_id, display_order=None
         )
-        return await self.repo.create(payload=milestone_data)
+        return await self.repo.create_milestone(payload=milestone_data)
 
     async def delete_milestone(self, *, user: User, milestone_id: int) -> bool:
         """Menghapus milestone berdasarkan ID dan project.
@@ -310,7 +316,7 @@ class MilestoneService:
         if not milestone:
             raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
 
-        is_owner = await self.uow.project_repo.is_project_owner(
+        is_owner = await self.uow.project_repo.is_user_owner_of_project(
             project_id=milestone.project_id, user_id=user.id
         )
 
@@ -352,7 +358,7 @@ class MilestoneService:
         if not milestone:
             raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
 
-        is_owner = await self.uow.project_repo.is_project_owner(
+        is_owner = await self.uow.project_repo.is_user_owner_of_project(
             project_id=milestone.project_id, user_id=user.id
         )
 

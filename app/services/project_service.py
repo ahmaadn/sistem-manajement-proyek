@@ -56,7 +56,7 @@ class ProjectService:
             project_create, extra_fields={"created_by": user.id}
         )
         # auto set owner
-        await self.repo.add_member(result.id, user.id, RoleProject.OWNER)
+        await self.repo.add_project_member(result.id, user.id, RoleProject.OWNER)
 
         self.uow.add_event(
             ProjectCreatedEvent(
@@ -153,10 +153,10 @@ class ProjectService:
         Returns:
             ProjectMember: Anggota proyek yang baru ditambahkan.
         """
-        member = await self.repo.get_member(project_id, user_id)
+        member = await self.repo.get_member_by_ids(project_id, user_id)
         if member:
             raise exceptions.MemberAlreadyExistsError
-        return await self.repo.add_member(project_id, user_id, role)
+        return await self.repo.add_project_member(project_id, user_id, role)
 
     async def remove_member(self, project_id: int, user_id: int) -> None:
         """Menghapus anggota dari proyek.
@@ -177,7 +177,7 @@ class ProjectService:
             raise exceptions.CannotRemoveMemberError(
                 "Tidak dapat menghapus owner dari proyek"
             )
-        await self.repo.remove_member(project_id, user_id)
+        await self.repo.remove_project_member(project_id, user_id)
 
     async def get_member(self, project_id: int, member_id: int) -> ProjectMember:
         """Mengambil informasi anggota proyek.
@@ -192,7 +192,7 @@ class ProjectService:
         Returns:
             ProjectMember: Informasi anggota proyek.
         """
-        member = await self.repo.get_member(project_id, member_id)
+        member = await self.repo.get_member_by_ids(project_id, member_id)
         if not member:
             raise exceptions.MemberNotFoundError
         return member
@@ -214,7 +214,7 @@ class ProjectService:
         Returns:
             ProjectMember: Anggota proyek dengan peran yang diperbarui.
         """
-        member = await self.repo.get_member(project_id, user.id)
+        member = await self.repo.get_member_by_ids(project_id, user.id)
         if not member:
             raise exceptions.MemberNotFoundError
 
@@ -232,7 +232,7 @@ class ProjectService:
                 "team member tidak bisa sebagai owner project"
             )
 
-        return await self.repo.update_member_role(member, project_id, role)
+        return await self.repo.update_project_member_role(member, project_id, role)
 
     async def get_user_project_statistics(self, user_id: int) -> dict[str, int]:
         """Mengambil statistik proyek untuk pengguna.
@@ -243,7 +243,7 @@ class ProjectService:
         Returns:
             dict[str, int]: Statistik proyek untuk pengguna.
         """
-        return await self.repo.get_user_project_statistics(user_id)
+        return await self.repo.get_project_statistics_for_user(user_id)
 
     async def get_user_project_participants(
         self, user_id: int
@@ -256,7 +256,7 @@ class ProjectService:
         Returns:
             list[ProjectParticipant]: Daftar partisipan proyek untuk pengguna.
         """
-        rows = await self.repo.list_user_project_participants_rows(user_id)
+        rows = await self.repo.list_user_project_participations(user_id)
         return [
             ProjectParticipation(
                 project_id=row.project_id,
@@ -369,7 +369,7 @@ class ProjectService:
         task_service: "TaskService",
         user_service: "UserService",
     ) -> ProjectDetail:
-        project = await self.repo.get_project_detail_for_user(
+        project = await self.repo.get_user_scoped_project_detail(
             user_id=user.id,
             project_id=project_id,
             is_admin=user.role == Role.ADMIN,
@@ -429,7 +429,7 @@ class ProjectService:
         Returns:
             Project: Proyek yang ditemukan
         """
-        project = await self.repo.get_project_by_owner(user_id, project_id)
+        project = await self.repo.get_owned_project_by_user(user_id, project_id)
         if not project:
             raise exceptions.ProjectNotFoundError
         return project
@@ -455,7 +455,7 @@ class ProjectService:
         """
 
         # pastikan actor adalah owner project
-        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        project = await self.repo.get_owned_project_by_user(actor.id, project_id)
         if not project:
             # samakan response dengan "tidak ditemukan/akses"
             raise exceptions.ProjectNotFoundError
@@ -464,10 +464,10 @@ class ProjectService:
         ensure_can_assign_member_role(member.role, role)
 
         # tidak boleh duplikat member
-        if await self.repo.get_member(project_id, member.id):
+        if await self.repo.get_member_by_ids(project_id, member.id):
             raise exceptions.MemberAlreadyExistsError
 
-        created = await self.repo.add_member(project_id, member.id, role)
+        created = await self.repo.add_project_member(project_id, member.id, role)
 
         self.uow.add_event(
             ProjectMemberAddedEvent(
@@ -484,7 +484,7 @@ class ProjectService:
         self, project_id: int, actor: User, member: User, target_user_id: int
     ) -> None:
         # pastikan actor owner (dan dapatkan owner id)
-        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        project = await self.repo.get_owned_project_by_user(actor.id, project_id)
         if not project:
             raise exceptions.ProjectNotFoundError
 
@@ -496,10 +496,10 @@ class ProjectService:
         )
 
         # pastikan member ada
-        if not await self.repo.get_member(project_id, target_user_id):
+        if not await self.repo.get_member_by_ids(project_id, target_user_id):
             raise exceptions.MemberNotFoundError
 
-        await self.repo.remove_member(project_id, target_user_id)
+        await self.repo.remove_project_member(project_id, target_user_id)
 
         self.uow.add_event(
             ProjectMemberRemovedEvent(
@@ -514,11 +514,11 @@ class ProjectService:
         self, project_id: int, actor: User, member: User, new_role: RoleProject
     ) -> ProjectMember:
         # pastikan actor owner
-        project = await self.repo.get_project_by_owner(actor.id, project_id)
+        project = await self.repo.get_owned_project_by_user(actor.id, project_id)
         if not project:
             raise exceptions.ProjectNotFoundError
 
-        current = await self.repo.get_member(project_id, member.id)
+        current = await self.repo.get_member_by_ids(project_id, member.id)
         if not current:
             raise exceptions.MemberNotFoundError
 
@@ -531,7 +531,9 @@ class ProjectService:
             current_role=current.role,
         )
 
-        updated = await self.repo.update_member_role(current, project_id, new_role)
+        updated = await self.repo.update_project_member_role(
+            current, project_id, new_role
+        )
         self.uow.add_event(
             ProjectMemberUpdatedEvent(
                 performed_by=actor.id,

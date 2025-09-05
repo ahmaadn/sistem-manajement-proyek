@@ -28,7 +28,7 @@ class InterfaceDashboardReadRepository(Protocol):
         """
         ...
 
-    async def get_pm_yearly_summary(
+    async def get_pm_yearly_project_summary(
         self, *, user_id: int, one_year_ago: date
     ) -> list[dict]:
         """Mendapatkan ringkasan tahunan untuk PM.
@@ -43,7 +43,7 @@ class InterfaceDashboardReadRepository(Protocol):
         """
         ...
 
-    async def list_upcoming_project_deadlines(
+    async def list_pm_upcoming_project_deadlines(
         self, *, user_id: int, skip: int, limit: int
     ) -> list[tuple[Project, int, int]]:
         """List proyek yang akan datang berdasarkan tenggat waktu untuk PM.
@@ -112,7 +112,7 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
             "new_this_month": (row.new_this_month or 0) if row else 0,
         }
 
-    async def get_pm_yearly_summary(
+    async def get_pm_yearly_project_summary(
         self, *, user_id: int, one_year_ago: date
     ) -> list[dict]:
         q = (
@@ -156,7 +156,7 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
             for row in res.fetchall()
         ]
 
-    async def list_upcoming_project_deadlines(
+    async def list_pm_upcoming_project_deadlines(
         self, *, user_id: int, skip: int, limit: int
     ):
         q = (

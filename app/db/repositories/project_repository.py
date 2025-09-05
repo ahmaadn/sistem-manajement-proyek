@@ -21,35 +21,35 @@ class InterfaceProjectRepository(
     """Repository untuk entitas Project."""
 
     @abstractmethod
-    async def get_member(
+    async def get_member_by_ids(
         self, project_id: int, member_id: int
     ) -> ProjectMember | None:
         """Mendapatkan anggota proyek berdasarkan ID proyek dan ID anggota."""
 
     @abstractmethod
-    async def add_member(
+    async def add_project_member(
         self, project_id: int, user_id: int, role: RoleProject
     ) -> ProjectMember:
         """Menambahkan anggota baru ke proyek."""
 
     @abstractmethod
-    async def remove_member(self, project_id: int, user_id: int) -> None:
+    async def remove_project_member(self, project_id: int, user_id: int) -> None:
         """Menghapus anggota dari proyek."""
 
     @abstractmethod
-    async def update_member_role(
+    async def update_project_member_role(
         self, member: ProjectMember, project_id: int, role: RoleProject
     ) -> ProjectMember:
         """Memperbarui peran anggota proyek."""
 
     @abstractmethod
-    async def get_project_by_owner(
+    async def get_owned_project_by_user(
         self, user_id: int, project_id: int
     ) -> Project | None:
         """Mendapatkan proyek milik pengguna tertentu."""
 
     @abstractmethod
-    async def get_user_project_statistics(self, user_id: int) -> dict[str, int]:
+    async def get_project_statistics_for_user(self, user_id: int) -> dict[str, int]:
         """Statistik proyek pengguna."""
 
     @abstractmethod
@@ -57,7 +57,7 @@ class InterfaceProjectRepository(
         """Statistik semua proyek."""
 
     @abstractmethod
-    async def list_user_project_participants_rows(
+    async def list_user_project_participations(
         self, user_id: int
     ) -> Sequence[Row[tuple[int, str, RoleProject]]]:
         """Daftar partisipasi proyek pengguna."""
@@ -88,13 +88,13 @@ class InterfaceProjectRepository(
         """Ringkasan proyek per status dengan filter yang sama."""
 
     @abstractmethod
-    async def get_roles_map_for_user_in_projects(
+    async def map_user_roles_in_projects(
         self, user_id: int, project_ids: list[int]
     ) -> dict[int, RoleProject]:
         """Peta peran pengguna di beberapa proyek."""
 
     @abstractmethod
-    async def get_project_detail_for_user(
+    async def get_user_scoped_project_detail(
         self,
         user_id: int,
         project_id: int,
@@ -104,7 +104,7 @@ class InterfaceProjectRepository(
         """Detail proyek untuk pengguna."""
 
     @abstractmethod
-    async def is_project_owner(self, project_id: int, user_id: int) -> bool:
+    async def is_user_owner_of_project(self, project_id: int, user_id: int) -> bool:
         """
         Memeriksa apakah pengguna adalah pemilik proyek yang terkait dengan tugas.
 
@@ -139,7 +139,7 @@ class InterfaceProjectRepository(
         """
 
     @abstractmethod
-    async def get_membership_flags(
+    async def get_project_membership_flags(
         self,
         *,
         user_id: int,
@@ -170,7 +170,7 @@ class ProjectSQLAlchemyRepository(
 
     model = Project
 
-    async def get_member(
+    async def get_member_by_ids(
         self, project_id: int, member_id: int
     ) -> ProjectMember | None:
         """
@@ -178,7 +178,7 @@ class ProjectSQLAlchemyRepository(
         """
         return await self.session.get(ProjectMember, (project_id, member_id))
 
-    async def add_member(
+    async def add_project_member(
         self, project_id: int, user_id: int, role: RoleProject
     ) -> ProjectMember:
         """Menambahkan anggota baru ke proyek.
@@ -197,19 +197,19 @@ class ProjectSQLAlchemyRepository(
         await self.session.refresh(member)
         return member
 
-    async def remove_member(self, project_id: int, user_id: int) -> None:
+    async def remove_project_member(self, project_id: int, user_id: int) -> None:
         """Menghapus anggota dari proyek.
 
         Args:
             project_id (int): ID proyek.
             user_id (int): ID pengguna.
         """
-        member = await self.get_member(project_id, user_id)
+        member = await self.get_member_by_ids(project_id, user_id)
         if member:
             await self.session.delete(member)
             await self.session.flush()
 
-    async def update_member_role(
+    async def update_project_member_role(
         self, member: ProjectMember, project_id: int, role: RoleProject
     ) -> ProjectMember:
         """Memperbarui peran anggota proyek.
@@ -227,7 +227,7 @@ class ProjectSQLAlchemyRepository(
         await self.session.refresh(member)
         return member
 
-    async def get_project_by_owner(
+    async def get_owned_project_by_user(
         self, user_id: int, project_id: int
     ) -> Project | None:
         stmt = select(Project).where(
@@ -246,7 +246,7 @@ class ProjectSQLAlchemyRepository(
         res = await self.session.execute(stmt)
         return res.scalars().first()
 
-    async def get_user_project_statistics(self, user_id: int) -> dict[str, int]:
+    async def get_project_statistics_for_user(self, user_id: int) -> dict[str, int]:
         stmt = (
             select(
                 func.count().label("total_project"),
@@ -309,7 +309,7 @@ class ProjectSQLAlchemyRepository(
             "project_completed": row.project_completed or 0,
         }
 
-    async def list_user_project_participants_rows(
+    async def list_user_project_participations(
         self, user_id: int
     ) -> Sequence[Row[tuple[int, str, RoleProject]]]:
         stmt = (
@@ -440,7 +440,7 @@ class ProjectSQLAlchemyRepository(
             "project_cancel": (row.project_cancel if row else 0) or 0,
         }
 
-    async def get_roles_map_for_user_in_projects(
+    async def map_user_roles_in_projects(
         self, user_id: int, project_ids: list[int]
     ) -> dict[int, RoleProject]:
         if not project_ids:
@@ -454,7 +454,7 @@ class ProjectSQLAlchemyRepository(
         rows = res.all()
         return {pid: role for pid, role in rows}  # noqa: C416
 
-    async def get_project_detail_for_user(
+    async def get_user_scoped_project_detail(
         self,
         user_id: int,
         project_id: int,
@@ -498,7 +498,7 @@ class ProjectSQLAlchemyRepository(
         res = await self.session.execute(stmt)
         return res.scalars().first()
 
-    async def is_project_owner(self, project_id: int, user_id: int) -> bool:
+    async def is_user_owner_of_project(self, project_id: int, user_id: int) -> bool:
         """
         Memeriksa apakah pengguna adalah pemilik proyek yang terkait dengan tugas.
 
@@ -539,7 +539,7 @@ class ProjectSQLAlchemyRepository(
         stmt = select(exists().where(*conditions))
         return (await self.session.execute(stmt)).scalar_one()
 
-    async def get_membership_flags(
+    async def get_project_membership_flags(
         self,
         *,
         user_id: int,

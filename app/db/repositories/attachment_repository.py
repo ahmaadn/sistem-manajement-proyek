@@ -12,7 +12,7 @@ from app.db.models.attachment_model import Attachment
 class InterfaceAttachmentRepository(Protocol):
     """Interface untuk operasi data Attachment."""
 
-    async def get(self, attachment_id: int) -> Optional[Attachment]:
+    async def get_by_id(self, attachment_id: int) -> Optional[Attachment]:
         """Ambil satu Attachment berdasarkan ID.
 
         Args:
@@ -23,7 +23,7 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def list(
+    async def list_by_reference(
         self, *, task_id: Optional[int] = None, comment_id: Optional[int] = None
     ) -> list[Attachment]:
         """Daftar Attachment dengan filter opsional.
@@ -37,7 +37,9 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def fetch_attachments_for_task(self, *, task_id: int) -> list[Attachment]:
+    async def list_by_task_without_comment(
+        self, *, task_id: int
+    ) -> list[Attachment]:
         """Daftar Attachment berdasarkan ID task.
 
         Args:
@@ -48,7 +50,7 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def count(
+    async def count_by_reference(
         self, *, task_id: Optional[int] = None, comment_id: Optional[int] = None
     ) -> int:
         """Hitung jumlah Attachment dengan filter opsional.
@@ -62,7 +64,7 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def create(self, *, payload: dict[str, Any]) -> Attachment:
+    async def create_attachment(self, *, payload: dict[str, Any]) -> Attachment:
         """Buat Attachment baru.
 
         Catatan: Penyimpanan permanen bergantung pada commit transaksi
@@ -81,7 +83,7 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def set_uploaded_result(
+    async def finalize_upload(
         self,
         *,
         attachment_id: int,
@@ -102,7 +104,7 @@ class InterfaceAttachmentRepository(Protocol):
         """
         ...
 
-    async def delete(self, attachment_id: int) -> None:
+    async def delete_by_id(self, attachment_id: int) -> None:
         """Hapus Attachment berdasarkan ID.
 
         Args:
@@ -114,16 +116,16 @@ class InterfaceAttachmentRepository(Protocol):
         ...
 
 
-class AttachmentSQLAlchemyRepository:
+class AttachmentSQLAlchemyRepository(InterfaceAttachmentRepository):
     """Repository sederhana untuk Attachment dengan session per-method."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, attachment_id: int) -> Optional[Attachment]:
+    async def get_by_id(self, attachment_id: int) -> Optional[Attachment]:
         return await self.session.get(Attachment, attachment_id)
 
-    async def list(
+    async def list_by_reference(
         self, *, task_id: Optional[int] = None, comment_id: Optional[int] = None
     ) -> list[Attachment]:
         stmt: Select = select(Attachment)
@@ -135,14 +137,14 @@ class AttachmentSQLAlchemyRepository:
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
 
-    async def fetch_attachments_for_task(self, *, task_id: int):
+    async def list_by_task_without_comment(self, *, task_id: int):
         q = select(Attachment).where(
             Attachment.task_id == task_id, Attachment.comment_id.is_(None)
         )
         res = await self.session.execute(q)
         return list(res.scalars().all())
 
-    async def count(
+    async def count_by_reference(
         self, *, task_id: Optional[int] = None, comment_id: Optional[int] = None
     ) -> int:
         stmt = select(func.count(Attachment.id))
@@ -153,13 +155,13 @@ class AttachmentSQLAlchemyRepository:
         res = await self.session.execute(stmt)
         return int(res.scalar_one() or 0)
 
-    async def create(self, *, payload: dict[str, Any]) -> Attachment:
+    async def create_attachment(self, *, payload: dict[str, Any]) -> Attachment:
         att = Attachment(**payload)
         self.session.add(att)
         await self.session.flush()
         return att
 
-    async def set_uploaded_result(
+    async def finalize_upload(
         self,
         *,
         attachment_id: int,
@@ -177,7 +179,7 @@ class AttachmentSQLAlchemyRepository:
         )
         await session.commit()
 
-    async def delete(self, attachment_id: int) -> None:
+    async def delete_by_id(self, attachment_id: int) -> None:
         await self.session.execute(
             delete(Attachment).where(Attachment.id == attachment_id)
         )

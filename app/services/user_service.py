@@ -39,7 +39,7 @@ class UserService:
         Returns:
             UserRole | None: Role pengguna yang ditemukan atau None jika tidak ada.
         """
-        return await self.repo.get_user_role(user_id)
+        return await self.repo.get_role_by_user_id(user_id)
 
     async def assign_role_to_user(
         self, user_id: int, user: UserBase, actor_id: int | None = None
@@ -60,7 +60,7 @@ class UserService:
             return user_role
 
         role = map_employee_role_to_app_role(user.employee_role)
-        user_role = await self.repo.create_user_role(user_id, role)
+        user_role = await self.repo.assign_role_to_user(user_id, role)
 
         # domain event
         if self.uow:
@@ -153,8 +153,10 @@ class UserService:
             )
             task_stats = await self.uow.task_repo.get_overall_task_statistics()
         else:
-            project_stats = await self.uow.project_repo.get_user_project_statistics(
-                user_id=user.id
+            project_stats = (
+                await self.uow.project_repo.get_project_statistics_for_user(
+                    user_id=user.id
+                )
             )
             task_stats = await self.uow.task_repo.get_user_task_statistics(user.id)
 
@@ -183,7 +185,7 @@ class UserService:
             return []
 
         user_ids = [p.id for p in pegawai_list]
-        existing_roles = await self.repo.list_roles_for_users(user_ids)
+        existing_roles = await self.repo.list_roles_by_user_ids(user_ids)
 
         # siapkan insert untuk yang belum punya role
         to_create: list[tuple[int, Role]] = []
@@ -194,7 +196,7 @@ class UserService:
                 existing_roles[p.id] = role
 
         if to_create:
-            await self.repo.bulk_create_user_roles(to_create)
+            await self.repo.bulk_assign_roles_to_users(to_create)
             # commit tetap di boundary router
 
         return [
@@ -224,11 +226,11 @@ class UserService:
         )
 
         # Ambil role saat ini target
-        current = await self.repo.get_user_role(user_id)
+        current = await self.repo.get_role_by_user_id(user_id)
 
         # Admin tidak boleh mengganti perannya sendiri
         if current is not None:
-            admin_count = await self.repo.count_users_with_role(Role.ADMIN)
+            admin_count = await self.repo.count_users_by_role(Role.ADMIN)
             ensure_not_demote_last_admin(
                 current_target_role=current.role,
                 new_role=new_role,
@@ -236,19 +238,19 @@ class UserService:
             )
 
         # Cek peran saat ini target user
-        current = await self.repo.get_user_role(user_id)
+        current = await self.repo.get_role_by_user_id(user_id)
 
         # Jika target saat ini ADMIN dan akan diubah menjadi non-ADMIN,
         # pastikan bukan admin terakhir.
         if current is not None:
-            admin_count = await self.repo.count_users_with_role(Role.ADMIN)
+            admin_count = await self.repo.count_users_by_role(Role.ADMIN)
             ensure_not_demote_last_admin(
                 current_target_role=current.role,
                 new_role=new_role,
                 total_admins=admin_count,
             )
 
-        ur = await self.repo.change_user_role(user_id, new_role)
+        ur = await self.repo.upsert_user_role(user_id, new_role)
 
         # Angkat domain event (publish post-commit oleh UoW)
         self.uow.add_event(

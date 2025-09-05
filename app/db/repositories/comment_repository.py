@@ -17,7 +17,9 @@ class InterfaceCommentRepository(Protocol):
     dikelola oleh lapisan pemanggil (service/UoW).
     """
 
-    async def create(self, *, task_id: int, user_id: int, content: str) -> "Comment":
+    async def create_comment(
+        self, *, task_id: int, user_id: int, content: str
+    ) -> "Comment":
         """
         Membuat komentar baru pada sebuah task. Implementasi diharapkan melakukan
         flush/refresh seperlunya.
@@ -32,7 +34,7 @@ class InterfaceCommentRepository(Protocol):
         """
         ...
 
-    async def list_by_task(self, *, task_id: int) -> "Sequence[Comment]":
+    async def list_by_task_id(self, *, task_id: int) -> "Sequence[Comment]":
         """
         Mengambil daftar komentar berdasarkan ID task.
 
@@ -45,7 +47,9 @@ class InterfaceCommentRepository(Protocol):
         """
         ...
 
-    async def get(self, *, comment_id: int, task_id: int) -> "Comment | None":
+    async def get_by_id_in_task(
+        self, *, comment_id: int, task_id: int
+    ) -> "Comment | None":
         """
         Mengambil satu komentar berdasarkan ID komentar dan ID task-nya.
 
@@ -69,7 +73,7 @@ class InterfaceCommentRepository(Protocol):
         """
         ...
 
-    async def delete_by_id(self, *, comment_id: int, task_id: int) -> bool:
+    async def delete_by_id_in_task(self, *, comment_id: int, task_id: int) -> bool:
         """
         Menghapus sebuah komentar berdasarkan ID komentar dan ID task-nya.
 
@@ -82,7 +86,7 @@ class InterfaceCommentRepository(Protocol):
         """
         ...
 
-    async def is_active_task(self, *, task_id: int) -> bool:
+    async def is_task_in_active_project(self, *, task_id: int) -> bool:
         """
         Mengecek apakah task berada pada project yang masih aktif dan tidak dihapus.
 
@@ -99,14 +103,16 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, *, task_id: int, user_id: int, content: str) -> Comment:
+    async def create_comment(
+        self, *, task_id: int, user_id: int, content: str
+    ) -> Comment:
         comment = Comment(task_id=task_id, user_id=user_id, content=content)
         self.session.add(comment)
         await self.session.flush()
         await self.session.refresh(comment)
         return comment
 
-    async def list_by_task(self, *, task_id: int) -> Sequence[Comment]:
+    async def list_by_task_id(self, *, task_id: int) -> Sequence[Comment]:
         result = await self.session.execute(
             select(Comment)
             .where(Comment.task_id == task_id)
@@ -114,7 +120,9 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
         )
         return result.scalars().all()
 
-    async def get(self, *, comment_id: int, task_id: int) -> Comment | None:
+    async def get_by_id_in_task(
+        self, *, comment_id: int, task_id: int
+    ) -> Comment | None:
         result = await self.session.execute(
             select(Comment).where(
                 Comment.id == comment_id,
@@ -131,7 +139,7 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
         )
         return result.scalar_one_or_none()
 
-    async def delete_by_id(self, *, comment_id: int, task_id: int) -> bool:
+    async def delete_by_id_in_task(self, *, comment_id: int, task_id: int) -> bool:
         result = await self.session.execute(
             delete(Comment).where(
                 Comment.id == comment_id,
@@ -141,7 +149,7 @@ class CommentSQLAlchemyRepository(InterfaceCommentRepository):
         await self.session.flush()
         return (result.rowcount or 0) > 0
 
-    async def is_active_task(self, *, task_id: int) -> bool:
+    async def is_task_in_active_project(self, *, task_id: int) -> bool:
         result = await self.session.execute(
             select(1)
             .select_from(Task)

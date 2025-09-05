@@ -32,11 +32,11 @@ class AttachmentService:
 
     async def get_attachment(self, attachment_id: int) -> Attachment | None:
         """Mendapatkan attachment berdasarkan ID."""
-        return await self.repo.get(attachment_id)
+        return await self.repo.get_by_id(attachment_id)
 
     async def get_attachments_by_task(self, task_id: int) -> List[Attachment]:
         """Mendapatkan semua attachment untuk task tertentu."""
-        return await self.repo.list(task_id=task_id)
+        return await self.repo.list_by_reference(task_id=task_id)
 
     async def create_task_attachment(
         self,
@@ -47,7 +47,7 @@ class AttachmentService:
         is_admin: bool = False,
     ) -> Attachment:
         if not is_admin:
-            is_member = await self.uow.task_repo.is_member_of_task_project(
+            is_member = await self.uow.task_repo.is_user_member_of_task_project(
                 task_id=task_id, user_id=actor.id
             )
             if not is_member:
@@ -123,7 +123,7 @@ class AttachmentService:
         comment_id: int | None = None,
     ) -> Attachment:
         """Mengupload attachment baru."""
-        att: Attachment = await self.repo.create(
+        att: Attachment = await self.repo.create_attachment(
             payload={
                 "user_id": user.id,
                 "task_id": task_id,
@@ -156,11 +156,11 @@ class AttachmentService:
             raise exceptions.AttachmentNotFoundError("Attachment tidak ditemukan.")
 
         if actor.role != Role.ADMIN:
-            task = await self.uow.task_repo.get(task_id=attachment.task_id)
+            task = await self.uow.task_repo.get_by_id(task_id=attachment.task_id)
             if not task:
                 raise exceptions.TaskNotFoundError
 
-            is_owner = await self.uow.project_repo.is_project_owner(
+            is_owner = await self.uow.project_repo.is_user_owner_of_project(
                 project_id=task.project_id, user_id=actor.id
             )
 
@@ -175,4 +175,4 @@ class AttachmentService:
             )
         )
 
-        await self.repo.delete(attachment.id)
+        await self.repo.delete_by_id(attachment.id)

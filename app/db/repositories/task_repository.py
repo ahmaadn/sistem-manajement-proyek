@@ -21,7 +21,7 @@ class InterfaceTaskRepository(Protocol):
     Seluruh method bersifat asynchronous.
     """
 
-    async def get(
+    async def get_by_id(
         self, task_id: int, *, options: list[Any] | None = None
     ) -> Task | None:
         """
@@ -31,7 +31,7 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def list(
+    async def list_by_filters(
         self,
         *,
         filters: dict[str, Any] | None = None,
@@ -46,14 +46,16 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def create(self, *, payload: dict[str, Any]) -> Task:
+    async def create_task(self, *, payload: dict[str, Any]) -> Task:
         """
         Membuat Task baru dari payload dan field tambahan (mis. project_id,
         display_order). Mengembalikan entitas Task yang sudah dipersist.
         """
         ...
 
-    async def update(self, task: Task, updates: TaskUpdate | dict[str, Any]) -> Task:
+    async def update_task(
+        self, task: Task, updates: TaskUpdate | dict[str, Any]
+    ) -> Task:
         """
         Memperbarui Task berdasarkan data yang diberikan.
         - updates: bisa berupa skema TaskUpdate atau dict field yang ingin
@@ -61,20 +63,20 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def delete(self, task: Task) -> None:
+    async def hard_delete_task(self, task: Task) -> None:
         """
         Melakukan soft delete pada Task dengan mengisi kolom deleted_at.
         """
         ...
 
-    async def next_display_order(self, project_id: int) -> int:
+    async def get_next_display_order(self, project_id: int) -> int:
         """
         Menghitung nilai display_order berikutnya untuk sebuah proyek.
         Dipakai untuk menjaga urutan tampilan task.
         """
         ...
 
-    async def validate_display_order(
+    async def ensure_valid_display_order(
         self, project_id: int, display_order: Optional[int]
     ) -> int:
         """
@@ -85,14 +87,14 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def assign_user(self, task: Task, user_id: int) -> TaskAssignee:
+    async def assign_user_to_task(self, task: Task, user_id: int) -> TaskAssignee:
         """
         Menetapkan user ke sebuah Task (idempotent).
         Jika sudah ter-assign, mengembalikan relasi yang ada.
         """
         ...
 
-    async def get_task_with_assignees(self, task_id: int) -> Task | None:
+    async def get_by_id_with_assignees(self, task_id: int) -> Task | None:
         """
         Mengambil Task beserta relasi assignees-nya.
         """
@@ -104,20 +106,22 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def list_subtasks(self, parent_id: int) -> list[Task]:
+    async def list_subtasks_by_parent(self, parent_id: int) -> list[Task]:
         """
         Mengambil daftar subtask berdasarkan parent_id.
         """
         ...
 
-    async def detach_all_subtasks_from_section(self, section_task_id: int) -> int:
+    async def detach_all_subtasks_from_section_parent(
+        self, section_task_id: int
+    ) -> int:
         """
         Melepas seluruh subtask dari sebuah section (mengosongkan parent_id).
         Mengembalikan jumlah subtask yang terpengaruh.
         """
         ...
 
-    async def cascade_soft_delete_subtasks(self, parent_task_id: int) -> int:
+    async def cascade_hard_delete_subtasks(self, parent_task_id: int) -> int:
         """
         Melakukan soft delete terhadap seluruh subtask langsung dari sebuah parent
         task. Mengembalikan jumlah subtask yang terpengaruh.
@@ -148,19 +152,21 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def unassign_user(self, user_id: int, task_id: int) -> None:
+    async def unassign_user_from_task(self, user_id: int, task_id: int) -> None:
         """
         Menghapus penugasan user dari sebuah task.
         """
         ...
 
-    async def is_member_of_task_project(self, task_id: int, user_id: int) -> bool:
+    async def is_user_member_of_task_project(
+        self, task_id: int, user_id: int
+    ) -> bool:
         """
         Mengecek apakah user adalah member dari project tempat task tersebut berada.
         """
         ...
 
-    async def is_active_task(self, task_id: int) -> bool:
+    async def is_task_in_active_project(self, task_id: int) -> bool:
         """
         Mengecek apakah task berada pada project yang masih aktif dan tidak dihapus.
 
@@ -172,7 +178,9 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def is_owner_of_project_by_task(self, user_id: int, task_id: int) -> bool:
+    async def is_user_owner_of_tasks_project(
+        self, user_id: int, task_id: int
+    ) -> bool:
         """Mengecek apakah user adalah pemilik proyek dari task yang diberikan.
 
         Args:
@@ -184,7 +192,9 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def get_project_member_ids_by_task(self, task_id: int) -> Sequence[int]:
+    async def get_project_member_user_ids_by_task(
+        self, task_id: int
+    ) -> Sequence[int]:
         """
         Mengambil daftar user_id yang menjadi anggota dari sebuah proyek.
         """
@@ -195,7 +205,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get(
+    async def get_by_id(
         self, task_id: int, *, options: list[Any] | None = None
     ) -> Task | None:
         stmt = select(Task).where(Task.id == task_id)
@@ -204,7 +214,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         res = await self.session.execute(stmt)
         return res.scalars().first()
 
-    async def list(
+    async def list_by_filters(
         self,
         *,
         filters: dict[str, Any] | None = None,
@@ -222,14 +232,16 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         res = await self.session.execute(stmt)
         return list(res.scalars())
 
-    async def create(self, *, payload: dict[str, Any]) -> Task:
+    async def create_task(self, *, payload: dict[str, Any]) -> Task:
         task = Task(**payload)
         self.session.add(task)
         await self.session.flush()
         await self.session.refresh(task)
         return task
 
-    async def update(self, task: Task, updates: TaskUpdate | dict[str, Any]) -> Task:
+    async def update_task(
+        self, task: Task, updates: TaskUpdate | dict[str, Any]
+    ) -> Task:
         data = (
             updates.model_dump(exclude_unset=True)  # type: ignore
             if hasattr(updates, "model_dump")
@@ -242,11 +254,11 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         await self.session.refresh(task)
         return task
 
-    async def delete(self, task: Task) -> None:
+    async def hard_delete_task(self, task: Task) -> None:
         await self.session.delete(task)
         await self.session.flush()
 
-    async def next_display_order(self, project_id: int) -> int:
+    async def get_next_display_order(self, project_id: int) -> int:
         q = await self.session.execute(
             select(Task)
             .where(Task.project_id == project_id)
@@ -255,11 +267,11 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         last = q.scalars().first()
         return 10000 if last is None else (last.display_order + 10000)
 
-    async def validate_display_order(
+    async def ensure_valid_display_order(
         self, project_id: int, display_order: Optional[int]
     ) -> int:
         if display_order is None or display_order <= 0:
-            return await self.next_display_order(project_id)
+            return await self.get_next_display_order(project_id)
 
         exists_same = await self.session.execute(
             select(Task.id)
@@ -270,10 +282,10 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             .limit(1)
         )
         if exists_same.first():
-            return await self.next_display_order(project_id)
+            return await self.get_next_display_order(project_id)
         return display_order
 
-    async def assign_user(self, task: Task, user_id: int) -> TaskAssignee:
+    async def assign_user_to_task(self, task: Task, user_id: int) -> TaskAssignee:
         res = await self.session.execute(
             select(TaskAssignee)
             .where(TaskAssignee.task_id == task.id, TaskAssignee.user_id == user_id)
@@ -288,8 +300,8 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         await self.session.refresh(ta)
         return ta
 
-    async def get_task_with_assignees(self, task_id: int) -> Task | None:
-        return await self.get(task_id, options=[selectinload(Task.assignees)])
+    async def get_by_id_with_assignees(self, task_id: int) -> Task | None:
+        return await self.get_by_id(task_id, options=[selectinload(Task.assignees)])
 
     async def get_project_member_user_ids(self, project_id: int) -> list[int]:
         res = await self.session.execute(
@@ -299,7 +311,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         return [row[0] for row in res.all()]
 
-    async def list_subtasks(self, parent_id: int) -> list[Task]:
+    async def list_subtasks_by_parent(self, parent_id: int) -> list[Task]:
         res = await self.session.execute(
             select(Task).where(
                 Task.parent_id == parent_id,
@@ -307,8 +319,10 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         return list(res.scalars())
 
-    async def detach_all_subtasks_from_section(self, section_task_id: int) -> int:
-        subtasks = await self.list_subtasks(section_task_id)
+    async def detach_all_subtasks_from_section_parent(
+        self, section_task_id: int
+    ) -> int:
+        subtasks = await self.list_subtasks_by_parent(section_task_id)
         if not subtasks:
             return 0
         for st in subtasks:
@@ -317,10 +331,10 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         await self.session.flush()
         return len(subtasks)
 
-    async def cascade_soft_delete_subtasks(self, parent_task_id: int) -> int:
-        subtasks = await self.list_subtasks(parent_task_id)
+    async def cascade_hard_delete_subtasks(self, parent_task_id: int) -> int:
+        subtasks = await self.list_subtasks_by_parent(parent_task_id)
         for st in subtasks:
-            await self.delete(st)
+            await self.hard_delete_task(st)
         return len(subtasks)
 
     async def get_user_task_statistics(self, user_id: int) -> dict:
@@ -399,14 +413,16 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             "task_cancelled": row.task_cancelled or 0,
         }
 
-    async def unassign_user(self, user_id: int, task_id: int) -> None:
+    async def unassign_user_from_task(self, user_id: int, task_id: int) -> None:
         stmt = delete(TaskAssignee).where(
             TaskAssignee.user_id == user_id, TaskAssignee.task_id == task_id
         )
         await self.session.execute(stmt)
         await self.session.flush()
 
-    async def is_member_of_task_project(self, task_id: int, user_id: int) -> bool:
+    async def is_user_member_of_task_project(
+        self, task_id: int, user_id: int
+    ) -> bool:
         result = await self.session.execute(
             select(1)
             .select_from(Task)
@@ -420,7 +436,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         return result.scalar_one_or_none() is not None
 
-    async def is_active_task(self, task_id: int) -> bool:
+    async def is_task_in_active_project(self, task_id: int) -> bool:
         result = await self.session.execute(
             select(1)
             .select_from(Task)
@@ -435,7 +451,9 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         return result.scalar_one_or_none() is not None
 
-    async def is_owner_of_project_by_task(self, user_id: int, task_id: int) -> bool:
+    async def is_user_owner_of_tasks_project(
+        self, user_id: int, task_id: int
+    ) -> bool:
         result = await self.session.execute(
             select(1)
             .select_from(Task)
@@ -453,7 +471,9 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         return result.scalar_one_or_none() is not None
 
-    async def get_project_member_ids_by_task(self, task_id: int) -> Sequence[int]:
+    async def get_project_member_user_ids_by_task(
+        self, task_id: int
+    ) -> Sequence[int]:
         """
         Mengambil daftar user_id yang menjadi anggota dari sebuah proyek.
         """
