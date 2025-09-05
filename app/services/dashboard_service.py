@@ -1,13 +1,8 @@
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Union
-
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING
 
 from app.db.models.role_model import Role
-from app.db.repositories.dashboard_repository import (
-    DashboardSQLAlchemyReadRepository,
-    InterfaceDashboardReadRepository,
-)
+from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.dashboard import (
     AdminDashboardResponse,
     PMDashboardResponse,
@@ -26,16 +21,9 @@ if TYPE_CHECKING:
 
 
 class DashboardService:
-    def __init__(
-        self,
-        repo: Union[InterfaceDashboardReadRepository, AsyncSession],
-    ) -> None:
-        if isinstance(repo, AsyncSession):
-            self.repo: InterfaceDashboardReadRepository = (
-                DashboardSQLAlchemyReadRepository(repo)
-            )
-        else:
-            self.repo = repo
+    def __init__(self, uow: UnitOfWork) -> None:
+        self.uow = uow
+        self.repo = uow.dashboard_repo
 
     async def admin_dashboard(
         self, user_service: "UserService", limit: int
@@ -43,10 +31,28 @@ class DashboardService:
         """Get admin dashboard data."""
         users = await user_service.list_user()
         role_counts = dict.fromkeys(Role, 0)
+
+        # Mendapatkan ringkasan status proyek
+        # start_of_this_month digunakan untuk menghitung proyek baru bulan ini
+        today = date.today()
+        start_of_this_month = today.replace(day=1)
+        summary = await self.repo.get_project_status_summary(
+            start_of_this_month=start_of_this_month
+        )
+
         for user in users:
             role_counts[user.role] = role_counts.get(user.role, 0) + 1
         top_users = sorted(users, key=lambda u: u.name, reverse=True)[:limit]
-        return AdminDashboardResponse(top_users=top_users, role_counts=role_counts)
+        return AdminDashboardResponse(
+            top_users=top_users,
+            role_counts=role_counts,
+            project_summary=ProjectStatusSummary(
+                total_project=summary["total_project"],
+                active_projects=summary["active_projects"],
+                completed_projects=summary["completed_projects"],
+                new_this_month=summary["new_this_month"],
+            ),
+        )
 
     async def pm_dashboard(
         self,

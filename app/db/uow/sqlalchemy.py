@@ -45,7 +45,7 @@ class UnitOfWork(Protocol):
     comment_repo: InterfaceCommentRepository
     task_repo: InterfaceTaskRepository
     project_repo: InterfaceProjectRepository
-    dashboard_repository: InterfaceDashboardReadRepository
+    dashboard_repo: InterfaceDashboardReadRepository
     user_repository: InterfaceUserRepository
     attachment_repo: InterfaceAttachmentRepository
     milestone_repo: InterfaceMilestoneRepository
@@ -68,7 +68,7 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.comment_repo = CommentSQLAlchemyRepository(self.session)
         self.task_repo = TaskSQLAlchemyRepository(self.session)
         self.project_repo = ProjectSQLAlchemyRepository(self.session)
-        self.dashboard_repository = DashboardSQLAlchemyReadRepository(self.session)
+        self.dashboard_repo = DashboardSQLAlchemyReadRepository(self.session)
         self.user_repository = UserSQLAlchemyRepository(self.session)
         self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
         self.milestone_repo: InterfaceMilestoneRepository = (

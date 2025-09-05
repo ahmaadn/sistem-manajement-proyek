@@ -28,6 +28,19 @@ class InterfaceDashboardReadRepository(Protocol):
         """
         ...
 
+    async def get_project_status_summary(self, *, start_of_this_month: date) -> dict:
+        """Mendapatkan ringkasan status semua project.
+
+        Args:
+            start_of_this_month (date): Tanggal awal bulan ini.
+
+        Returns:
+            dict: Ringkasan status proyek. terdiri dari total_project (Jumlah proyek)
+            , active_projects (Jumlah proyek aktif), completed_projects (Jumlah
+            proyek selesai), dan new_this_month (Jumlah proyek baru bulan ini).
+        """
+        ...
+
     async def get_pm_yearly_project_summary(
         self, *, user_id: int, one_year_ago: date
     ) -> list[dict]:
@@ -99,8 +112,34 @@ class DashboardSQLAlchemyReadRepository(InterfaceDashboardReadRepository):
                 # Filter bedasarkan owner
                 ProjectMember.user_id == user_id,
                 # Filter berdasarkan role
-                ProjectMember.role == RoleProject.OWNER,
+                # ProjectMember.role == RoleProject.OWNER,
             )
+        )
+
+        res = await self.session.execute(stmt)
+        row = res.fetchone()
+        return {
+            "total_project": (row.total_project or 0) if row else 0,
+            "active_projects": (row.active_projects or 0) if row else 0,
+            "completed_projects": (row.completed_projects or 0) if row else 0,
+            "new_this_month": (row.new_this_month or 0) if row else 0,
+        }
+
+    async def get_project_status_summary(self, *, start_of_this_month: date) -> dict:
+        stmt = select(
+            func.count(Project.id).label("total_project"),
+            func.sum(
+                case((Project.status == StatusProject.ACTIVE, 1), else_=0)
+            ).label("active_projects"),
+            func.sum(
+                case((Project.status == StatusProject.COMPLETED, 1), else_=0)
+            ).label("completed_projects"),
+            func.sum(
+                case((Project.created_at >= start_of_this_month, 1), else_=0)
+            ).label("new_this_month"),
+        ).where(
+            # Project yang tidak dihapus
+            Project.deleted_at.is_(None),
         )
 
         res = await self.session.execute(stmt)

@@ -7,16 +7,17 @@ from app.schemas.task import TaskRead
 from app.schemas.user import User, UserProjectStats
 
 
-class AdminDashboardResponse(BaseSchema):
-    top_users: list[User]
-    role_counts: dict[Role, int]
-
-
 class ProjectStatusSummary(BaseSchema):
     total_project: int
     active_projects: int
     completed_projects: int
     new_this_month: int
+
+
+class AdminDashboardResponse(BaseSchema):
+    top_users: list[User]
+    role_counts: dict[Role, int]
+    project_summary: ProjectStatusSummary
 
 
 class YearlySummary(BaseSchema):

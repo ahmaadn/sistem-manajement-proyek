@@ -1,8 +1,6 @@
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies.repositories import get_project_repository
-from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.uow import get_uow
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
@@ -28,10 +26,10 @@ def get_task_service(uow: UnitOfWork = Depends(get_uow)) -> TaskService:
 
 
 def get_dashboard_service(
-    session: AsyncSession = Depends(get_async_session),
+    uow: UnitOfWork = Depends(get_uow),
 ) -> DashboardService:
     """Mendapatkan layanan dasbor."""
-    return DashboardService(session)
+    return DashboardService(uow)
 
 
 def get_comment_service(uow: UnitOfWork = Depends(get_uow)) -> CommentService:
