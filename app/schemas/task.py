@@ -61,8 +61,9 @@ class SubTaskRead(BaseSchema):
 class TaskAttachmentRead(BaseSchema):
     id: int
     file_name: str
-    file_path: str
     file_size: str
+    mime_type: str
+    file_path: str
     created_at: datetime.datetime
 
 

@@ -116,6 +116,7 @@ class TaskService:
                 file_path=attachment.file_path,
                 file_size=attachment.file_size,
                 created_at=attachment.created_at,
+                mime_type=attachment.mime_type,
             )
             for attachment in await self.uow.attachment_repo.list_by_task_without_comment(
                 task_id=task.id
