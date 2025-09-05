@@ -263,6 +263,14 @@ class MilestoneService:
         order = {"low": 0, "medium": 1, "high": 2}
         return order.get(str(value).lower(), 999)
 
+    @staticmethod
+    def _status_rank(value: Any) -> int:
+        """Custom order: todo < in_progress < done."""
+        if value is None:
+            return 999
+        order = {"pending": 0, "cancelled": 0, "in_progress": 2, "completed": 3}
+        return order.get(str(value).lower(), 999)
+
     def _primary_key(self, value: Any, field: str) -> Any:
         if field == "priority":
             return self._priority_rank(value)

@@ -27,6 +27,7 @@ class TaskSortBy(Enum):
     title = "title"
     created_at = "created_at"
     priority = "priority"
+    status = "status"
 
 
 @cbv(r)
