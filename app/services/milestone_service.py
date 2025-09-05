@@ -80,7 +80,7 @@ class MilestoneService:
                 Milestone.display_order.asc()
             ),
         )
-        return sorted(milestones, key=lambda m: m.display_order)
+        return sorted(milestones, key=lambda m: m.display_order, reverse=True)
 
     @staticmethod
     def _collect_assignee_ids(milestones: list[Milestone]) -> set[int]:
@@ -178,7 +178,11 @@ class MilestoneService:
         )
 
     def _map_task(
-        self, t: Task, user_info_map: dict[int, UserBase | None]
+        self,
+        t: Task,
+        user_info_map: dict[int, UserBase | None],
+        sort_by: str = "display_order",
+        descending: bool = False,
     ) -> MilestoneTaskRead:
         """Memetakan tugas untuk respons milestone.
 
@@ -191,7 +195,9 @@ class MilestoneService:
             MilestoneTaskResponse: Respons tugas yang dipetakan.
         """
         sub_tasks_sorted = sorted(
-            (t.sub_tasks or []), key=lambda st: st.display_order
+            (t.sub_tasks or []),
+            key=lambda st: self._sort_key(st, sort_by, descending),
+            reverse=descending,
         )
         sub_tasks_resp = [
             self._map_subtask(st, user_info_map) for st in sub_tasks_sorted
@@ -209,7 +215,11 @@ class MilestoneService:
         )
 
     def _map_milestone(
-        self, m: Milestone, user_info_map: dict[int, UserBase | None]
+        self,
+        m: Milestone,
+        user_info_map: dict[int, UserBase | None],
+        sort_by: str = "display_order",
+        descending: bool = False,
     ) -> MilestoneDetail:
         """Memetakan milestone untuk respons milestone.
 
@@ -223,9 +233,18 @@ class MilestoneService:
         """
         top_level_tasks = sorted(
             (t for t in (m.tasks or []) if getattr(t, "parent_id", None) is None),
-            key=lambda t: t.display_order,
+            key=lambda t: self._sort_key(t, sort_by, descending),
+            reverse=descending,
         )
-        tasks_resp = [self._map_task(t, user_info_map) for t in top_level_tasks]
+        tasks_resp = [
+            self._map_task(
+                t=t,
+                user_info_map=user_info_map,
+                sort_by=sort_by,
+                descending=descending,
+            )
+            for t in top_level_tasks
+        ]
         return MilestoneDetail(
             id=m.id,
             project_id=m.project_id,
@@ -236,8 +255,38 @@ class MilestoneService:
             tasks=tasks_resp,
         )
 
+    @staticmethod
+    def _priority_rank(value: Any) -> int:
+        """Custom order: low < medium < high."""
+        if value is None:
+            return 999
+        order = {"low": 0, "medium": 1, "high": 2}
+        return order.get(str(value).lower(), 999)
+
+    def _primary_key(self, value: Any, field: str) -> Any:
+        if field == "priority":
+            return self._priority_rank(value)
+        if isinstance(value, str):
+            return value.casefold()
+        return value
+
+    def _sort_key(self, obj: Any, field: str, descending: bool) -> tuple[int, Any]:
+        """Return a key that keeps None at the end for both asc/desc."""
+        if field == "title":
+            field = "name"
+        v = getattr(obj, field, None)
+        primary = self._primary_key(v, field)
+        is_none = v is None
+        # None last on both directions:
+        # - asc: none_rank = 1 for None
+        # - desc: none_rank = 0 for None (because list.sort(reverse=True) flips the order)
+        none_rank = (
+            (1 if is_none else 0) if not descending else (0 if is_none else 1)
+        )
+        return (none_rank, primary)
+
     async def list_milestones(
-        self, *, user: User, project_id: int
+        self, *, user: User, project_id: int, sort_by: str, descending: bool
     ) -> list[MilestoneDetail]:
         """Mengambil daftar milestone untuk proyek tertentu.
 
@@ -254,7 +303,15 @@ class MilestoneService:
         milestones = await self._fetch_milestones(project_id=project_id)
         assignee_ids = self._collect_assignee_ids(milestones)
         user_info_map = await self._get_user_info_map(assignee_ids)
-        return [self._map_milestone(m, user_info_map) for m in milestones]
+        return [
+            self._map_milestone(
+                m=m,
+                user_info_map=user_info_map,
+                sort_by=sort_by,
+                descending=descending,
+            )
+            for m in milestones
+        ]
 
     async def create_milestone(
         self, *, user: User, project_id: int, payload: MilestoneCreate
