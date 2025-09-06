@@ -1,4 +1,9 @@
+import asyncio
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
+
+from sqlalchemy.orm import selectinload
 
 from app.core.domain.events.project import (
     ProjectCreatedEvent,
@@ -22,7 +27,7 @@ from app.core.policies.query_policies import (
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
-from app.db.models.task_model import StatusTask
+from app.db.models.task_model import PriorityLevel, StatusTask, Task
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import PaginationSchema
@@ -32,11 +37,17 @@ from app.schemas.project import (
     ProjectListPage,
     ProjectMemberRead,
     ProjectRead,
+    ProjectReport,
+    ProjectReportAssignee,
+    ProjectReportPriority,
+    ProjectReportSummary,
+    ProjectReportWeekItem,
     ProjectStats,
     ProjectSummary,
     ProjectUpdate,
 )
 from app.schemas.user import ProjectParticipation, User
+from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 if TYPE_CHECKING:
@@ -558,4 +569,189 @@ class ProjectService:
             user_id=user.id,
             project_id=project_id,
             required_role=project_role,
+        )
+
+    async def get_project_report_(
+        self,
+        *,
+        user: User,
+        project_id: int,
+        week_start: date | None = None,
+    ) -> ProjectReport:
+        # Pastikan user bisa akses (admin atau member)
+
+        if user.role != Role.ADMIN:
+            can_access = await self.repo.ensure_member_in_project(
+                user_id=user.id,
+                project_id=project_id,
+                required_role=RoleProject.OWNER,
+            )
+            if not can_access:
+                raise exceptions.ForbiddenError("Tidak punya akses ke proyek ini")
+
+        # Ambil semua task proyek (dengan assignees)
+        tasks = await self.uow.task_repo.list_by_filters(
+            filters={"project_id": project_id},
+            custom_query=lambda q: q.options(selectinload(Task.assignees)),
+        )
+
+        # Counters
+        task_complete = 0
+        task_not_complete = 0
+
+        # Priority counters
+        pr_high = pr_medium = pr_low = 0
+
+        # Assignee stats
+        assignee_stats: dict[int, dict[str, int]] = defaultdict(
+            lambda: {"complete": 0, "not_complete": 0}
+        )
+        assignee_ids: set[int] = set()
+
+        for t in tasks:
+            is_complete = t.status == StatusTask.COMPLETED
+            if is_complete:
+                task_complete += 1
+            else:
+                task_not_complete += 1
+
+            # Priority
+            if t.priority == PriorityLevel.HIGH:
+                pr_high += 1
+            elif t.priority == PriorityLevel.MEDIUM:
+                pr_medium += 1
+            elif t.priority == PriorityLevel.LOW:
+                pr_low += 1
+
+            # Assignee counts
+            for a in t.assignees:
+                assignee_ids.add(a.user_id)
+                if is_complete:
+                    assignee_stats[a.user_id]["complete"] += 1
+                else:
+                    assignee_stats[a.user_id]["not_complete"] += 1
+
+        # Ambil data user assignee
+        pegawai_service = PegawaiService()
+        users = await pegawai_service.list_user_by_ids(sorted(assignee_ids))
+        user_map = {u.id: u for u in users if u}
+
+        assignee_items = [
+            ProjectReportAssignee(
+                user_id=uid,
+                email=user_map.get(uid).email if user_map.get(uid) else "",  # type: ignore
+                profile_url=user_map.get(uid).profile_url  # type: ignore
+                if user_map.get(uid)
+                else "",
+                task_complete=stats["complete"],
+                task_not_complete=stats["not_complete"],
+            )
+            for uid, stats in assignee_stats.items()
+        ]
+
+        # Weekly (7 hari) report
+        today = date.today()
+        start_day = week_start or (today - timedelta(days=6))
+        days = [start_day + timedelta(days=i) for i in range(7)]
+
+        week_items: list[ProjectReportWeekItem] = []
+        for d in days:
+            wc = 0
+            wnc = 0
+            for t in tasks:
+                # gunakan updated_at jika ada, fallback created_at
+                stamp = (t.updated_at or t.created_at or datetime.utcnow()).date()
+                if stamp == d:
+                    if t.status == StatusTask.COMPLETED:
+                        wc += 1
+                    else:
+                        wnc += 1
+            week_items.append(
+                ProjectReportWeekItem(
+                    date=d,
+                    task_complete=wc,
+                    task_not_complete=wnc,
+                )
+            )
+
+        return ProjectReport(
+            project_summary=ProjectReportSummary(
+                total_task=task_complete + task_not_complete,
+                task_complete=task_complete,
+                task_not_complete=task_not_complete,
+            ),
+            assignee=assignee_items,
+            priority=ProjectReportPriority(
+                high=pr_high, medium=pr_medium, low=pr_low
+            ),
+            weakly_report=week_items,
+        )
+
+    async def get_project_report(
+        self, *, user: User, project_id: int, week_start: date | None = None
+    ) -> ProjectReport:
+        if user.role != Role.ADMIN:
+            can_access = await self.repo.ensure_member_in_project(
+                user_id=user.id,
+                project_id=project_id,
+                required_role=RoleProject.OWNER,
+            )
+            if not can_access:
+                raise exceptions.ForbiddenError("Tidak punya akses ke proyek ini")
+
+        today = date.today()
+        start_day = week_start or (today - timedelta(days=6))
+        end_day = start_day + timedelta(days=6)
+
+        summary_data, assignee_rows, weekly_map = await asyncio.gather(
+            self.uow.task_repo.get_report_summary_priority(project_id),
+            self.uow.task_repo.get_report_assignee_stats(project_id),
+            self.uow.task_repo.get_report_weekly_stats(
+                project_id, start_day, end_day
+            ),
+        )
+
+        # Fetch user info (assignee) sekali
+        assignee_ids = [r["user_id"] for r in assignee_rows]
+        pegawai_service = PegawaiService()
+        users = await pegawai_service.list_user_by_ids(sorted(assignee_ids))
+        user_map = {u.id: u for u in users if u}
+
+        assignee_items = [
+            ProjectReportAssignee(
+                user_id=row["user_id"],
+                email=getattr(user_map.get(row["user_id"]), "email", "") or "",
+                profile_url=getattr(user_map.get(row["user_id"]), "profile_url", "")
+                or "",
+                task_complete=row["task_complete"],
+                task_not_complete=row["task_not_complete"],
+            )
+            for row in assignee_rows
+        ]
+
+        weekly_items: list[ProjectReportWeekItem] = []
+        for i in range(7):
+            d = start_day + timedelta(days=i)
+            c, nc = weekly_map.get(d, (0, 0))
+            weekly_items.append(
+                ProjectReportWeekItem(
+                    date=d,
+                    task_complete=c,
+                    task_not_complete=nc,
+                )
+            )
+
+        return ProjectReport(
+            project_summary=ProjectReportSummary(
+                total_task=summary_data["total_task"],
+                task_complete=summary_data["task_complete"],
+                task_not_complete=summary_data["task_not_complete"],
+            ),
+            assignee=assignee_items,
+            priority=ProjectReportPriority(
+                high=summary_data["high"],
+                medium=summary_data["medium"],
+                low=summary_data["low"],
+            ),
+            weakly_report=weekly_items,
         )

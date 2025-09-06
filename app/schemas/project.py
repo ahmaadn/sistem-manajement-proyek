@@ -84,3 +84,36 @@ class ProjectSummary(BaseSchema):
 
 class ProjectListPage(PaginationSchema[ProjectRead]):
     summary: ProjectSummary = Field(..., description="Ringkasan proyek")
+
+
+class ProjectReportSummary(BaseSchema):
+    total_task: int
+    task_complete: int
+    task_not_complete: int
+
+
+class ProjectReportAssignee(BaseSchema):
+    user_id: int
+    email: str
+    profile_url: str
+    task_complete: int
+    task_not_complete: int
+
+
+class ProjectReportPriority(BaseSchema):
+    high: int
+    medium: int
+    low: int
+
+
+class ProjectReportWeekItem(BaseSchema):
+    date: datetime.date
+    task_complete: int
+    task_not_complete: int
+
+
+class ProjectReport(BaseSchema):
+    project_summary: ProjectReportSummary
+    assignee: list[ProjectReportAssignee]
+    priority: ProjectReportPriority
+    weakly_report: list[ProjectReportWeekItem]

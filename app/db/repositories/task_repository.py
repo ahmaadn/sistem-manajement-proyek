@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Callable, Optional, Protocol, Sequence, runtime_checkable
 
 from sqlalchemy import Select, case, delete, func, select
@@ -9,7 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.task_assigne_model import TaskAssignee
-from app.db.models.task_model import StatusTask, Task
+from app.db.models.task_model import PriorityLevel, StatusTask, Task
 from app.schemas.task import TaskUpdate
 
 
@@ -197,6 +198,38 @@ class InterfaceTaskRepository(Protocol):
     ) -> Sequence[int]:
         """
         Mengambil daftar user_id yang menjadi anggota dari sebuah proyek.
+        """
+        ...
+
+    async def get_report_summary_priority(self, project_id: int) -> dict[str, int]:
+        """Mengambil ringkasan laporan berdasarkan prioritas.
+
+        Args:
+            project_id (int): ID proyek yang akan diambil laporannya.
+
+        Returns:
+            dict[str, int]: Ringkasan laporan berdasarkan prioritas.
+        """
+        ...
+
+    async def get_report_assignee_stats(self, project_id: int) -> list[dict]:
+        """
+        Kembalikan statistik penugasan untuk proyek tertentu.
+
+        Args:
+            project_id (int): ID proyek yang akan diambil statistiknya.
+
+        Returns:
+            list[dict]: Daftar statistik penugasan untuk proyek.
+        """
+        ...
+
+    async def get_report_weekly_stats(
+        self, project_id: int, start_day: date, end_day: date
+    ) -> dict[date, tuple[int, int]]:
+        """
+        Weekly (7 hari) agregasi berdasarkan (updated_at || created_at)
+        Return dict[date] = (task_complete, task_not_complete)
         """
         ...
 
@@ -484,3 +517,104 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
         )
         result = await self.session.execute(stmt)
         return result.scalars().all()
+
+    async def get_report_summary_priority(self, project_id: int) -> dict[str, int]:
+        completed = StatusTask.COMPLETED
+        not_completed = [
+            StatusTask.PENDING,
+            StatusTask.IN_PROGRESS,
+            StatusTask.CANCELLED,
+        ]
+
+        stmt = select(
+            func.count(Task.id).label("total_task"),
+            func.sum(case((Task.status == completed, 1), else_=0)).label(
+                "task_complete"
+            ),
+            func.sum(case((Task.status.in_(not_completed), 1), else_=0)).label(
+                "task_not_complete"
+            ),
+            func.sum(case((Task.priority == PriorityLevel.HIGH, 1), else_=0)).label(
+                "high"
+            ),
+            func.sum(
+                case((Task.priority == PriorityLevel.MEDIUM, 1), else_=0)
+            ).label("medium"),
+            func.sum(case((Task.priority == PriorityLevel.LOW, 1), else_=0)).label(
+                "low"
+            ),
+        ).where(Task.project_id == project_id)
+        row = (await self.session.execute(stmt)).one()
+        return {
+            "total_task": row.total_task or 0,
+            "task_complete": row.task_complete or 0,
+            "task_not_complete": row.task_not_complete or 0,
+            "high": row.high or 0,
+            "medium": row.medium or 0,
+            "low": row.low or 0,
+        }
+
+    async def get_report_assignee_stats(self, project_id: int) -> list[dict]:
+        completed = StatusTask.COMPLETED
+        not_completed = [
+            StatusTask.PENDING,
+            StatusTask.IN_PROGRESS,
+            StatusTask.CANCELLED,
+        ]
+
+        stmt = (
+            select(
+                TaskAssignee.user_id.label("user_id"),
+                func.sum(case((Task.status == completed, 1), else_=0)).label(
+                    "task_complete"
+                ),
+                func.sum(case((Task.status.in_(not_completed), 1), else_=0)).label(
+                    "task_not_complete"
+                ),
+            )
+            .join(Task, Task.id == TaskAssignee.task_id)
+            .where(Task.project_id == project_id)
+            .group_by(TaskAssignee.user_id)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            {
+                "user_id": r.user_id,
+                "task_complete": r.task_complete or 0,
+                "task_not_complete": r.task_not_complete or 0,
+            }
+            for r in rows
+        ]
+
+    async def get_report_weekly_stats(
+        self, project_id: int, start_day: date, end_day: date
+    ) -> dict[date, tuple[int, int]]:
+        completed = StatusTask.COMPLETED
+        not_completed = [
+            StatusTask.PENDING,
+            StatusTask.IN_PROGRESS,
+            StatusTask.CANCELLED,
+        ]
+
+        stamp_expr = func.date(
+            func.coalesce(Task.updated_at, Task.created_at, func.now())
+        )
+        stmt = (
+            select(
+                stamp_expr.label("d"),
+                func.sum(case((Task.status == completed, 1), else_=0)).label(
+                    "task_complete"
+                ),
+                func.sum(case((Task.status.in_(not_completed), 1), else_=0)).label(
+                    "task_not_complete"
+                ),
+            )
+            .where(
+                Task.project_id == project_id,
+                stamp_expr >= start_day,
+                stamp_expr <= end_day,
+            )
+            .group_by(stamp_expr)
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return {r.d: (r.task_complete or 0, r.task_not_complete or 0) for r in rows}

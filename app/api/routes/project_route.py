@@ -22,6 +22,7 @@ from app.schemas.project import (
     ProjectDetail,
     ProjectListPage,
     ProjectRead,
+    ProjectReport,
     ProjectUpdate,
 )
 from app.schemas.user import User
@@ -208,3 +209,48 @@ class _Project:
             await self.uow.commit()
 
         return result
+
+    @r.get(
+        "/projects/{project_id}/report",
+        response_model=ProjectReport,
+        status_code=status.HTTP_200_OK,
+        responses={
+            status.HTTP_200_OK: {
+                "description": "Laporan proyek",
+                "model": ProjectReport,
+            },
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Proyek tidak ditemukan",
+                "model": exceptions.AppErrorResponse,
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "description": "Tidak punya akses",
+                "model": exceptions.AppErrorResponse,
+            },
+        },
+    )
+    async def get_project_report(
+        self,
+        project_id: int,
+        week_start: datetime | None = Query(
+            default=None,
+            description=(
+                "Tanggal mulai minggu (YYYY-MM-DD). Jika kosong, gunakan 6 hari ke "
+                "belakang."
+            ),
+        ),
+    ):
+        """
+        Laporan ringkas proyek:
+        - project_summary (total, complete, not_complete)
+        - assignee stats
+        - priority distribution
+        - weakly_report (7 hari)
+
+        **Akses** : Project Manajer (Owner), Admin
+        """
+        return await self.project_service.get_project_report(
+            user=self.user,
+            project_id=project_id,
+            week_start=week_start.date() if week_start else None,
+        )
