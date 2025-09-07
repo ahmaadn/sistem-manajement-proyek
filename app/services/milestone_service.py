@@ -175,6 +175,7 @@ class MilestoneService:
             due_date=st.due_date,
             start_date=st.start_date,
             assignees=self._map_assignees(st, user_info_map),
+            category_id=st.category_id,
         )
 
     def _map_task(
@@ -212,6 +213,7 @@ class MilestoneService:
             start_date=t.start_date,
             assignees=self._map_assignees(t, user_info_map),
             sub_tasks=sub_tasks_resp,
+            category_id=t.category_id,
         )
 
     def _map_milestone(
