@@ -298,7 +298,7 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             .order_by(Task.display_order.desc())
         )
         last = q.scalars().first()
-        return 10000 if last is None else (last.display_order + 10000)
+        return 1000 if last is None else (last.display_order + 1000)
 
     async def ensure_valid_display_order(
         self, project_id: int, display_order: Optional[int]
