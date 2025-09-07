@@ -283,7 +283,7 @@ class ProjectService:
         user: User,
         page: int = 1,
         per_page: int = 10,
-        status_project: StatusProject,
+        status_project: StatusProject | None = None,
         start_year: int | None = None,
         end_year: int | None = None,
     ) -> PaginationSchema[ProjectRead]:
@@ -299,9 +299,7 @@ class ProjectService:
         """
         validate_status_by_role(user=user, status_project=status_project)
 
-        norm_start, norm_end = normalize_year_range(
-            start_year=start_year, end_year=end_year
-        )
+        normalize_year_range(start_year=start_year, end_year=end_year)
 
         paginate = await self.repo.paginate_user_projects(
             user_id=user.id,
@@ -309,8 +307,8 @@ class ProjectService:
             page=page,
             per_page=per_page,
             status_filter=status_project,
-            start_year=norm_start,
-            end_year=norm_end,
+            start_year=start_year,
+            end_year=end_year,
         )
 
         items = [
@@ -329,7 +327,7 @@ class ProjectService:
         return ProjectListPage(
             **paginate,
             summary=await self.summarize_user_projects(
-                user=user, start_year=norm_start, end_year=norm_end
+                user=user, start_year=start_year, end_year=end_year
             ),
         )
 

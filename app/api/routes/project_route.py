@@ -50,7 +50,7 @@ class _Project:
         self,
         page: int = Query(default=1, ge=1),
         per_page: int = Query(default=10, ge=1, le=100),
-        status_project: StatusProject = Query(default=StatusProject.ACTIVE),
+        status_project: StatusProject | None = Query(default=None),
         start_year: int | None = Query(
             default=None, ge=1970, description="Tahun mulai (mis. 2010)"
         ),

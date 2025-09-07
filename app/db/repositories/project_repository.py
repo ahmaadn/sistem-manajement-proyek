@@ -364,7 +364,8 @@ class ProjectSQLAlchemyRepository(
         # Scope status
         if status_filter is not None:
             conditions.append(Project.status == status_filter)
-        elif user_role not in (Role.ADMIN, Role.PROJECT_MANAGER):
+
+        elif user_role == Role.TEAM_MEMBER:
             conditions.append(
                 Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
             )
