@@ -5,6 +5,7 @@ from app.api.dependencies.uow import get_uow
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.services.attachment_service import AttachmentService
+from app.services.category_service import CategoryService
 from app.services.comment_service import CommentService
 from app.services.dashboard_service import DashboardService
 from app.services.milestone_service import MilestoneService
@@ -44,3 +45,7 @@ def get_attachment_service(uow: UnitOfWork = Depends(get_uow)) -> AttachmentServ
 
 def get_milestone_service(uow: UnitOfWork = Depends(get_uow)) -> MilestoneService:
     return MilestoneService(uow=uow)
+
+
+def get_category_service(uow: UnitOfWork = Depends(get_uow)):
+    return CategoryService(uow=uow)

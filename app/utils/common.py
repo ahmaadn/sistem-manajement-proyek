@@ -48,3 +48,7 @@ class ErrorCode(StrEnum):
 
     # milestone
     MILESTONE_NOT_FOUND = auto()
+
+    # Kategori
+    CATEGORY_NOT_FOUND = auto()
+    INVALID_CATEGORY_ASSIGNMENT = auto()
