@@ -11,6 +11,7 @@ from app.db.models.mixin import TimeStampMixin
 if TYPE_CHECKING:
     from app.db.models.attachment_model import Attachment
     from app.db.models.audit_model import AuditLog
+    from app.db.models.category_model import Category
     from app.db.models.comment_model import Comment
     from app.db.models.milestone_model import Milestone
     from app.db.models.project_model import Project
@@ -85,14 +86,18 @@ class Task(Base, TimeStampMixin):
     """ID pengguna yang membuat tugas."""
 
     project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("project.id"), nullable=False
+        Integer, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     """ID proyek tempat tugas ini berada."""
 
     parent_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("task.id"), nullable=True
+        Integer, ForeignKey("task.id", ondelete="SET NULL"), nullable=True
     )
     """ID tugas induk jika tugas ini merupakan sub-tugas."""
+
+    category_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("category.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relasi
     project: Mapped["Project"] = relationship("Project", back_populates="tasks")
@@ -157,4 +162,12 @@ class Task(Base, TimeStampMixin):
     """
     Relasi ke milestone yang terkait dengan tugas ini,
     relasi ini bersifat one to many (satu milestone dapat memiliki banyak tugas)
+    """
+
+    category: Mapped[Optional["Category"]] = relationship(
+        "Category", back_populates="tasks"
+    )
+    """
+    Relasi ke kategori yang terkait dengan tugas ini,
+    relasi ini bersifat one to many (satu kategori dapat memiliki banyak tugas)
     """

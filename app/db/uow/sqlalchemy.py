@@ -9,6 +9,10 @@ from app.db.repositories.attachment_repository import (
     AttachmentSQLAlchemyRepository,
     InterfaceAttachmentRepository,
 )
+from app.db.repositories.category_repository import (
+    CategorySQLAlchemyRepository,
+    InterfaceCategoryRepository,
+)
 from app.db.repositories.comment_repository import (
     CommentSQLAlchemyRepository,
     InterfaceCommentRepository,
@@ -49,6 +53,7 @@ class UnitOfWork(Protocol):
     user_repository: InterfaceUserRepository
     attachment_repo: InterfaceAttachmentRepository
     milestone_repo: InterfaceMilestoneRepository
+    category_repo: InterfaceCategoryRepository
 
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
@@ -73,6 +78,9 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
         self.milestone_repo: InterfaceMilestoneRepository = (
             MilestoneSQLAlchemyRepository(self.session)
+        )
+        self.category_repo: InterfaceCategoryRepository = (
+            CategorySQLAlchemyRepository(self.session)
         )
 
     def add_event(self, event: "DomainEvent") -> None:

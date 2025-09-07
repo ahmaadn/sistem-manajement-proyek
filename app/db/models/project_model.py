@@ -10,6 +10,7 @@ from app.db.models.mixin import SoftDeleteMixin, TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.audit_model import AuditLog
+    from app.db.models.category_model import Category
     from app.db.models.milestone_model import Milestone
     from app.db.models.project_member_model import ProjectMember
     from app.db.models.task_model import Task
@@ -80,4 +81,12 @@ class Project(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Daftar tonggak yang terkait dengan proyek ini.
     relasi one to many (satu proyek memiliki banyak tonggak)
+    """
+
+    categories: Mapped[List["Category"]] = relationship(
+        "Category", back_populates="project", cascade="all, delete-orphan"
+    )
+    """
+    Daftar kategori yang terkait dengan proyek ini.
+    relasi one to many (satu proyek memiliki banyak kategori)
     """
