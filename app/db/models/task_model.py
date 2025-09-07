@@ -10,7 +10,6 @@ from app.db.models.mixin import TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.attachment_model import Attachment
-    from app.db.models.audit_model import AuditLog
     from app.db.models.category_model import Category
     from app.db.models.comment_model import Comment
     from app.db.models.milestone_model import Milestone
@@ -130,14 +129,6 @@ class Task(Base, TimeStampMixin):
     Relasi ke pengguna yang ditugaskan untuk tugas ini,
     relasi ini bersifat one to many (satu tugas dapat ditugaskan kepada banyak
     pengguna)
-    """
-
-    audit_logs: Mapped[List["AuditLog"]] = relationship(
-        "AuditLog", back_populates="task"
-    )
-    """
-    Relasi ke AuditLog.
-    relasi bersifat one-to-many (1 task dapat memiliki banyak audit log)
     """
 
     comments: Mapped[List["Comment"]] = relationship(
