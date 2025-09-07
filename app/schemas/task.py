@@ -18,6 +18,7 @@ class TaskCreate(BaseSchema):
     due_date: datetime.datetime | None = Field(default=None)
     start_date: datetime.datetime | None = Field(default=None)
     estimated_duration: int | None = Field(default=None)
+    category_id: int | None = Field(default=None)
 
 
 class TaskUpdate(BaseSchema):
@@ -31,6 +32,7 @@ class TaskUpdate(BaseSchema):
     due_date: datetime.datetime | None = Field(default=None)
     start_date: datetime.datetime | None = Field(default=None)
     estimated_duration: int | None = Field(default=None)
+    category_id: int | None = Field(default=None)
 
 
 class TaskRead(BaseSchema):
@@ -43,6 +45,7 @@ class TaskRead(BaseSchema):
     due_date: datetime.datetime | None = Field(default=None)
     start_date: datetime.datetime | None = Field(default=None)
     estimated_duration: int | None = Field(default=None)
+    category_id: int | None = Field(default=None)
 
 
 class SubTaskRead(BaseSchema):
@@ -56,6 +59,7 @@ class SubTaskRead(BaseSchema):
     due_date: datetime.datetime | None = Field(default=None)
     start_date: datetime.datetime | None = Field(default=None)
     estimated_duration: int | None = Field(default=None)
+    category_id: int | None = Field(default=None)
 
 
 class TaskAttachmentRead(BaseSchema):

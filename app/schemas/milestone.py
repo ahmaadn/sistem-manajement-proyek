@@ -37,6 +37,7 @@ class MilestoneTaskBase(BaseSchema):
     display_order: int | None = Field(default=None)
     due_date: datetime | None = Field(default=None)
     start_date: datetime | None = Field(default=None)
+    category_id: int | None = Field(default=None)
 
     assignees: List[TaskAssigneeRead] = Field(
         default_factory=list,
