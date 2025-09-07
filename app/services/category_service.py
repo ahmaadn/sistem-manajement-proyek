@@ -15,11 +15,39 @@ class CategoryService:
         self.project_repo = uow.project_repo
         self.task_repo = uow.task_repo
 
-    async def _ensure_project(self, project_id: int):
-        project = await self.project_repo.get_by_id(project_id)
-        if not project:
+    async def _ensure_is_owner(self, *, project_id: int, user_id: int):
+        is_owner = await self.project_repo.ensure_member_in_project(
+            project_id=project_id,
+            user_id=user_id,
+            required_role=RoleProject.OWNER,
+        )
+
+        if not is_owner:
+            raise exceptions.ForbiddenError
+        return is_owner
+
+    async def _ensure_is_member(
+        self,
+        *,
+        project_id: int,
+        user_id: int,
+        is_admin: bool,
+        required_role: RoleProject | None = None,
+    ):
+        (
+            is_project_exist,
+            is_member,
+        ) = await self.project_repo.get_project_membership_flags(
+            project_id=project_id, user_id=user_id, required_role=required_role
+        )
+
+        if not is_project_exist:
             raise exceptions.ProjectNotFoundError
-        return project
+
+        if not is_admin and not is_member:
+            raise exceptions.ForbiddenError(
+                "Anda tidak memiliki izin untuk mengakses kategori pada proyek ini"
+            )
 
     async def _ensure_category(self, category_id: int) -> Category:
         category = await self.category_repo.get_by_id(category_id=category_id)
@@ -36,40 +64,23 @@ class CategoryService:
     async def create(
         self, *, project_id: int, payload: CategoryCreate, user: User
     ) -> Category:
-        (
-            is_project_exist,
-            is_owner,
-        ) = await self.project_repo.get_project_membership_flags(
-            project_id=project_id, user_id=user.id, required_role=RoleProject.OWNER
+        await self._ensure_is_member(
+            project_id=project_id,
+            user_id=user.id,
+            is_admin=user.role == Role.ADMIN,
+            required_role=RoleProject.OWNER,
         )
-
-        if not is_project_exist:
-            raise exceptions.ProjectNotFoundError
-
-        if not is_owner:
-            raise exceptions.ForbiddenError(
-                "Anda tidak memiliki izin untuk mengakses kategori pada proyek ini"
-            )
 
         return await self.category_repo.create(
             payload={"project_id": project_id, **payload.model_dump()}
         )
 
     async def list(self, *, project_id: int, user: User) -> list[Category]:
-        (
-            is_project_exist,
-            is_member,
-        ) = await self.project_repo.get_project_membership_flags(
-            project_id=project_id, user_id=user.id
+        await self._ensure_is_member(
+            project_id=project_id,
+            user_id=user.id,
+            is_admin=user.role == Role.ADMIN,
         )
-
-        if not is_project_exist:
-            raise exceptions.ProjectNotFoundError
-
-        if user.role != Role.ADMIN and not is_member:
-            raise exceptions.ForbiddenError(
-                "Anda tidak memiliki izin untuk mengakses kategori pada proyek ini"
-            )
 
         return await self.category_repo.list_by_project(project_id=project_id)
 
@@ -96,14 +107,7 @@ class CategoryService:
         category = await self._ensure_category(category_id)
 
         # Cek apakah user memiliki akses ke proyek kategori ini
-        is_member = await self.project_repo.ensure_member_in_project(
-            project_id=category.project_id,
-            user_id=user.id,
-            required_role=RoleProject.OWNER,
-        )
-
-        if not is_member:
-            raise exceptions.ForbiddenError
+        await self._ensure_is_owner(project_id=category.project_id, user_id=user.id)
 
         return await self.category_repo.update(
             category=category, data=payload.model_dump(exclude_unset=True)
@@ -113,14 +117,7 @@ class CategoryService:
         category = await self._ensure_category(category_id)
 
         # Cek apakah user memiliki akses ke proyek kategori ini
-        is_member = await self.project_repo.ensure_member_in_project(
-            project_id=category.project_id,
-            user_id=user.id,
-            required_role=RoleProject.OWNER,
-        )
-
-        if not is_member:
-            raise exceptions.ForbiddenError
+        await self._ensure_is_owner(project_id=category.project_id, user_id=user.id)
 
         await self.category_repo.delete(category=category)
 
@@ -134,14 +131,7 @@ class CategoryService:
             )
 
         # Cek apakah user memiliki akses ke proyek kategori ini
-        is_member = await self.project_repo.ensure_member_in_project(
-            project_id=category.project_id,
-            user_id=user.id,
-            required_role=RoleProject.OWNER,
-        )
-
-        if not is_member:
-            raise exceptions.ForbiddenError
+        await self._ensure_is_owner(project_id=task.project_id, user_id=user.id)
 
         return await self.category_repo.assign_to_task(task=task, category=category)
 
@@ -149,13 +139,6 @@ class CategoryService:
         task = await self._ensure_task(task_id)
 
         # Cek apakah user memiliki akses ke proyek kategori ini
-        is_member = await self.project_repo.ensure_member_in_project(
-            project_id=task.project_id,
-            user_id=user.id,
-            required_role=RoleProject.OWNER,
-        )
-
-        if not is_member:
-            raise exceptions.ForbiddenError
+        await self._ensure_is_owner(project_id=task.project_id, user_id=user.id)
 
         return await self.category_repo.unassign_from_task(task=task)
