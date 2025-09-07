@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.core.config.settings import get_settings
 from app.db.models import load_all_models
 from app.db.models.project_model import StatusProject
 from app.db.models.task_model import PriorityLevel, StatusTask
@@ -30,7 +31,7 @@ from app.utils import exceptions
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://root:root@127.0.0.1:5432/sistem_manajement_project",
+    str(get_settings().db_url),
 )
 
 engine = create_async_engine(DATABASE_URL, echo=False)
