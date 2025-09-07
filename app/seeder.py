@@ -102,6 +102,18 @@ class Seeder:
             f"{random.choice(subjects)} {random.choice(verbs)} {random.choice(objs)}"
         )
 
+    @staticmethod
+    def random_task_dates():
+        """
+        Menghasilkan (start_date, due_date) dengan rentang relatif sekarang.
+        start_date: antara -3 sampai +5 hari dari sekarang
+        due_date  : >= start_date (1..14 hari setelah start)
+        """
+        now = datetime.datetime.now(datetime.timezone.utc)
+        start = now + datetime.timedelta(days=random.randint(-3, 5))
+        due = start + datetime.timedelta(days=random.randint(1, 14))
+        return start, due
+
     def random_description(self) -> str:
         return " ".join(self.random_sentence() for _ in range(3))
 
@@ -213,12 +225,15 @@ class Seeder:
             return
         print(f"          · Subtasks ({sub_count}) utk task_id={task_id}")
         for s_idx in range(sub_count):
+            start_date, due_date = self.random_task_dates()
             payload = TaskCreate(
                 name=f"{parent_name} - Subtask {s_idx + 1}",
                 description=self.random_description(),
                 status=random.choice(list(StatusTask)),
                 priority=random.choice(list(PriorityLevel)),
                 category_id=random.choice(category_ids) if category_ids else None,
+                start_date=start_date,
+                due_date=due_date,
             )
             await self.task_service.create_subtask(
                 user=self.pm_user,  # type: ignore
@@ -236,12 +251,15 @@ class Seeder:
             f"({self.tasks_per_milestone} task)"
         )
         for t_idx in range(self.tasks_per_milestone):
+            start_date, due_date = self.random_task_dates()
             payload = TaskCreate(
                 name=self.random_task_name(t_idx),
                 description=self.random_description(),
                 status=random.choice(list(StatusTask)),
                 priority=random.choice(list(PriorityLevel)),
                 category_id=random.choice(category_ids) if category_ids else None,
+                start_date=start_date,
+                due_date=due_date,
             )
             task = await self.task_service.create_task(
                 user=self.pm_user,  # type: ignore
