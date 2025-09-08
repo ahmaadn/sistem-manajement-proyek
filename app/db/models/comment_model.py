@@ -20,7 +20,7 @@ class Comment(Base, CreateStampMixin):
     """ID komentar"""
 
     task_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("task.id"), nullable=False
+        Integer, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     """ID task yang dikomentari"""
 

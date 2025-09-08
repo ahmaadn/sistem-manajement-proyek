@@ -25,7 +25,7 @@ class Attachment(Base, CreateStampMixin):
     """
 
     task_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("task.id"), nullable=False
+        Integer, ForeignKey("task.id", ondelete="CASCADE"), nullable=False
     )
     """
     ID tugas yang dilampirkan

@@ -90,7 +90,7 @@ class Task(Base, TimeStampMixin):
     """ID proyek tempat tugas ini berada."""
 
     parent_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("task.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("task.id", ondelete="CASCADE"), nullable=True
     )
     """ID tugas induk jika tugas ini merupakan sub-tugas."""
 
@@ -115,7 +115,12 @@ class Task(Base, TimeStampMixin):
     sub-tugas)
     """
 
-    sub_tasks: Mapped[List["Task"]] = relationship("Task", back_populates="parent")
+    sub_tasks: Mapped[List["Task"]] = relationship(
+        "Task",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     """
     Relasi ke sub-tugas jika tugas ini merupakan tugas induk,
     relasi ini bersifat one to many (satu tugas induk dapat memiliki
@@ -123,7 +128,10 @@ class Task(Base, TimeStampMixin):
     """
 
     assignees: Mapped[List["TaskAssignee"]] = relationship(
-        "TaskAssignee", back_populates="task", cascade="all, delete-orphan"
+        "TaskAssignee",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Relasi ke pengguna yang ditugaskan untuk tugas ini,
@@ -132,7 +140,10 @@ class Task(Base, TimeStampMixin):
     """
 
     comments: Mapped[List["Comment"]] = relationship(
-        "Comment", back_populates="task", cascade="all, delete-orphan"
+        "Comment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Relasi ke komentar yang dibuat untuk tugas ini,
@@ -140,7 +151,10 @@ class Task(Base, TimeStampMixin):
     """
 
     attachments: Mapped[List["Attachment"]] = relationship(
-        "Attachment", back_populates="task", cascade="all, delete-orphan"
+        "Attachment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Relasi ke lampiran yang dibuat untuk tugas ini,
