@@ -107,6 +107,7 @@ class CommentService:
                     ),
                     None,
                 ),
+                attachments=list(comment.attachments)
             )
             for comment in comments
         ]
