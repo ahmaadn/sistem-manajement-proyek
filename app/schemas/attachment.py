@@ -25,4 +25,4 @@ class AttachmentRead(BaseSchema):
 
 class AttachmentLinkCreate(BaseSchema):
     link: str
-    file_name: str
+    link_name: str | None = None
