@@ -92,7 +92,11 @@ class EventBus:
     async def publish(self, event: DomainEvent) -> None:
         pairs = self._handlers.get(type(event), [])
         if not pairs:
-            logger.debug("event.no_handlers", extra={"event": event.name})
+            logger.debug(
+                "event.no_handlers for %s. current: %s",
+                event.name,
+                len(self._handlers),
+            )
             return
 
         # Pisahkan immediate vs background

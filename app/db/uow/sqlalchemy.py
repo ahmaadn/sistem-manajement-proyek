@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, List, Protocol, runtime_checkable
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +41,8 @@ from app.db.repositories.user_repository import (
 
 if TYPE_CHECKING:
     from app.core.domain.event import DomainEvent
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -90,6 +93,7 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             event (DomainEvent): Event yang akan ditambahkan.
         """
         # Simpan di buffer dan enqueue ke session (agar konsisten dengan bus)
+        logger.info("Event enqueued: %s", event.__class__.__name__)
         self._events.append(event)
 
     async def commit(self) -> None:
@@ -97,6 +101,9 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         await self.session.commit()
         try:
             # Publish seluruh pending events yang ter-enqueue di session
+            logger.info(
+                "Committing transaction and dispatching %d events", len(self._events)
+            )
             await dispatch_pending_events(self._events)
         finally:
             self._events.clear()
