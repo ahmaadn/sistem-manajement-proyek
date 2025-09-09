@@ -21,3 +21,8 @@ class AttachmentRead(BaseSchema):
     file_size: str
     user_id: int
     created_at: datetime.datetime
+
+
+class AttachmentLinkCreate(BaseSchema):
+    link: str
+    file_name: str
