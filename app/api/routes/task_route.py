@@ -10,7 +10,7 @@ from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm
 from app.db.models.task_model import StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.task import TaskCreate, TaskDetail, TaskRead, TaskUpdate
+from app.schemas.task import MyTaskRead, TaskCreate, TaskDetail, TaskRead, TaskUpdate
 from app.schemas.user import User
 from app.services.task_service import TaskService
 from app.utils import exceptions
@@ -205,7 +205,7 @@ class _Task:
 
     @r.get(
         "/users/me/tasks",
-        response_model=list[TaskRead],
+        response_model=list[MyTaskRead],
         status_code=status.HTTP_200_OK,
     )
     async def get_user_tasks(self):

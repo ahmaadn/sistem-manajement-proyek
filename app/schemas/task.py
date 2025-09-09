@@ -48,6 +48,11 @@ class TaskRead(BaseSchema):
     category_id: int | None = Field(default=None)
 
 
+class MyTaskRead(TaskRead):
+    milestone_id: int | None = Field(default=None)
+    project_id: int | None = Field(default=None)
+
+
 class SubTaskRead(BaseSchema):
     """Response schema untuk sub-subtask."""
 
