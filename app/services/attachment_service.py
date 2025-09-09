@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from fastapi import UploadFile
@@ -11,6 +12,7 @@ from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.user import User
 from app.utils import exceptions
+from app.utils.cloudinary import upload_bytes
 
 ALLOWED_EXTENSIONS = {
     "image/png": ".png",
@@ -21,6 +23,8 @@ ALLOWED_EXTENSIONS = {
 }
 
 MAX_SIZE = 5 * 1024 * 1024  # 5 MB
+
+logger = logging.getLogger(__name__)
 
 
 class AttachmentService:
@@ -113,6 +117,51 @@ class AttachmentService:
         )
 
     async def upload_attachment(
+        self,
+        *,
+        user: User,
+        file: UploadFile,
+        file_bytes: bytes,
+        file_size: str,
+        task_id: int,
+        comment_id: int | None = None,
+    ) -> Attachment:
+        logger.info("attachment.upload.start")
+        try:
+            result = upload_bytes(
+                file_bytes=file_bytes, filename=file.filename or "attachment"
+            )
+            url = result.get("secure_url") or result.get("url") or ""
+            bytes_size = result.get("bytes") or len(file_bytes)
+
+            att: Attachment = await self.repo.create_attachment(
+                payload={
+                    "user_id": user.id,
+                    "task_id": task_id,
+                    "comment_id": comment_id,
+                    "file_name": file.filename or "attachment",
+                    "file_size": str(bytes_size),
+                    "file_path": url,
+                    "mime_type": file.content_type or "application/octet-stream",
+                }
+            )
+            logger.info("attachment.upload.done", extra={"attachment_id": att.id})
+        except Exception as e:
+            logger.exception("attachment.upload.failed", extra={"error": str(e)})
+            att: Attachment = await self.repo.create_attachment(
+                payload={
+                    "user_id": user.id,
+                    "task_id": task_id,
+                    "comment_id": comment_id,
+                    "file_name": file.filename or "attachment",
+                    "file_size": "",
+                    "file_path": "Error Uploading",
+                    "mime_type": file.content_type or "application/octet-stream",
+                }
+            )
+        return att
+
+    async def upload_attachment_with_event(
         self,
         *,
         user: User,
