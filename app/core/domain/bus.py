@@ -146,35 +146,18 @@ class EventBus:
                     task.add_done_callback(background_handlers.discard)
 
 
-PENDING_EVENT = []
 _event_bus = EventBus()
 subscribe = _event_bus.subscribe
 subscribe_background = _event_bus.subscribe_background
 publish = _event_bus.publish
 
 
-def enqueue_event(event: DomainEvent) -> None:
-    """Entri sebuah event untuk diproses nanti.
-
-    Args:
-        session (AsyncSession): Sesi database.
-        event (DomainEvent): Event yang akan dimasukkan dalam antrean.
+async def dispatch_pending_events(events: list[DomainEvent]) -> None:
     """
-    PENDING_EVENT.append(event)
-    logger.info("Event enqueued: %s", event.__class__.__name__)
-
-
-async def dispatch_pending_events() -> None:
+    Jalankan daftar event yang tertunda (per-UoW/per-session), bukan global.
     """
-    Menjalankan event yang tertunda.
-
-    Args:
-        session (AsyncSession): Sesi database.
-    """
-    for ev in PENDING_EVENT:
+    for ev in events:
         try:
             await publish(ev)
         except Exception:
             logger.exception("event.handler.error", extra={"event": ev.name})
-
-    PENDING_EVENT.clear()
