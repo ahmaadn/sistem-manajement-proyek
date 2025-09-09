@@ -60,7 +60,10 @@ class Project(Base, TimeStampMixin, SoftDeleteMixin):
     """
 
     members: Mapped[List["ProjectMember"]] = relationship(
-        "ProjectMember", back_populates="project", cascade="all, delete-orphan"
+        "ProjectMember",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Daftar anggota proyek.

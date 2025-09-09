@@ -21,7 +21,10 @@ class ProjectMember(Base, TimeStampMixin):
     __tablename__ = "project_member"
 
     project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("project.id"), primary_key=True, autoincrement=False
+        Integer,
+        ForeignKey("project.id", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
     )
     """ID proyek"""
 
