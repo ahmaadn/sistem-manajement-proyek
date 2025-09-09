@@ -20,4 +20,6 @@ class CommentRead(BaseSchema):
 
 
 class CommentDetail(CommentRead):
+    profile_url: str | None = None
+    user_name: str | None = None
     attachments: list[AttachmentRead] = Field(default_factory=list)

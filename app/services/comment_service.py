@@ -1,9 +1,10 @@
 import logging
-from typing import Optional, Sequence
+from typing import Optional
 
 from app.db.models.comment_model import Comment
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.comment import CommentCreate
+from app.schemas.comment import CommentCreate, CommentDetail
+from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class CommentService:
 
     async def list_comments(
         self, task_id: int, user_id: int, is_admin: bool = False
-    ) -> Sequence[Comment]:
+    ):
         """
         Mendapatkan daftar komentar untuk tugas tertentu. komentar yang hanya dapat
         dilihat oleh anggota proyek (termasuk owner) atau admin.
@@ -77,7 +78,38 @@ class CommentService:
                     "Anda tidak memiliki izin untuk melihat komentar ini"
                 )
 
-        return await self.uow.comment_repo.list_by_task_id(task_id=task_id)
+        comments = await self.uow.comment_repo.list_by_task_id(task_id=task_id)
+        user_ids = {comment.user_id for comment in comments}
+
+        pegawai_service = PegawaiService()
+        users = await pegawai_service.list_user_by_ids(list(user_ids))
+
+        return [
+            CommentDetail(
+                id=comment.id,
+                task_id=comment.task_id,
+                user_id=comment.user_id,
+                content=comment.content,
+                created_at=comment.created_at,
+                profile_url=next(
+                    (
+                        user.profile_url
+                        for user in users
+                        if user and user.id == comment.user_id
+                    ),
+                    None,
+                ),
+                user_name=next(
+                    (
+                        user.name
+                        for user in users
+                        if user and user.id == comment.user_id
+                    ),
+                    None,
+                ),
+            )
+            for comment in comments
+        ]
 
     async def get_comment(
         self, task_id: int, user_id: int, comment_id: int, is_admin: bool = False
