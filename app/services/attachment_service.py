@@ -108,7 +108,7 @@ class AttachmentService:
                 "file_name": payload.file_name,
                 "file_size": "0",
                 "file_path": payload.link,
-                "mime_type": "unknown",
+                "mime_type": "hyperlink",
             }
         )
         logger.info("attachment.upload.done", extra={"attachment_id": att.id})
@@ -156,7 +156,7 @@ class AttachmentService:
                 "file_name": payload.file_name,
                 "file_size": str("0"),
                 "file_path": payload.link,
-                "mime_type": "unknown",
+                "mime_type": "hyperlink",
             }
         )
         logger.info("attachment.upload.done", extra={"attachment_id": att.id})
