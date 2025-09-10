@@ -17,7 +17,6 @@ class TaskCreate(BaseSchema):
     display_order: int = Field(default=0)
     due_date: datetime.datetime | None = Field(default=None)
     start_date: datetime.datetime | None = Field(default=None)
-    estimated_duration: int | None = Field(default=None)
     category_id: int | None = Field(default=None)
 
 

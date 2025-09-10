@@ -228,6 +228,8 @@ class TaskService:
 
         # buat task
         data = payload.model_dump(exclude_unset=True)
+        estimated_duration = 0
+
         data.update(
             {
                 "created_by": user.id,
@@ -237,9 +239,27 @@ class TaskService:
                     project_id=milestone.project_id,
                     display_order=payload.display_order,
                 ),
+                "estimated_duration": estimated_duration,  # Set 0 untuk sementara
             }
         )
-        return await self.uow.task_repo.create_task(payload=data)
+
+        task = await self.uow.task_repo.create_task(payload=data)
+
+        # Jika start_date tidak diisi, set ke created_at
+        start_date = task.created_at if task.start_date is None else task.start_date
+
+        # Hitung estimasi durasi dalam menit dari due_date - start_date.
+        # Jika salah satu bernilai None, jangan dihitung.
+        if (
+            task.estimated_duration is None or task.estimated_duration == 0
+        ) and task.due_date:
+            delta_minutes = int((task.due_date - start_date).total_seconds() // 60)
+            estimated_duration = max(0, delta_minutes)
+
+        return await self.uow.task_repo.update_task(
+            task,
+            {"estimated_duration": estimated_duration, "start_date": start_date},
+        )
 
     async def create_subtask(
         self, *, user: User, task_id: int, payload: TaskCreate
