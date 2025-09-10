@@ -237,7 +237,7 @@ class ProjectSQLAlchemyRepository(
                 select(1)
                 .select_from(ProjectMember)
                 .where(
-                    ProjectMember.project_id == Project.id,
+                    ProjectMember.project_id == project_id,
                     ProjectMember.user_id == user_id,
                     ProjectMember.role == RoleProject.OWNER,
                 )
