@@ -78,8 +78,8 @@ class Task(Base, TimeStampMixin):
     estimated_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     """Estimasi waktu pengerjaan dalam satuan menit."""
 
-    total_time_logged: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    """Total waktu yang dicatat dalam satuan menit."""
+    finish_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Total waktu yang dikerjakan dalam satuan menit."""
 
     created_by: Mapped[int] = mapped_column(Integer, nullable=False)
     """ID pengguna yang membuat tugas."""
@@ -97,6 +97,12 @@ class Task(Base, TimeStampMixin):
     category_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("category.id", ondelete="SET NULL"), nullable=True
     )
+    """ID kategori tempat tugas ini berada."""
+
+    completed_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(True), nullable=True
+    )
+    """Tanggal dan waktu tugas diselesaikan."""
 
     # Relasi
     project: Mapped["Project"] = relationship("Project", back_populates="tasks")

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import selectinload
@@ -326,18 +327,28 @@ class TaskService:
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
-        is_owner = self.uow.project_repo.ensure_member_in_project(
+        # cek status member (Owner)
+        is_owner = await self.uow.project_repo.ensure_member_in_project(
             user_id=user.id,
             project_id=task.project_id,
             required_role=RoleProject.OWNER,
         )
 
+        # hanya owner project dan admin yang bisa update task
         if not is_owner and user.role != Role.ADMIN:
             raise exceptions.ForbiddenError(
                 "Tidak punya akses untuk mengupdate task"
             )
 
-        updated = await self.repo.update_task(task, payload)
+        task_update_data: dict[str, Any] = payload.model_dump(exclude_unset=True)
+
+        # handle jika status berubah ke COMPLETED atau dari COMPLETED ke status lain
+        if payload.status:
+            task_update_data.update(
+                **self.handle_completed_status(payload.status, task, task.status)
+            )
+
+        updated = await self.repo.update_task(task, task_update_data)
 
         self.uow.add_event(
             TaskUpdatedEvent(
@@ -422,28 +433,86 @@ class TaskService:
             Task: Tugas yang telah diperbarui.
         """
 
+        # Mendapatkan task beserta assignees-nya
         task = await self.repo.get_by_id_with_assignees(task_id)
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
+        # pastikan hanya assignee (user yang ditugaskan) yang bisa mengubah status
         ensure_only_assignee_can_change_status(
             task_assignee_user_ids=[a.user_id for a in task.assignees],
             actor_user_id=actor_user_id,
         )
 
-        old_status = task.status
-        updated = await self.repo.update_task(task, {"status": new_status})
+        prev_status = task.status
+        payload_update: dict[str, Any] = {"status": new_status}
 
+        # handle jika status berubah ke COMPLETED atau dari COMPLETED ke status lain
+        payload_update.update(
+            **self.handle_completed_status(new_status, task, prev_status)
+        )
+
+        task = await self.repo.update_task(task, payload_update)
+
+        # catat event
         self.uow.add_event(
             TaskStatusChangedEvent(
                 performed_by=actor_user_id,
                 task_id=task.id,
                 project_id=task.project_id,
-                old_status=old_status,
+                old_status=prev_status,
                 new_status=getattr(new_status, "name", str(new_status)),
             )
         )
-        return updated
+        return task
+
+    def handle_completed_status(
+        self,
+        new_status: StatusTask,
+        task: Task,
+        prev_status: StatusTask,
+    ) -> dict[str, Any]:
+        """Mengelola status tugas yang telah selesai.
+
+        Args:
+            new_status (StatusTask): Status baru yang akan diterapkan.
+            task (Task): Tugas yang akan diperbarui.
+            prev_status (StatusTask): Status sebelumnya dari tugas.
+
+        Returns:
+            dict[str, Any]: Payload yang berisi pembaruan untuk tugas.
+        """
+        payload_update = {}
+        if new_status == StatusTask.COMPLETED:
+            # Jika status diubah ke COMPLETED, set tanggal selesai (completed_at)
+            completed_at = datetime.now(timezone.utc)
+
+            # Hitung durasi penyelesaian tugas dalam menit,
+            # yaitu selisih antara start_date dan completed_at dan
+            # dibatasi minimal 0 menit
+            finish_duration = max(
+                (
+                    (completed_at - task.start_date).total_seconds() // 60
+                    if task.start_date
+                    else 0
+                ),
+                0,
+            )
+
+            payload_update.update(
+                completed_at=completed_at, finish_duration=finish_duration
+            )
+        elif (
+            new_status
+            in {StatusTask.CANCELLED, StatusTask.PENDING, StatusTask.IN_PROGRESS}
+            and prev_status == StatusTask.COMPLETED
+        ):
+            # Jika status diubah dari COMPLETED ke status lain, reset completed_at
+            # dan finish_duration
+            payload_update.update(completed_at=None, finish_duration=0)
+        elif task.completed_at is not None:
+            payload_update.update(completed_at=None, finish_duration=0)
+        return payload_update
 
     async def assign_user(self, actor_id, task_id: int, *, user: User) -> None:
         """Menugaskan pengguna ke tugas tertentu.
