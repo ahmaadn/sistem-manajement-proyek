@@ -1,9 +1,9 @@
 from typing import Any
+
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
-from app.schemas.user import PegawaiInfo
-from app.services import pegawai_service
+from app.schemas.user import UserBase
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -18,7 +18,7 @@ class AuthHandler:
         self,
         username_or_email: str,
         password: str,
-    )->tuple[dict[str, Any], PegawaiInfo]:
+    ) -> tuple[dict[str, Any], UserBase]:
         """Otentikasi pengguna dengan nama pengguna atau email dan kata sandi.
 
         Args:
