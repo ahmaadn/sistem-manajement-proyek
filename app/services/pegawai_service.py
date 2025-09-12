@@ -4,9 +4,10 @@
 
 import asyncio
 import logging
+import urllib.parse
 from time import time
 from typing import Any
-import urllib.parse
+
 import aiohttp
 
 from app.core.config.settings import get_settings
@@ -88,8 +89,8 @@ def _get_bearer_from_ctx() -> str | None:
         return parts[1].strip()
     return None
 
-class _PegawaiApiClient:
 
+class _PegawaiApiClient:
     @staticmethod
     async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
         request = request_object.get()
@@ -126,13 +127,19 @@ class _PegawaiApiClient:
         try:
             start_time = time()
             async with request.app.requests_client.post(  # type: ignore
-                "api/auth/validation", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
+                "api/auth/validation",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
 
                 logger.debug("response validate_token: %s", data)
-                logger.debug("time request /auth/validation: %s", time() - start_time)
+                logger.debug(
+                    "time request /auth/validation: %s", time() - start_time
+                )
                 return True
         except (ValueError, aiohttp.ClientError) as e:
             logger.error("Error during validate_token request: %s", e)
@@ -148,7 +155,11 @@ class _PegawaiApiClient:
         try:
             start_time = time()
             async with request.app.requests_client.get(  # type: ignore
-                "api/pegawai/me", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
+                "api/pegawai/me",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
@@ -163,19 +174,27 @@ class _PegawaiApiClient:
     async def get_pegawai_detail(*, user_id: int, token: str | None = None):
         token = token or _get_bearer_from_ctx()
         if not token:
-            logger.warning("get_pegawai_detail: token tidak tersedia di context/header.")
+            logger.warning(
+                "get_pegawai_detail: token tidak tersedia di context/header."
+            )
             return None
 
         request = request_object.get()
         try:
             start_time = time()
             async with request.app.requests_client.get(  # type: ignore
-                f"api/pegawai/{user_id}", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
+                f"api/pegawai/{user_id}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
                 logger.debug("response get_pegawai_detail: %s", data)
-                logger.debug("time request api/pegawai/%d: %s", user_id, time() - start_time)
+                logger.debug(
+                    "time request api/pegawai/%d: %s", user_id, time() - start_time
+                )
                 return data
         except (ValueError, aiohttp.ClientError) as e:
             logger.error("Error during get_pegawai_me request: %s", e)
@@ -185,14 +204,20 @@ class _PegawaiApiClient:
     async def get_list_pegawai(*, token: str | None = None):
         token = token or _get_bearer_from_ctx()
         if not token:
-            logger.warning("get_list_pegawai: token tidak tersedia di context/header.")
+            logger.warning(
+                "get_list_pegawai: token tidak tersedia di context/header."
+            )
             return None
 
         request = request_object.get()
         try:
             start_time = time()
             async with request.app.requests_client.get(  # type: ignore
-                "api/pegawai-list", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'}
+                "api/pegawai-list",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
@@ -207,15 +232,21 @@ class _PegawaiApiClient:
     async def get_bulk_pegawai(*, ids: list[int], token: str | None = None):
         token = token or _get_bearer_from_ctx()
         if not token:
-            logger.warning("get_bulk_pegawai: token tidak tersedia di context/header.")
+            logger.warning(
+                "get_bulk_pegawai: token tidak tersedia di context/header."
+            )
             return None
 
         request = request_object.get()
         try:
             start_time = time()
             async with request.app.requests_client.post(  # type: ignore
-                "api/pegawai/bulk", headers={"Authorization": f"Bearer {token}", 'Accept': 'application/json'},
-                json={"ids": ids}
+                "api/pegawai/bulk",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                json={"ids": ids},
             ) as res:
                 res.raise_for_status()
                 data = await res.json()
@@ -233,12 +264,16 @@ class PegawaiService:
 
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""
-        result = await asyncio.gather(_PegawaiApiClient.validation_token(token=token))
+        result = await asyncio.gather(
+            _PegawaiApiClient.validation_token(token=token)
+        )
         return bool(result[0])
 
     async def get_user_info(self, user_id: int):
         """Ambil info user berdasarkan user_id, tanpa access_token."""
-        result = await asyncio.gather(_PegawaiApiClient.get_pegawai_detail(user_id=user_id))
+        result = await asyncio.gather(
+            _PegawaiApiClient.get_pegawai_detail(user_id=user_id)
+        )
         user = result[0]
         if not user:
             return None
@@ -273,20 +308,20 @@ class PegawaiService:
 
         role = data.get("role")
 
-        if role == 'admin':
-            name = data['email']
-            position = data['role']
+        if role == "admin":
+            name = data["email"]
+            position = data["role"]
         else:
-        # handle pegawai
+            # handle pegawai
             pegawai = data.get("pegawai")
             if not pegawai:
                 pegawai = {
-                    'nama': data.get('email'),
-                    'position': data.get('position')
+                    "nama": data.get("email"),
+                    "position": data.get("position"),
                 }
 
-            name = pegawai.get('nama', pegawai.get('nama_lengkap', ''))
-            position = pegawai.get('jabatan', '')
+            name = pegawai.get("nama", pegawai.get("nama_lengkap", ""))
+            position = pegawai.get("jabatan", "")
 
         # handle profile_url
         profile_photo_path = data.get("profile_photo_path")
@@ -300,8 +335,6 @@ class PegawaiService:
             employee_role=data.get("role"),
             email=data.get("email"),
             position=position,
-            # work_unit=data.get("unit_kerja"),
-            # address=data.get("alamat"),
             profile_url=profile_photo_path or dummy_profile_url,
         )
 
@@ -312,8 +345,6 @@ class PegawaiService:
             employee_role=data.get("role"),
             email=data.get("email"),
             position=data.get("jabatan"),
-            # work_unit=data.get("unit_kerja"),
-            # address=data.get("alamat"),
             profile_url=data.get("profile_url"),
         )
 
@@ -328,7 +359,7 @@ class PegawaiService:
         if not result:
             return []
 
-        users = result.get('data', [])
+        users = result.get("data", [])
         return [await self.map_to_pegawai_info(user) for user in users]
 
     async def list_user_by_ids(self, data: list[int]) -> list[UserBase | None]:
@@ -347,7 +378,7 @@ class PegawaiService:
             return []
 
         map_users = []
-        for user in  users:
+        for user in users:
             if user:
                 print(user)
                 map_users.append(await self.map_to_pegawai_info(user))
