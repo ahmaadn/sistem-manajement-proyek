@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from fastapi_utils.cbv import cbv
 
-from app.api.dependencies.services import get_project_service, get_task_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import (
     get_current_user,
@@ -13,8 +12,6 @@ from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.pagination import SimplePaginationSchema
 from app.schemas.user import User, UserDetail
-from app.services.project_service import ProjectService
-from app.services.task_service import TaskService
 from app.services.user_service import UserService
 from app.utils.exceptions import AppErrorResponse
 
@@ -24,8 +21,6 @@ r = router = APIRouter(tags=["users"])
 @cbv(router)
 class _User:
     user_service: UserService = Depends(get_user_service)
-    project_service: ProjectService = Depends(get_project_service)
-    task_service: TaskService = Depends(get_task_service)
     uow: UnitOfWork = Depends(get_uow)  # NEW
 
     @r.get(
@@ -45,7 +40,7 @@ class _User:
 
         **Akses**: Semua User
         """
-        detail = await self.user_service.get_detail_me(user=user)
+        detail = await self.user_service.get_user_detail(user=user)
         await self.uow.commit()  # commit jika ada role baru dibuat
         return detail
 
@@ -68,20 +63,14 @@ class _User:
             Depends(permission_required([Role.ADMIN, Role.PROJECT_MANAGER]))
         ],
     )
-    async def get_user_info(
-        self,
-        user_id: int,
-    ) -> UserDetail:
+    async def get_user_info(self, user_id: int) -> UserDetail:
         """Mendapatkan detail user. hanyaa bisa di akses oleh admin dan project
             manajer
 
         **Akses** : Admin, Project Manajer
         """
-        detail = await self.user_service.get_user_detail(
-            user_id=user_id,
-            project_service=self.project_service,
-            task_service=self.task_service,
-        )
+        user = await self.user_service.get_user(user_id=user_id)
+        detail = await self.user_service.get_user_detail(user=user)
         await self.uow.commit()
         return detail
 

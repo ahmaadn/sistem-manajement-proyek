@@ -14,8 +14,7 @@ from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 if TYPE_CHECKING:
-    from app.services.project_service import ProjectService
-    from app.services.task_service import TaskService
+    pass
 
 
 class UserService:
@@ -94,50 +93,7 @@ class UserService:
         user_role = await self.assign_role_to_user(user_id, user_profile)
         return User(**user_profile.model_dump(), role=user_role.role)
 
-    async def get_user_detail(
-        self,
-        user_id: int | None = None,
-        user_data: User | None = None,
-        *,
-        task_service: "TaskService",
-        project_service: "ProjectService",
-    ) -> UserDetail:
-        """Mendapatkan detail pengguna.
-
-        Args:
-            task_service (TaskService): Layanan untuk mengelola tugas.
-            project_service (ProjectService): Layanan untuk mengelola proyek.
-            user_id (int | None, optional): ID pengguna. Defaults to None.
-            user_data (UserRead | None, optional): Data pengguna. Defaults to None.
-        """
-        if user_id is None and user_data is None:
-            raise exceptions.UserNotFoundError("Pengguna tidak ditemukan")
-
-        if user_data is None:
-            user_data = await self.get_user(user_id)  # type: ignore
-
-        if user_id is None:
-            user_id = user_data.id
-
-        project_stats = await project_service.get_user_project_statistics(user_id)
-        task_stats = await task_service.get_user_task_statistics(user_id)
-
-        statistics = UserProjectStats(
-            total_project=project_stats["total_project"],
-            project_active=project_stats["project_active"],
-            project_completed=project_stats["project_completed"],
-            total_task=task_stats["total_task"],
-            task_in_progress=task_stats["task_in_progress"],
-            task_completed=task_stats["task_completed"],
-            task_cancelled=task_stats["task_cancelled"],
-        )
-
-        return UserDetail(
-            **user_data.model_dump(),
-            statistics=statistics,
-        )
-
-    async def get_detail_me(self, *, user: User) -> UserDetail:
+    async def get_user_detail(self, *, user: User) -> UserDetail:
         """Mendapatkan detail pengguna.
 
         Args:
@@ -147,6 +103,8 @@ class UserService:
             user_data (UserRead | None, optional): Data pengguna. Defaults to None.
         """
 
+        # jika admin, ambil statistik keseluruhan
+        # jika bukan, ambil statistik berdasarkan user_id
         if user.role == Role.ADMIN:
             project_stats = (
                 await self.uow.project_repo.get_overall_project_statistics()
