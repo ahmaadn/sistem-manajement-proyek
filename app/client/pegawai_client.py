@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 from fastapi import Request
+from httpx import AsyncClient
 
 from app.core.config.settings import get_settings
 from app.middleware.request import request_object
@@ -128,28 +129,32 @@ class PegawaiApiClient:
 
         # dapatkan client HTTP dari request.state, client menggunakan
         # httpx.AsyncClient
-        client = getattr(request.state, "client", None)
-        if client is None:
-            raise RuntimeError(
-                "HTTP client is not available on request.state.client"
-            )
+        httpx_client: AsyncClient | None = getattr(request.state, "client", None)
 
-        # lacak waktu mulai untuk logging durasi
         start = perf_counter()
         try:
-            # kirim permintaan HTTP
-            resp = await client.request(method, url, json=json, headers=headers)
+            if httpx_client is not None:
+                resp = await httpx_client.request(
+                    method, url, json=json, headers=headers
+                )
+            else:
+                # dikarenakan di hosting di serverles lifespan/startup
+                # kadang tidak konsisten. Jika request.state.client tidak tersedia,
+                # fallback ke client httpx.AsyncClient temporer.
+                async with AsyncClient(http2=True) as tmp_client:
+                    resp = await tmp_client.request(
+                        method, url, json=json, headers=headers
+                    )
+                    # Pastikan body sudah dibaca sebelum client ditutup
+                    await resp.aread()
 
-            duration_ms = (perf_counter() - start) * 1000
             logger.debug(
                 "%s %s -> %s in %.2f ms",
                 method.upper(),
                 url,
                 resp.status_code,
-                duration_ms,
+                (perf_counter() - start) * 1000,
             )
-
-            # kirim response kembali
             return resp
         except Exception:
             logger.exception("HTTP %s %s failed", method.upper(), url)

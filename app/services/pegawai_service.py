@@ -2,7 +2,7 @@ import asyncio
 import logging
 import urllib.parse
 
-from app.client import PegawaiAiohttpClient
+from app.client import PegawaiApiClient
 from app.schemas.user import UserBase
 
 logger = logging.getLogger(__name__)
@@ -11,15 +11,13 @@ logger = logging.getLogger(__name__)
 class PegawaiService:
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""
-        result = await asyncio.gather(
-            PegawaiAiohttpClient.validation_token(token=token)
-        )
+        result = await asyncio.gather(PegawaiApiClient.validation_token(token=token))
         return bool(result[0])
 
     async def get_user_info(self, user_id: int):
         """Ambil info user berdasarkan user_id."""
         result = await asyncio.gather(
-            PegawaiAiohttpClient.get_pegawai_detail(user_id=user_id)
+            PegawaiApiClient.get_pegawai_detail(user_id=user_id)
         )
         user = result[0]
         if not user:
@@ -28,9 +26,7 @@ class PegawaiService:
 
     async def get_user_info_by_token(self, token: str):
         """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
-        result = await asyncio.gather(
-            PegawaiAiohttpClient.get_pegawai_me(token=token)
-        )
+        result = await asyncio.gather(PegawaiApiClient.get_pegawai_me(token=token))
         user = result[0]
         if not user:
             return None
@@ -42,7 +38,7 @@ class PegawaiService:
         berhasil.
         """
         payload = {"email": email, "password": password}
-        result = await asyncio.gather(PegawaiAiohttpClient.login(payload=payload))
+        result = await asyncio.gather(PegawaiApiClient.login(payload=payload))
         return result[0]
 
     async def map_to_pegawai_info(self, data):
@@ -92,7 +88,7 @@ class PegawaiService:
         Returns:
             list[UserBase]: Daftar informasi pegawai.
         """
-        result = await asyncio.gather(PegawaiAiohttpClient.get_list_pegawai())
+        result = await asyncio.gather(PegawaiApiClient.get_list_pegawai())
         result = result[0]
         if not result:
             return []
@@ -110,9 +106,7 @@ class PegawaiService:
         Returns:
             list[UserBase | None]: Daftar info pegawai atau None sesuai urutan ID.
         """
-        result = await asyncio.gather(
-            PegawaiAiohttpClient.get_bulk_pegawai(ids=data)
-        )
+        result = await asyncio.gather(PegawaiApiClient.get_bulk_pegawai(ids=data))
         users = result[0]
         if not users or len(users) == 0:
             return []

@@ -14,7 +14,6 @@ from app.core.realtime.drivers import include_realtime_routers
 from app.db import create_db_and_tables
 from app.db.models import load_all_models
 from app.middleware import middleware
-from app.utils import aiohttp_client
 from app.utils.error_handler import register_exception_handlers
 from app.utils.exceptions import ValidationErrorResponse
 
@@ -35,13 +34,9 @@ async def lifespan(app: FastAPI):
     # register event handlers untuk domain events
     register_event_handlers()
 
-    await aiohttp_client.on_start_up()
-
     # inisialisasi httpx.AsyncClient untuk digunakan di seluruh aplikasi
     async with AsyncClient(http2=True) as client:
         yield {"client": client}
-
-    await aiohttp_client.on_shutdown()
 
 
 def get_app() -> FastAPI:
