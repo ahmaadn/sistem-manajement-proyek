@@ -431,14 +431,15 @@ class TaskService:
             actor_user_id=actor_user_id,
         )
 
-        old = getattr(task.status, "name", str(task.status))
+        old_status = task.status
         updated = await self.repo.update_task(task, {"status": new_status})
+
         self.uow.add_event(
             TaskStatusChangedEvent(
                 performed_by=actor_user_id,
                 task_id=task.id,
                 project_id=task.project_id,
-                old_status=old,
+                old_status=old_status,
                 new_status=getattr(new_status, "name", str(new_status)),
             )
         )
