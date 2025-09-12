@@ -6,6 +6,7 @@ from fastapi_utils.cbv import cbv
 from app.api.dependencies.services import get_milestone_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
+from app.db.models.task_model import PriorityLevel, StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import (
     MilestoneCreate,
@@ -56,6 +57,26 @@ class _Milestone:
         project_id: int,
         sort_by: TaskSortBy = Query(default=TaskSortBy.display_order),
         descending: bool = Query(default=False),
+        priorities: list[PriorityLevel] | None = Query(
+            default=None,
+            alias="priority",
+            description=(
+                "Filter prioritas; bisa multiple (?priority=low&priority=high)"
+            ),
+        ),
+        statuses: list[StatusTask] | None = Query(
+            default=None,
+            alias="status",
+            description=(
+                "Filter status; bisa multiple (?status=pending&status=completed)"
+            ),
+        ),
+        assigned_to_me: bool = Query(
+            default=False,
+            description=(
+                "Jika true, hanya tampilkan task yang ditugaskan ke user saat ini"
+            ),
+        ),
     ):
         """
         Mendapatkan daftar milestone untuk proyek tertentu.
@@ -73,6 +94,9 @@ class _Milestone:
             user=self.user,
             sort_by=sort_by.value,
             descending=descending,
+            priorities=priorities,
+            statuses=statuses,
+            assigned_to_user_id=(self.user.id if assigned_to_me else None),
         )
 
     @r.post(

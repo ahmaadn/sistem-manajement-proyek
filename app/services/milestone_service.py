@@ -1,11 +1,13 @@
 from typing import Any
 
+from sqlalchemy import Select, and_
 from sqlalchemy.orm import selectinload
 
 from app.db.models.milestone_model import Milestone
 from app.db.models.project_member_model import RoleProject
 from app.db.models.role_model import Role
-from app.db.models.task_model import Task
+from app.db.models.task_assigne_model import TaskAssignee
+from app.db.models.task_model import PriorityLevel, StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.milestone import (
     MilestoneCreate,
@@ -64,7 +66,9 @@ class MilestoneService:
                 "User tidak memiliki akses ke proyek ini"
             )
 
-    async def _fetch_milestones(self, *, project_id: int) -> list[Milestone]:
+    async def _fetch_milestones(
+        self, *, project_id: int, use_options: bool = True
+    ) -> list[Milestone]:
         """Mengambil daftar milestone untuk proyek tertentu.
 
         Args:
@@ -73,14 +77,20 @@ class MilestoneService:
         Returns:
             list[Milestone]: Daftar milestone yang terkait dengan proyek.
         """
-        opts = self._eager_options()
-        milestones = await self.repo.list_by_project(
-            project_id=project_id,
-            custom_query=lambda q: q.options(*opts).order_by(
-                Milestone.display_order.asc()
-            ),
-        )
-        return sorted(milestones, key=lambda m: m.display_order, reverse=True)
+        if use_options:
+            opts = self._eager_options()
+            milestones = await self.repo.list_by_project(
+                project_id=project_id,
+                custom_query=lambda q: q.options(*opts).order_by(
+                    Milestone.display_order.asc()
+                ),
+            )
+        else:
+            milestones = await self.repo.list_by_project(
+                project_id=project_id,
+                custom_query=lambda q: q.order_by(Milestone.display_order.asc()),
+            )
+        return milestones
 
     @staticmethod
     def _collect_assignee_ids(milestones: list[Milestone]) -> set[int]:
@@ -122,7 +132,9 @@ class MilestoneService:
         pegawai_service = PegawaiService()
         unique_ids = sorted(assignee_ids)
         users = await pegawai_service.list_user_by_ids(unique_ids)
-        return dict(zip(unique_ids, users, strict=False))
+
+        # Bangun map langsung dari objek user untuk menghindari mismatch urutan
+        return {u.id: u for u in (users or []) if u is not None}
 
     @staticmethod
     def _map_assignees(
@@ -267,7 +279,7 @@ class MilestoneService:
 
     @staticmethod
     def _status_rank(value: Any) -> int:
-        """Custom order: todo < in_progress < done."""
+        """Custom order: pending/cancelled < in_progress < completed."""
         if value is None:
             return 999
         order = {"pending": 0, "cancelled": 0, "in_progress": 2, "completed": 3}
@@ -276,29 +288,41 @@ class MilestoneService:
     def _primary_key(self, value: Any, field: str) -> Any:
         if field == "priority":
             return self._priority_rank(value)
+        if field == "status":
+            return self._status_rank(value)
         if isinstance(value, str):
             return value.casefold()
         return value
 
     def _sort_key(
         self, obj: Any, field: str, descending: bool
-    ) -> tuple[int, int, Any]:
+    ) -> tuple[int, Any, int]:
         """Return a key that keeps None at the end for both asc/desc."""
         if field == "title":
             field = "name"
+
         v = getattr(obj, field, None)
         primary = self._primary_key(v, field)
         is_none = v is None
-        # None last on both directions:
-        # - asc: none_rank = 1 for None
-        # - desc: none_rank = 0 for None (because list.sort(reverse=True) flips the order)
+
+        # None selalu di akhir untuk asc/desc:
         none_rank = (
             (1 if is_none else 0) if not descending else (0 if is_none else 1)
         )
-        return (obj.id, none_rank, primary)
+
+        # Urutan: none_rank -> primary -> id (id sebagai tie-breaker saja)
+        return (none_rank, primary, getattr(obj, "id", 0))
 
     async def list_milestones(
-        self, *, user: User, project_id: int, sort_by: str, descending: bool
+        self,
+        *,
+        user: User,
+        project_id: int,
+        sort_by: str,
+        descending: bool,
+        priorities: list[PriorityLevel] | None = None,
+        statuses: list[StatusTask] | None = None,
+        assigned_to_user_id: int | None = None,
     ) -> list[MilestoneDetail]:
         """Mengambil daftar milestone untuk proyek tertentu.
 
@@ -312,6 +336,22 @@ class MilestoneService:
         if user.role != Role.ADMIN:
             await self._ensure_member(user=user, project_id=project_id)
 
+        # Jika ada filter, gunakan metode khusus untuk memfilter tugas
+        if (
+            priorities is not None
+            or statuses is not None
+            or assigned_to_user_id is not None
+        ):
+            return await self.filtered_list_milestones(
+                user=user,
+                project_id=project_id,
+                sort_by=sort_by,
+                descending=descending,
+                priorities=priorities,
+                statuses=statuses,
+                assigned_to_user_id=assigned_to_user_id,
+            )
+
         milestones = await self._fetch_milestones(project_id=project_id)
         assignee_ids = self._collect_assignee_ids(milestones)
         user_info_map = await self._get_user_info_map(assignee_ids)
@@ -324,6 +364,143 @@ class MilestoneService:
             )
             for m in milestones
         ]
+
+    async def filtered_list_milestones(
+        self,
+        *,
+        user: User,
+        project_id: int,
+        sort_by: str,
+        descending: bool,
+        priorities: list[PriorityLevel] | None = None,
+        statuses: list[StatusTask] | None = None,
+        assigned_to_user_id: int | None = None,
+    ) -> list[MilestoneDetail]:
+        """Mengambil daftar milestone untuk proyek tertentu dengan filter tugas.
+
+        Args:
+            user (User): Pengguna yang meminta daftar milestone.
+            project_id (int): ID proyek yang dimaksud.
+            sort_by (str): Field untuk mengurutkan tugas.
+            descending (bool): Apakah urutan menurun.
+            priorities (list[PriorityLevel] | None): Daftar prioritas untuk memfilter
+                tugas.
+            statuses (list[StatusTask] | None): Daftar status untuk memfilter tugas.
+            assigned_to_user_id (int | None): ID pengguna yang ditugaskan untuk
+                memfilter tugas.
+
+        Returns:
+            list[MilestoneResponse]: Daftar respons milestone yang dipetakan.
+        """
+        if user.role != Role.ADMIN:
+            await self._ensure_member(user=user, project_id=project_id)
+
+        milestones = await self._fetch_milestones(
+            project_id=project_id, use_options=False
+        )
+
+        # Filter tasks within each milestone
+        tasks = await self.uow.task_repo.list_by_filters(
+            filters={"project_id": project_id},
+            custom_query=lambda q: self._filter_tasks(
+                q,
+                priorities=priorities,
+                statuses=statuses,
+                assigned_to_user_id=assigned_to_user_id,
+            ),
+        )
+
+        # mengurutkan tugas berdasarkan kriteria yang diberikan
+        tasks = sorted(
+            tasks,
+            key=lambda t: self._sort_key(t, sort_by, descending),
+            reverse=descending,
+        )
+
+        # Kumpulkan semua ID pengguna yang ditugaskan dari tugas yang difilter
+        assignee_ids = {a.user_id for t in tasks for a in t.assignees}
+        user_info_map = await self._get_user_info_map(assignee_ids)
+
+        result = []
+        for m in milestones:
+            m_copy = MilestoneDetail(
+                id=m.id,
+                project_id=m.project_id,
+                title=m.title,
+                display_order=m.display_order,
+                created_at=m.created_at,
+                updated_at=m.updated_at,
+                tasks=[],
+            )
+
+            # ambil tugas teratas yang sesuai untuk milestone ini
+            m_tasks = [t for t in tasks if t.milestone_id == m.id]
+            if m_tasks:
+                m_copy.tasks = [
+                    MilestoneTaskRead(
+                        id=t.id,
+                        name=t.name,
+                        status=t.status,
+                        priority=t.priority,
+                        display_order=t.display_order,
+                        due_date=t.due_date,
+                        start_date=t.start_date,
+                        assignees=self._map_assignees(t, user_info_map),
+                        sub_tasks=[],
+                        category_id=t.category_id,
+                    )
+                    for t in m_tasks
+                ]
+
+            result.append(m_copy)
+
+        return result
+
+    def _filter_tasks(
+        self,
+        q: Select,
+        *,
+        priorities: list[PriorityLevel] | None = None,
+        statuses: list[StatusTask] | None = None,
+        assigned_to_user_id: int | None = None,
+    ) -> Select:
+        """Menyaring tugas berdasarkan kriteria yang diberikan.
+
+        Args:
+            q (Select): Query untuk tugas.
+            priorities (list[PriorityLevel] | None, optional): Daftar prioritas yang
+                akan difilter. Defaults to None.
+            statuses (list[StatusTask] | None, optional): Daftar status yang akan
+                difilter. Defaults to None.
+            assigned_to_user_id (int | None, optional): ID pengguna yang ditugaskan.
+                Defaults to None.
+
+        Returns:
+            Select: Query yang telah difilter.
+        """
+
+        statement = []
+
+        # ini digunakan untuk mendapatkan user yanng ditugaskan
+        # bersama dengan tugas. menggunakan eager loading untuk menghindari
+        # masalah N+1 query saat mengakses assignees nanti.
+        q = q.options(selectinload(Task.assignees))
+
+        # Tambahkan kondisi filter berdasarkan prioritas
+        if priorities:
+            statement.append(Task.priority.in_(priorities))
+
+        # Tambahkan kondisi filter berdasarkan status
+        if statuses:
+            statement.append(Task.status.in_(statuses))
+
+        # Tambahkan kondisi filter berdasarkan user yang ditugaskan
+        if assigned_to_user_id is not None:
+            q = q.join(Task.assignees)
+            statement.append(TaskAssignee.user_id == assigned_to_user_id)
+
+        # Gabungkan semua kondisi dengan AND
+        return q.where(and_(*statement)) if len(statement) > 1 else q
 
     async def create_milestone(
         self, *, user: User, project_id: int, payload: MilestoneCreate
