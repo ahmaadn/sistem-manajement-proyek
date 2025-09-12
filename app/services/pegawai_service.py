@@ -2,7 +2,7 @@ import asyncio
 import logging
 import urllib.parse
 
-from app.client import PegawaiApiClient
+from app.client import PegawaiAiohttpClient
 from app.schemas.user import UserBase
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 
 class PegawaiService:
     def __init__(self) -> None:
-        self.client = PegawaiApiClient
+        # menggunakan aiohttp client sebagai default
+        # bisa juga menggunakan httpx client jika diperlukan
+        self.client = PegawaiAiohttpClient
 
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""

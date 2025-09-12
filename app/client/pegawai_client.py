@@ -2,6 +2,7 @@ import logging
 from time import perf_counter
 from typing import Any
 
+import aiohttp
 from fastapi import Request
 from httpx import AsyncClient
 
@@ -302,9 +303,10 @@ class PegawaiAiohttpClient:
         headers: dict[str, str] | None = None,
     ) -> tuple[int, Any | None, str]:
         start = perf_counter()
-        client = SingletonAiohttp.get_aiohttp_client()
         try:
-            async with client.request(
+            # Pakai session singleton yang loop-aware
+            session = await SingletonAiohttp.get_aiohttp_client()
+            async with session.request(
                 method, url, json=json, headers=headers
             ) as resp:
                 status = resp.status
@@ -316,17 +318,43 @@ class PegawaiAiohttpClient:
                         data = await resp.json()
                     except Exception:
                         data = None
-                logger.debug(
-                    "%s %s -> %s in %.2f ms",
-                    method.upper(),
-                    url,
-                    status,
-                    (perf_counter() - start) * 1000,
-                )
-                return status, data, text
+
+        except (RuntimeError, aiohttp.ClientError) as e:
+            # dikarenakan di hosting di serverles lifespan/startup
+            # kadang tidak konsisten. Jika singleton aiohttp tidak bisa
+            # digunakan, maka kita perlu membuat session baru.
+            logger.warning(
+                "aiohttp singleton unusable (%s). Falling back to temp session.", e
+            )
+            timeout = aiohttp.ClientTimeout(total=30)
+            connector = aiohttp.TCPConnector(limit=100, enable_cleanup_closed=True)
+            async with aiohttp.ClientSession(  # noqa: SIM117
+                timeout=timeout, connector=connector, trust_env=True
+            ) as temp:
+                async with temp.request(
+                    method, url, json=json, headers=headers
+                ) as resp:
+                    status = resp.status
+                    text = await resp.text()
+                    data = None
+                    ct = resp.headers.get("Content-Type", "")
+                    if "application/json" in ct.lower():
+                        try:
+                            data = await resp.json()
+                        except Exception:
+                            data = None
         except Exception:
             logger.exception("HTTP %s %s failed (aiohttp)", method.upper(), url)
             raise
+
+        logger.debug(
+            "%s %s -> %s in %.2f ms",
+            method.upper(),
+            url,
+            status,
+            (perf_counter() - start) * 1000,
+        )
+        return status, data, text
 
     @staticmethod
     async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:

@@ -1,4 +1,4 @@
-from socket import AF_INET
+import asyncio
 from typing import Any, Optional, Unpack
 
 import aiohttp
@@ -8,19 +8,35 @@ SIZE_POOL_AIOHTTP = 100
 
 class SingletonAiohttp:
     aiohttp_client: Optional[aiohttp.ClientSession] = None
+    _loop: asyncio.AbstractEventLoop | None = None
 
     @classmethod
-    def get_aiohttp_client(cls) -> aiohttp.ClientSession:
-        if cls.aiohttp_client is None:
-            timeout = aiohttp.ClientTimeout(connect=2, sock_read=5, total=7)
-            connector = aiohttp.TCPConnector(
-                family=AF_INET, limit_per_host=SIZE_POOL_AIOHTTP
-            )
+    async def get_aiohttp_client(cls) -> aiohttp.ClientSession:
+        loop = asyncio.get_running_loop()
+        if (
+            cls.aiohttp_client is None
+            or cls.aiohttp_client.closed
+            or cls._loop is not loop
+        ):
+            if cls.aiohttp_client and not cls.aiohttp_client.closed:
+                try:  # noqa: SIM105
+                    await cls.aiohttp_client.close()
+                except Exception:
+                    pass
+            timeout = aiohttp.ClientTimeout(total=30)
+            connector = aiohttp.TCPConnector(limit=100, enable_cleanup_closed=True)
             cls.aiohttp_client = aiohttp.ClientSession(
-                timeout=timeout, connector=connector
+                timeout=timeout, connector=connector, trust_env=True
             )
-
+            cls._loop = loop
         return cls.aiohttp_client
+
+    @classmethod
+    async def aclose(cls) -> None:
+        if cls.aiohttp_client and not cls.aiohttp_client.closed:
+            await cls.aiohttp_client.close()
+        cls.aiohttp_client = None
+        cls._loop = None
 
     @classmethod
     async def close_aiohttp_client(cls) -> None:
@@ -35,7 +51,7 @@ class SingletonAiohttp:
         url: str,
         **kwargs: Unpack[aiohttp.client._RequestOptions],
     ) -> Any:
-        client = cls.get_aiohttp_client()
+        client = await cls.get_aiohttp_client()
 
         try:
             async with client.request(method, url, **kwargs) as response:
@@ -50,7 +66,7 @@ class SingletonAiohttp:
 
 
 async def on_start_up() -> None:
-    SingletonAiohttp.get_aiohttp_client()
+    await SingletonAiohttp.get_aiohttp_client()
 
 
 async def on_shutdown() -> None:
