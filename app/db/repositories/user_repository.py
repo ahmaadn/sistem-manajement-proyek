@@ -25,7 +25,7 @@ class InterfaceUserRepository(ABC):
 
         Args:
             user_id (int): ID pengguna yang akan ditetapkan perannya.
-            user (PegawaiInfo): Informasi pegawai yang akan digunakan untuk
+            user (UserBase): Informasi pegawai yang akan digunakan untuk
                 menetapkan peran.
 
         Returns:

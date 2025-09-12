@@ -1,120 +1,134 @@
-# NOTE: untuk semntara menggunakan data dummy
-# implementasi service pegawai akan di kerjakan setalah
-# api dari sistem pegawai siap digunakan
+import asyncio
+import logging
+import urllib.parse
 
+from app.client import PegawaiAiohttpClient
 from app.schemas.user import UserBase
 
-FAKE_USERS = [
-    {
-        "access_token": "dummy_access_token_1",
-        "user_id": 1,
-        "nama": "Admin",
-        "role": "admin",
-        "email": "admin@example.com",
-        "jabatan": "Kepala Admin",
-        "unit_kerja": "Manajemen",
-        "alamat": "Jl. Admin No. 1",
-        "profile_url": "https://randomuser.me/api/portraits/lego/6.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_2",
-        "user_id": 2,
-        "nama": "HRD",
-        "role": "hrd",
-        "email": "hrd@example.com",
-        "jabatan": "HRD Manager",
-        "unit_kerja": "HRD",
-        "alamat": "Jl. HRD No. 2",
-        "profile_url": "https://randomuser.me/api/portraits/lego/4.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_3",
-        "user_id": 3,
-        "nama": "Pegawai Satu",
-        "role": "pegawai",
-        "email": "pegawai1@example.com",
-        "jabatan": "Staff",
-        "unit_kerja": "Operasional",
-        "alamat": "Jl. Pegawai No. 3",
-        "profile_url": "https://randomuser.me/api/portraits/lego/0.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_4",
-        "user_id": 4,
-        "nama": "Pegawai Dua",
-        "role": "pegawai",
-        "email": "pegawai2@example.com",
-        "jabatan": "Staff",
-        "unit_kerja": "Operasional",
-        "alamat": "Jl. Pegawai No. 4",
-        "profile_url": "https://randomuser.me/api/portraits/lego/2.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_5",
-        "user_id": 5,
-        "nama": "Pegawai Tiga",
-        "role": "pegawai",
-        "email": "pegawai3@example.com",
-        "jabatan": "Staff",
-        "unit_kerja": "Operasional",
-        "alamat": "Jl. Pegawai No. 5",
-        "profile_url": "https://randomuser.me/api/portraits/lego/8.jpg",
-    },
-]
+logger = logging.getLogger(__name__)
 
 
 class PegawaiService:
     def __init__(self) -> None:
-        self.api_url = "https://localhost:3000/"
+        # menggunakan aiohttp client sebagai default
+        # bisa juga menggunakan httpx client jika diperlukan
+        self.client = PegawaiAiohttpClient
 
     async def validate_token(self, token: str) -> bool:
-        """Validasi token dengan mencocokkan pada FAKE_USERS."""
-        return any(user["access_token"] == token for user in FAKE_USERS)
+        """Validasi token Bearer ke layanan Pegawai.
+
+        Args:
+            token (str): Token Bearer eksplisit (opsional). Jika tidak ada,
+                fallback ke header Authorization request. Default to None
+
+        Returns:
+            bool: True jika valid (HTTP 200), False jika tidak valid atau terjadi
+                error.
+        """
+        result = await asyncio.gather(self.client.validation_token(token=token))
+        return bool(result[0])
 
     async def get_user_info(self, user_id: int):
-        """Ambil info user berdasarkan user_id, tanpa access_token."""
-        user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
+        """Ambil info user berdasarkan user_id.
+
+        Args:
+            user_id (int): ID pengguna/pegawai.
+
+        Returns:
+            UserBase | None: Objek informasi pegawai jika ditemukan, None jika tidak.
+        """
+        result = await asyncio.gather(
+            self.client.get_pegawai_detail(user_id=user_id)
+        )
+        user = result[0]
         if not user:
             return None
-        return self._cast_to_user_info(user.copy())
+        return await self.map_to_pegawai_info(user.copy())
 
     async def get_user_info_by_token(self, token: str):
-        """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
-        user = next((u for u in FAKE_USERS if u["access_token"] == token), None)
+        """Ambil info user berdasarkan token.
+
+        Args:
+            token (str): Token Bearer eksplisit (opsional). Jika tidak ada,
+                fallback ke header Authorization request. Default to None.
+
+        Returns:
+            UserBase | None: Objek informasi pegawai jika ditemukan, None jika tidak.
+        """
+        result = await asyncio.gather(self.client.get_pegawai_me(token=token))
+        user = result[0]
         if not user:
             return None
-        return self._cast_to_user_info(user.copy())
+        return await self.map_to_pegawai_info(user.copy())
 
     async def login(self, email: str, password: str):
-        """Login: cek email dan password, return access_token jika cocok."""
-        # Untuk dummy, password diabaikan, hanya cek email
-        user = next(
-            (u for u in FAKE_USERS if u["email"] == email),
-            None,
-        )
-        if not user:
-            return None
-        return {"access_token": user["access_token"], "user_id": user["user_id"]}
+        """Lakukan login dan ambil token akses.
 
-    def _cast_to_user_info(self, data):
+        Args:
+            email (str): Alamat email pengguna.
+            password (str): Kata sandi pengguna.
+
+        Returns:
+            dict[str, Any] | None: Berisi 'access_token', 'user', dan 'user_id'
+                jika sukses; None jika gagal/format tak sesuai.
+        """
+        payload = {"email": email, "password": password}
+        result = await asyncio.gather(self.client.login(payload=payload))
+        return result[0]
+
+    async def map_to_pegawai_info(self, data):
+        """Map API response to UserBase.
+
+        Args:
+            data (dict): API response data.
+
+        Returns:
+            UserBase: Mapped UserBase object.
+        """
+        role = data.get("role")
+
+        if role == "admin":
+            name = data.get("email", "")
+            position = role or ""
+        else:
+            # handle pegawai biasa
+            pegawai = data.get("pegawai") or {
+                "nama": data.get("email", ""),
+                "position": data.get("position", role),
+            }
+
+            name = pegawai.get("nama", pegawai.get("nama_lengkap", ""))
+            position = pegawai.get("jabatan", "")
+
+        # handle profile_url
+        profile_photo_path = data.get("profile_photo_path", None)
+        if not profile_photo_path:
+            safe_name = name.strip()
+            encoded_name = urllib.parse.quote_plus(safe_name)
+            profile_photo_path = f"https://ui-avatars.com/api/?name={encoded_name}&background=random&bold=true&size=256"
+
         return UserBase(
-            id=data.get("user_id"),
-            name=data.get("nama"),
+            id=data.get("id"),
+            name=name,
             employee_role=data.get("role"),
             email=data.get("email"),
-            position=data.get("jabatan"),
-            work_unit=data.get("unit_kerja"),
-            address=data.get("alamat"),
-            profile_url=data.get("profile_url"),
+            position=position,
+            profile_url=profile_photo_path,
         )
 
     async def list_user(self) -> list[UserBase]:
         """Mendapatkan daftar semua pengguna.
 
         Returns:
-            list[PegawaiInfo]: Daftar informasi pegawai.
+            list[UserBase]: Daftar informasi pegawai.
         """
-        return [self._cast_to_user_info(user) for user in FAKE_USERS]
+        result = await asyncio.gather(self.client.get_list_pegawai())
+        result = result[0]
+        if not result:
+            return []
+
+        users = result.get("data", [])
+        return [await self.map_to_pegawai_info(user) for user in users]
 
     async def list_user_by_ids(self, data: list[int]) -> list[UserBase | None]:
         """Mendapatkan daftar user berdasarkan list ID yang diberikan.
@@ -124,10 +138,31 @@ class PegawaiService:
             data (list[int]): Daftar ID pegawai.
 
         Returns:
-            list[PegawaiInfo | None]: Daftar info pegawai atau None sesuai urutan ID.
+            list[UserBase | None]: Daftar info pegawai atau None sesuai urutan ID.
         """
-        result: list[UserBase | None] = []
-        for user_id in data:
-            user = next((u for u in FAKE_USERS if u["user_id"] == user_id), None)
-            result.append(self._cast_to_user_info(user.copy()) if user else None)
-        return result
+        result = await asyncio.gather(self.client.get_bulk_pegawai(ids=data))
+        users = result[0]
+        if not users or len(users) == 0:
+            return []
+
+        map_users = []
+        for user in users:
+            if user:
+                map_users.append(await self.map_to_pegawai_info(user))
+            else:
+                map_users.append(None)
+        return map_users
+
+
+def _singleton(cls):
+    _instances = {}
+
+    def warp():
+        if cls not in _instances:
+            _instances[cls] = cls()
+        return _instances[cls]
+
+    return warp
+
+
+PegawaiService = _singleton(PegawaiService)  # type: ignore

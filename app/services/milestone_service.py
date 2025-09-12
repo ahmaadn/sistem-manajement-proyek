@@ -115,7 +115,7 @@ class MilestoneService:
             assignee_ids (set[int]): Kumpulan ID pengguna yang ditugaskan.
 
         Returns:
-            dict[int, PegawaiInfo | None]: Peta ID pengguna ke informasi pegawai.
+            dict[int, UserBase | None]: Peta ID pengguna ke informasi pegawai.
         """
         if not assignee_ids:
             return {}
@@ -132,7 +132,7 @@ class MilestoneService:
 
         Args:
             task_like (Task): Tugas yang akan dipetakan.
-            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+            user_info_map (dict[int, UserBase | None]): Peta ID pengguna ke
                 informasi pegawai.
 
         Returns:
@@ -160,7 +160,7 @@ class MilestoneService:
 
         Args:
             st (Task): Sub-tugas yang akan dipetakan.
-            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+            user_info_map (dict[int, UserBase | None]): Peta ID pengguna ke
                 informasi pegawai.
 
         Returns:
@@ -189,7 +189,7 @@ class MilestoneService:
 
         Args:
             t (Task): Tugas yang akan dipetakan.
-            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+            user_info_map (dict[int, UserBase | None]): Peta ID pengguna ke
                 informasi pegawai.
 
         Returns:
@@ -227,7 +227,7 @@ class MilestoneService:
 
         Args:
             m (Milestone): Milestone yang akan dipetakan.
-            user_info_map (dict[int, PegawaiInfo | None]): Peta ID pengguna ke
+            user_info_map (dict[int, UserBase | None]): Peta ID pengguna ke
                 informasi pegawai.
 
         Returns:

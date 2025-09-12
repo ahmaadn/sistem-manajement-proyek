@@ -41,7 +41,7 @@ class _Auth:
             password=credentials.password,
         )
         async with uow:
-            await user_service.assign_role_to_user(token["user_id"], user_info)
+            await user_service.assign_role_to_user(user_id=user_info.id, user=user_info)
             await uow.commit()
 
         return AuthToken(
