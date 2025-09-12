@@ -12,10 +12,7 @@ from app.core.domain.events.task import (
     TaskStatusChangedEvent,
     TaskUpdatedEvent,
 )
-from app.core.policies.task import (
-    ensure_assignee_is_project_member,
-    ensure_only_assignee_can_change_status,
-)
+from app.core.policies.task import ensure_only_assignee_can_change_status
 from app.db.models.project_member_model import RoleProject
 from app.db.models.role_model import Role
 from app.db.models.task_assigne_model import TaskAssignee
@@ -514,7 +511,9 @@ class TaskService:
             payload_update.update(completed_at=None, finish_duration=0)
         return payload_update
 
-    async def assign_user(self, actor_id, task_id: int, *, user: User) -> None:
+    async def assign_user(
+        self, *, actor: User, task_id: int, target_user: User
+    ) -> None:
         """Menugaskan pengguna ke tugas tertentu.
 
         Args:
@@ -529,34 +528,47 @@ class TaskService:
         Returns:
             TaskAssignee: Objek penugasan tugas yang berhasil dibuat.
         """
+
         task = await self.repo.get_by_id(task_id)
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
-        member_ids = await self.repo.get_project_member_user_ids(task.project_id)
-        ensure_assignee_is_project_member(
-            project_member_user_ids=member_ids, target_user_id=user.id
-        )
+        # pastikan user yang ditugaskan adalah member proyek
+        if actor.role != Role.ADMIN:
+            is_owner = await self.uow.project_repo.ensure_member_in_project(
+                user_id=actor.id,
+                project_id=task.project_id,
+                required_role=RoleProject.OWNER,
+            )
 
-        await self.repo.assign_user_to_task(task, user.id)
+            if not is_owner:
+                raise exceptions.ForbiddenError(
+                    "Tidak punya akses untuk menugaskan user ke task"
+                )
+
+        await self.repo.assign_user_to_task(task=task, target_user_id=target_user.id)
+
+        # catat event
         self.uow.add_event(
             TaskAssignedAddedEvent(
                 task_id=task.id,
                 performed_by=task.id,
                 project_id=task.project_id,
-                user_id=actor_id,
-                assignee_id=user.id,
-                assignee_name=user.name,
+                user_id=actor.id,
+                assignee_id=target_user.id,
+                assignee_name=target_user.name,
             )
         )
 
-    async def unassign_user(self, actor_id: int, user: User, task: Task) -> None:
+    async def unassign_user(
+        self, actor: User, task_id: int, target_user: User
+    ) -> None:
         """Menghapus penugasan pengguna dari tugas tertentu.
 
         Args:
-            actor_id (int): ID pengguna yang mencoba menghapus penugasan.
-            user (User): Pengguna yang akan dihapus penugasannya.
-            task (Task): Tugas yang akan dihapus penugasannya.
+            actor (User): Pengguna yang mencoba menghapus penugasan.
+            target_user (User): Pengguna yang akan dihapus penugasannya.
+            task_id (int): ID tugas yang akan dihapus penugasannya.
 
         Raises:
             exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
@@ -564,21 +576,35 @@ class TaskService:
                 proyek.
         """
 
-        member_ids = await self.repo.get_project_member_user_ids(task.project_id)
-        ensure_assignee_is_project_member(
-            project_member_user_ids=member_ids, target_user_id=user.id
-        )
+        task = await self.repo.get_by_id(task_id)
+        if not task:
+            raise exceptions.TaskNotFoundError("Task not found")
 
-        await self.repo.unassign_user_from_task(user.id, task.id)
+        if actor.role != Role.ADMIN:
+            # pastikan user yang ditugaskan adalah member proyek
+            is_owner = await self.uow.project_repo.ensure_member_in_project(
+                user_id=actor.id,
+                project_id=task.project_id,
+                required_role=RoleProject.OWNER,
+            )
+
+            if not is_owner:
+                raise exceptions.ForbiddenError(
+                    "Tidak punya akses untuk menghapus penugasan user dari task"
+                )
+
+        await self.repo.unassign_user_from_task(
+            target_user_id=target_user.id, task_id=task.id
+        )
 
         self.uow.add_event(
             TaskAssignedRemovedEvent(
                 task_id=task.id,
                 performed_by=task.id,
                 project_id=task.project_id,
-                user_id=actor_id,
-                assignee_id=user.id,
-                assignee_name=user.name,
+                user_id=actor.id,
+                assignee_id=target_user.id,
+                assignee_name=target_user.name,
             )
         )
 

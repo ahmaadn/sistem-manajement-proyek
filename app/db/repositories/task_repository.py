@@ -88,7 +88,9 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def assign_user_to_task(self, task: Task, user_id: int) -> TaskAssignee:
+    async def assign_user_to_task(
+        self, *, task: Task, target_user_id: int
+    ) -> TaskAssignee:
         """
         Menetapkan user ke sebuah Task (idempotent).
         Jika sudah ter-assign, mengembalikan relasi yang ada.
@@ -153,7 +155,9 @@ class InterfaceTaskRepository(Protocol):
         """
         ...
 
-    async def unassign_user_from_task(self, user_id: int, task_id: int) -> None:
+    async def unassign_user_from_task(
+        self, *, target_user_id: int, task_id: int
+    ) -> None:
         """
         Menghapus penugasan user dari sebuah task.
         """
@@ -318,16 +322,21 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             return await self.get_next_display_order(project_id)
         return display_order
 
-    async def assign_user_to_task(self, task: Task, user_id: int) -> TaskAssignee:
+    async def assign_user_to_task(
+        self, *, task: Task, target_user_id: int
+    ) -> TaskAssignee:
         res = await self.session.execute(
             select(TaskAssignee)
-            .where(TaskAssignee.task_id == task.id, TaskAssignee.user_id == user_id)
+            .where(
+                TaskAssignee.task_id == task.id,
+                TaskAssignee.user_id == target_user_id,
+            )
             .limit(1)
         )
         ta = res.scalar_one_or_none()
         if ta:
             return ta
-        ta = TaskAssignee(task_id=task.id, user_id=user_id)
+        ta = TaskAssignee(task_id=task.id, user_id=target_user_id)
         self.session.add(ta)
         await self.session.flush()
         await self.session.refresh(ta)
@@ -446,9 +455,11 @@ class TaskSQLAlchemyRepository(InterfaceTaskRepository):
             "task_cancelled": row.task_cancelled or 0,
         }
 
-    async def unassign_user_from_task(self, user_id: int, task_id: int) -> None:
+    async def unassign_user_from_task(
+        self, *, target_user_id: int, task_id: int
+    ) -> None:
         stmt = delete(TaskAssignee).where(
-            TaskAssignee.user_id == user_id, TaskAssignee.task_id == task_id
+            TaskAssignee.user_id == target_user_id, TaskAssignee.task_id == task_id
         )
         await self.session.execute(stmt)
         await self.session.flush()
