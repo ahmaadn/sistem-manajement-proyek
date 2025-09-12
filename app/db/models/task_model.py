@@ -41,7 +41,7 @@ class Task(Base, TimeStampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     """ID tugas."""
 
-    milestone_id: Mapped[int | None] = mapped_column(
+    milestone_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("milestone.id"), nullable=False
     )
     """ID mileston"""
