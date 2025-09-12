@@ -1,278 +1,23 @@
-# NOTE: untuk semntara menggunakan data dummy
-# implementasi service pegawai akan di kerjakan setalah
-# api dari sistem pegawai siap digunakan
-
 import asyncio
 import logging
 import urllib.parse
-from time import time
-from typing import Any
 
-import aiohttp
-
-from app.core.config.settings import get_settings
-from app.middleware.request import request_object
+from app.client import PegawaiApiClient
 from app.schemas.user import UserBase
 
 logger = logging.getLogger(__name__)
 
-FAKE_USERS = [
-    {
-        "access_token": "dummy_access_token_1",
-        "user_id": 1,
-        "nama": "Admin",
-        "role": "admin",
-        "email": "admin@example.com",
-        "jabatan": "Kepala Admin",
-        "unit_kerja": "Manajemen",
-        "alamat": "Jl. Admin No. 1",
-        "profile_url": "https://randomuser.me/api/portraits/lego/6.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_2",
-        "user_id": 2,
-        "nama": "HRD",
-        "role": "hrd",
-        "email": "hrd@example.com",
-        "jabatan": "HRD Manager",
-        "unit_kerja": "HRD",
-        "alamat": "Jl. HRD No. 2",
-        "profile_url": "https://randomuser.me/api/portraits/lego/4.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_3",
-        "user_id": 3,
-        "nama": "Pegawai Satu",
-        "role": "pegawai",
-        "email": "pegawai1@example.com",
-        "jabatan": "Staff",
-        "unit_kerja": "Operasional",
-        "alamat": "Jl. Pegawai No. 3",
-        "profile_url": "https://randomuser.me/api/portraits/lego/0.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_4",
-        "user_id": 4,
-        "nama": "Pegawai Dua",
-        "role": "pegawai",
-        "email": "pegawai2@example.com",
-        "jabatan": "Staff",
-        "unit_kerja": "Operasional",
-        "alamat": "Jl. Pegawai No. 4",
-        "profile_url": "https://randomuser.me/api/portraits/lego/2.jpg",
-    },
-    {
-        "access_token": "dummy_access_token_5",
-        "user_id": 5,
-        "nama": "Pegawai Tiga",
-        "role": "pegawai",
-        "email": "pegawai3@example.com",
-        "jabatan": "Staff",
-        "unit_kerja": "Operasional",
-        "alamat": "Jl. Pegawai No. 5",
-        "profile_url": "https://randomuser.me/api/portraits/lego/8.jpg",
-    },
-]
-
-
-def _get_bearer_from_ctx() -> str | None:
-    """Ambil Bearer token dari request saat ini (Authorization header)."""
-    try:
-        req = request_object.get()
-    except Exception:
-        return None
-    auth = req.headers.get("authorization") or req.headers.get("Authorization")
-    if not auth:
-        return None
-    parts = auth.split(" ", 1)
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1].strip()
-    return None
-
-
-class _PegawaiApiClient:
-    @staticmethod
-    async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
-        request = request_object.get()
-        try:
-            start_time = time()
-            async with request.app.requests_client.post(  # type: ignore
-                "api/login", json=payload, headers={"Accept": "application/json"}
-            ) as res:
-                res.raise_for_status()
-                data = await res.json()
-
-                # mendapatkan token
-                token = data.get("token").split("|")[-1]
-
-                # get data user
-                user = data.get("user")
-                user_id = user.get("id")
-
-                logger.debug("response login: %s", data)
-                logger.debug("time request /api/login: %s", time() - start_time)
-                return {"access_token": token, "user": user, "user_id": user_id}
-        except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during login request: %s", e)
-            return None
-
-    @staticmethod
-    async def validation_token(*, token: str | None = None):
-        token = token or _get_bearer_from_ctx()
-        if not token:
-            logger.warning("get_pegawai_me: token tidak tersedia di context/header.")
-            return None
-
-        request = request_object.get()
-        try:
-            start_time = time()
-            async with request.app.requests_client.post(  # type: ignore
-                "api/auth/validation",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json",
-                },
-            ) as res:
-                res.raise_for_status()
-                data = await res.json()
-
-                logger.debug("response validate_token: %s", data)
-                logger.debug(
-                    "time request /auth/validation: %s", time() - start_time
-                )
-                return True
-        except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during validate_token request: %s", e)
-            return False
-
-    @staticmethod
-    async def get_pegawai_me(*, token: str | None = None):
-        token = token or _get_bearer_from_ctx()
-        if not token:
-            logger.warning("get_pegawai_me: token tidak tersedia di context/header.")
-            return None
-        request = request_object.get()
-        try:
-            start_time = time()
-            async with request.app.requests_client.get(  # type: ignore
-                "api/pegawai/me",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json",
-                },
-            ) as res:
-                res.raise_for_status()
-                data = await res.json()
-                logger.debug("response get_pegawai_me: %s", data)
-                logger.debug("time request /pegawai/me: %s", time() - start_time)
-                return data
-        except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during get_pegawai_me request: %s", e)
-            return None
-
-    @staticmethod
-    async def get_pegawai_detail(*, user_id: int, token: str | None = None):
-        token = token or _get_bearer_from_ctx()
-        if not token:
-            logger.warning(
-                "get_pegawai_detail: token tidak tersedia di context/header."
-            )
-            return None
-
-        request = request_object.get()
-        try:
-            start_time = time()
-            async with request.app.requests_client.get(  # type: ignore
-                f"api/pegawai/{user_id}",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json",
-                },
-            ) as res:
-                res.raise_for_status()
-                data = await res.json()
-                logger.debug("response get_pegawai_detail: %s", data)
-                logger.debug(
-                    "time request api/pegawai/%d: %s", user_id, time() - start_time
-                )
-                return data
-        except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during get_pegawai_me request: %s", e)
-            return None
-
-    @staticmethod
-    async def get_list_pegawai(*, token: str | None = None):
-        token = token or _get_bearer_from_ctx()
-        if not token:
-            logger.warning(
-                "get_list_pegawai: token tidak tersedia di context/header."
-            )
-            return None
-
-        request = request_object.get()
-        try:
-            start_time = time()
-            async with request.app.requests_client.get(  # type: ignore
-                "api/pegawai-list",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json",
-                },
-            ) as res:
-                res.raise_for_status()
-                data = await res.json()
-                logger.debug("response get_list_pegawai: %s", data)
-                logger.debug("time request /pegawai: %s", time() - start_time)
-                return data
-        except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during get_list_pegawai request: %s", e)
-            return None
-
-    @staticmethod
-    async def get_bulk_pegawai(*, ids: list[int], token: str | None = None):
-        token = token or _get_bearer_from_ctx()
-        if not token:
-            logger.warning(
-                "get_bulk_pegawai: token tidak tersedia di context/header."
-            )
-            return None
-
-        request = request_object.get()
-        try:
-            start_time = time()
-            async with request.app.requests_client.post(  # type: ignore
-                "api/pegawai/bulk",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json",
-                },
-                json={"ids": ids},
-            ) as res:
-                res.raise_for_status()
-                data = await res.json()
-                logger.debug("response get_bulk_pegawai: %s", data)
-                logger.debug("time request /pegawai-bulk: %s", time() - start_time)
-                return data
-        except (ValueError, aiohttp.ClientError) as e:
-            logger.error("Error during get_bulk_pegawai request: %s", e)
-            return None
-
 
 class PegawaiService:
-    def __init__(self) -> None:
-        self.api_url = get_settings().API_PEGAWAI
-
     async def validate_token(self, token: str) -> bool:
         """Validasi token dengan mencocokkan pada FAKE_USERS."""
-        result = await asyncio.gather(
-            _PegawaiApiClient.validation_token(token=token)
-        )
+        result = await asyncio.gather(PegawaiApiClient.validation_token(token=token))
         return bool(result[0])
 
     async def get_user_info(self, user_id: int):
-        """Ambil info user berdasarkan user_id, tanpa access_token."""
+        """Ambil info user berdasarkan user_id."""
         result = await asyncio.gather(
-            _PegawaiApiClient.get_pegawai_detail(user_id=user_id)
+            PegawaiApiClient.get_pegawai_detail(user_id=user_id)
         )
         user = result[0]
         if not user:
@@ -281,7 +26,7 @@ class PegawaiService:
 
     async def get_user_info_by_token(self, token: str):
         """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
-        result = await asyncio.gather(_PegawaiApiClient.get_pegawai_me(token=token))
+        result = await asyncio.gather(PegawaiApiClient.get_pegawai_me(token=token))
         user = result[0]
         if not user:
             return None
@@ -289,45 +34,44 @@ class PegawaiService:
 
     async def login(self, email: str, password: str):
         """
-        Login via API_PEGAWAI: POST {api_url}/login. Return access_token jika
+        Login via BASE_API_PEGAWAI: POST {api_url}/login. Return access_token jika
         berhasil.
         """
         payload = {"email": email, "password": password}
-        result = await asyncio.gather(_PegawaiApiClient.login(payload=payload))
+        result = await asyncio.gather(PegawaiApiClient.login(payload=payload))
         return result[0]
 
     async def map_to_pegawai_info(self, data):
-        """Map API response to PegawaiInfo.
+        """Map API response to UserBase.
 
         Args:
             data (dict): API response data.
 
         Returns:
-            PegawaiInfo: Mapped PegawaiInfo object.
+            UserBase: Mapped UserBase object.
         """
 
         role = data.get("role")
 
         if role == "admin":
-            name = data["email"]
-            position = data["role"]
+            name = data.get("email", "")
+            position = role or ""
         else:
-            # handle pegawai
-            pegawai = data.get("pegawai")
-            if not pegawai:
-                pegawai = {
-                    "nama": data.get("email"),
-                    "position": data.get("position"),
-                }
+            # handle pegawai biasa
+            pegawai = data.get("pegawai") or {
+                "nama": data.get("email", ""),
+                "position": data.get("position", role),
+            }
 
             name = pegawai.get("nama", pegawai.get("nama_lengkap", ""))
             position = pegawai.get("jabatan", "")
 
         # handle profile_url
-        profile_photo_path = data.get("profile_photo_path")
-        safe_name = name.strip()
-        encoded_name = urllib.parse.quote_plus(safe_name)
-        dummy_profile_url = f"https://ui-avatars.com/api/?name={encoded_name}&background=random&bold=true&size=256"
+        profile_photo_path = data.get("profile_photo_path", None)
+        if not profile_photo_path:
+            safe_name = name.strip()
+            encoded_name = urllib.parse.quote_plus(safe_name)
+            profile_photo_path = f"https://ui-avatars.com/api/?name={encoded_name}&background=random&bold=true&size=256"
 
         return UserBase(
             id=data.get("id"),
@@ -335,26 +79,16 @@ class PegawaiService:
             employee_role=data.get("role"),
             email=data.get("email"),
             position=position,
-            profile_url=profile_photo_path or dummy_profile_url,
-        )
-
-    def _map_to_user_profile(self, data):
-        return UserBase(
-            id=data.get("user_id"),
-            name=data.get("nama"),
-            employee_role=data.get("role"),
-            email=data.get("email"),
-            position=data.get("jabatan"),
-            profile_url=data.get("profile_url"),
+            profile_url=profile_photo_path,
         )
 
     async def list_user(self) -> list[UserBase]:
         """Mendapatkan daftar semua pengguna.
 
         Returns:
-            list[PegawaiInfo]: Daftar informasi pegawai.
+            list[UserBase]: Daftar informasi pegawai.
         """
-        result = await asyncio.gather(_PegawaiApiClient.get_list_pegawai())
+        result = await asyncio.gather(PegawaiApiClient.get_list_pegawai())
         result = result[0]
         if not result:
             return []
@@ -370,9 +104,9 @@ class PegawaiService:
             data (list[int]): Daftar ID pegawai.
 
         Returns:
-            list[PegawaiInfo | None]: Daftar info pegawai atau None sesuai urutan ID.
+            list[UserBase | None]: Daftar info pegawai atau None sesuai urutan ID.
         """
-        result = await asyncio.gather(_PegawaiApiClient.get_bulk_pegawai(ids=data))
+        result = await asyncio.gather(PegawaiApiClient.get_bulk_pegawai(ids=data))
         users = result[0]
         if not users or len(users) == 0:
             return []

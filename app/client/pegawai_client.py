@@ -1,0 +1,334 @@
+import logging
+from time import perf_counter
+from typing import Any
+from urllib.parse import urljoin
+
+from fastapi import Request
+
+from app.core.config.settings import get_settings
+from app.middleware.request import request_object
+
+logger = logging.getLogger(__name__)
+
+
+class PegawaiApiUrls:
+    BASE = get_settings().BASE_API_PEGAWAI.rstrip("/") + "/"
+    """
+    Base URL untuk layanan pegawai.
+    """
+
+    LOGIN = urljoin(BASE, "api/login")
+    """
+    URL endpoint untuk login. Gunakan metode POST dengan payload JSON
+    berisi 'email' dan 'password'.
+    """
+
+    VALIDATION = urljoin(BASE, "api/auth/validation")
+    """
+    URL endpoint untuk validasi token. Gunakan metode POST dengan
+    header Authorization.
+    """
+
+    PEGAWAI_ME = urljoin(BASE, "api/pegawai/me")
+    """
+    URL endpoint untuk mendapatkan data pegawai saat ini. Gunakan
+    metode GET dengan header Authorization.
+    """
+
+    PEGAWAI_LIST = urljoin(BASE, "api/pegawai-list")
+    """
+    URL endpoint untuk mendapatkan daftar pegawai. Gunakan metode GET
+    dengan header Authorization.
+    """
+
+    PEGAWAI_BULK = urljoin(BASE, "api/pegawai/bulk")
+    """
+    URL endpoint untuk melakukan operasi bulk pada pegawai. Gunakan
+    metode POST dengan header Authorization dan payload JSON yang sesuai.
+    """
+
+    @staticmethod
+    def pegawai_detail(user_id: int) -> str:
+        """Bangun URL detail pegawai.
+
+        Args:
+            user_id: ID pengguna/pegawai.
+
+        Returns:
+            URL absolut endpoint detail pegawai.
+        """
+        return urljoin(PegawaiApiUrls.BASE, f"api/pegawai/{user_id}")
+
+
+def _get_bearer_from_ctx(req: Request) -> dict:
+    """Ambil header Authorization Bearer dari request aktif.
+
+    Jika header tidak diawali 'Bearer ', ia akan ditambahkan secara otomatis.
+
+    Args:
+        req: Objek request yang memiliki atribut headers.
+
+    Returns:
+        Dict header Authorization jika tersedia, atau dict kosong jika tidak ada.
+    """
+    auth = req.headers.get("authorization") or req.headers.get("Authorization")
+    if not auth:
+        return {}
+
+    if not str(auth).lower().startswith("bearer "):
+        auth = f"Bearer {auth}"
+
+    return {"Authorization": auth}
+
+
+def _auth_headers(req: Request, token: str | None) -> dict[str, str]:
+    """Bangun header untuk permintaan HTTP dengan Accept JSON.
+
+    Args:
+        req: Objek request aktif (untuk fallback Authorization).
+        token: Token Bearer eksplisit. Jika diberikan, digunakan sebagai prioritas.
+
+    Returns:
+        Dict header yang berisi Authorization (jika ada) dan Accept.
+    """
+    if token:
+        return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    return {**_get_bearer_from_ctx(req), "Accept": "application/json"}
+
+
+class PegawaiApiClient:
+    @staticmethod
+    async def _request(
+        method: str,
+        url: str,
+        *,
+        json: Any = None,
+        headers: dict[str, str] | None = None,
+    ):
+        """Wrapper generik untuk mengirim request HTTP.
+
+        Args:
+            method (str): Metode HTTP (GET, POST, dst.).
+            url (str): URL absolut endpoint.
+            json (Any, optional): Payload JSON. Defaults to None.
+            headers (dict[str, str] | None, optional): Header tambahan. Defaults
+                to None.
+
+        Raises:
+            RuntimeError: Jika request.state.client tidak tersedia.
+            Exception: Jika permintaan HTTP gagal (dilempar ulang setelah logging).
+
+        Returns:
+            _type_: Objek response dari client HTTP yang digunakan.
+        """
+
+        # dapatkan request aktif dari context var
+        request = request_object.get()
+
+        # dapatkan client HTTP dari request.state, client menggunakan
+        # httpx.AsyncClient
+        client = getattr(request.state, "client", None)
+        if client is None:
+            raise RuntimeError(
+                "HTTP client is not available on request.state.client"
+            )
+
+        # lacak waktu mulai untuk logging durasi
+        start = perf_counter()
+        try:
+            # kirim permintaan HTTP
+            resp = await client.request(method, url, json=json, headers=headers)
+
+            duration_ms = (perf_counter() - start) * 1000
+            logger.debug(
+                "%s %s -> %s in %.2f ms",
+                method.upper(),
+                url,
+                resp.status_code,
+                duration_ms,
+            )
+
+            # kirim response kembali
+            return resp
+        except Exception:
+            logger.exception("HTTP %s %s failed", method.upper(), url)
+            raise
+
+    @staticmethod
+    async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Lakukan autentikasi dan ambil token akses.
+
+        Args:
+            payload (dict[str, Any]): Body login (mis. email dan password).
+
+        Returns:
+            dict[str, Any] | None: berisi 'access_token', 'user', dan 'user_id'
+                jika sukses; None jika gagal/format tak sesuai.
+        """
+        try:
+            # mengirim request login
+            resp = await PegawaiApiClient._request(
+                "POST",
+                PegawaiApiUrls.LOGIN,
+                json=payload,
+                headers={"Accept": "application/json"},
+            )
+
+            # periksa status code
+            if resp.status_code != 200:
+                logger.warning(
+                    "Login failed: %s - %s",
+                    resp.status_code,
+                    getattr(resp, "text", ""),
+                )
+                return None
+
+            # ekstrak token dan info user dari response
+            data = resp.json()
+            raw_token = data.get("token")
+            user = data.get("user") or {}
+
+            # token format di laravel seperti ini num|token maka ambil bagian
+            # setelah '|'
+            token = (
+                raw_token.split("|")[-1]
+                if isinstance(raw_token, str) and "|" in raw_token
+                else raw_token
+            )
+            user_id = user.get("id")
+
+            if not token or user_id is None:
+                logger.warning("Unexpected login payload: %s", data)
+                return None
+
+            return {"access_token": token, "user": user, "user_id": user_id}
+        except Exception:
+            logger.exception("Error during login request")
+            return None
+
+    @staticmethod
+    async def validation_token(*, token: str | None = None) -> bool:
+        """Validasi token Bearer ke layanan Pegawai.
+
+        Args:
+            token (str | None): Token Bearer eksplisit (opsional). Jika tidak ada,
+                fallback ke header Authorization request. Default to None
+
+        Returns:
+            True jika valid (HTTP 200), False jika tidak valid atau terjadi error.
+        """
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        try:
+            resp = await PegawaiApiClient._request(
+                "POST", PegawaiApiUrls.VALIDATION, headers=headers
+            )
+            return resp.status_code == 200
+        except Exception:
+            logger.exception("Error during validation_token request")
+            return False
+
+    @staticmethod
+    async def get_pegawai_me(*, token: str | None = None):
+        """Ambil profil pegawai berdasarkan token saat ini.
+
+        Args:
+            token (str | None): Token Bearer eksplisit (opsional). Default to None.
+
+        Returns:
+            Objek/dict data pegawai jika sukses, else None.
+        """
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        try:
+            resp = await PegawaiApiClient._request(
+                "GET", PegawaiApiUrls.PEGAWAI_ME, headers=headers
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.debug("response get_pegawai_me: %s", data)
+                return data
+            return None
+        except Exception:
+            logger.exception("Error during get_pegawai_me request")
+            return None
+
+    @staticmethod
+    async def get_pegawai_detail(*, user_id: int, token: str | None = None):
+        """Ambil detail pegawai berdasarkan user_id.
+
+        Args:
+            user_id (int): ID pengguna/pegawai.
+            token (str | None): Token Bearer eksplisit (opsional). Default to None.
+
+        Returns:
+            Objek/dict detail pegawai jika sukses, else None.
+        """
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        try:
+            resp = await PegawaiApiClient._request(
+                "GET", PegawaiApiUrls.pegawai_detail(user_id), headers=headers
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.debug("response get_pegawai_detail: %s", data)
+                return data
+            return None
+        except Exception:
+            logger.exception("Error during get_pegawai_detail request")
+            return None
+
+    @staticmethod
+    async def get_list_pegawai(*, token: str | None = None):
+        """Ambil daftar pegawai.
+
+        Args:
+            token (str | None): Token Bearer eksplisit (opsional). Default to None.
+
+        Returns:
+            List/array pegawai jika sukses, else None.
+        """
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        try:
+            resp = await PegawaiApiClient._request(
+                "GET", PegawaiApiUrls.PEGAWAI_LIST, headers=headers
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.debug("response get_list_pegawai: %s", data)
+                return data
+            return None
+        except Exception:
+            logger.exception("Error during get_list_pegawai request")
+            return None
+
+    @staticmethod
+    async def get_bulk_pegawai(*, ids: list[int], token: str | None = None):
+        """Ambil data pegawai secara bulk berdasarkan daftar ID.
+
+        Args:
+            ids (list[int]): Daftar ID pegawai.
+            token (str | None): Token Bearer eksplisit (opsional). Default to None.
+
+        Returns:
+            List/array data pegawai jika sukses, else None.
+        """
+        req = request_object.get()
+        headers = {**_auth_headers(req, token), "Content-Type": "application/json"}
+        try:
+            resp = await PegawaiApiClient._request(
+                "POST",
+                PegawaiApiUrls.PEGAWAI_BULK,
+                json={"ids": ids},
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                logger.debug("response get_bulk_pegawai: %s", data)
+                return data
+            return None
+        except Exception:
+            logger.exception("Error during get_bulk_pegawai request")
+            return None

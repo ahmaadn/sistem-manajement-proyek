@@ -1,10 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
 
-import aiohttp
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from httpx import AsyncClient
 
 from app.api import api
 from app.core.config import settings
@@ -25,21 +25,18 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI application."""
 
-    app.requests_client = aiohttp.ClientSession(  # type: ignore
-        base_url="http://127.0.0.1:4321",
-        timeout=aiohttp.ClientTimeout(connect=2, sock_read=5, total=7),
-        connector=aiohttp.TCPConnector(
-            limit=100,
-            limit_per_host=20,
-            ttl_dns_cache=300,  # cache DNS 5 menit
-            enable_cleanup_closed=True,
-        )
-    )
+    # buat semua tabel database yang diperlukan
     await create_db_and_tables()
+
+    # muat semua model database diperlukan untuk memastikan semua model terdafta
     load_all_models()
+
+    # register event handlers untuk domain events
     register_event_handlers()
-    yield
-    await app.requests_client.close()  # type: ignore
+
+    # inisialisasi httpx.AsyncClient untuk digunakan di seluruh aplikasi
+    async with AsyncClient() as client:
+        yield {"client": client}
 
 
 def get_app() -> FastAPI:
