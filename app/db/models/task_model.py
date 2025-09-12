@@ -52,7 +52,7 @@ class Task(Base, TimeStampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Deskripsi tugas."""
 
-    status: Mapped[StatusTask | None] = mapped_column(
+    status: Mapped[StatusTask] = mapped_column(
         Enum(StatusTask, name="status_task"), nullable=True
     )
     """Status tugas."""
