@@ -45,6 +45,7 @@ from app.schemas.project import (
     ProjectStats,
     ProjectSummary,
     ProjectUpdate,
+    TaskEstimationItem,
 )
 from app.schemas.user import ProjectParticipation, User
 from app.services.pegawai_service import PegawaiService
@@ -683,6 +684,20 @@ class ProjectService:
                 high=pr_high, medium=pr_medium, low=pr_low
             ),
             weakly_report=week_items,
+            tasks_estimation=[
+                TaskEstimationItem(
+                    task_id=t.id,
+                    milestone_id=t.milestone_id,
+                    name=t.name,
+                    status=t.status,
+                    finish_duration=t.finish_duration,
+                    estimated_duration=t.estimated_duration,
+                    start_date=t.start_date,
+                    due_date=t.due_date,
+                    completed_at=t.completed_at,
+                )
+                for t in tasks
+            ],
         )
 
     async def get_project_report(
@@ -701,12 +716,13 @@ class ProjectService:
         start_day = week_start or (today - timedelta(days=6))
         end_day = start_day + timedelta(days=6)
 
-        summary_data, assignee_rows, weekly_map = await asyncio.gather(
+        summary_data, assignee_rows, weekly_map, tasks = await asyncio.gather(
             self.uow.task_repo.get_report_summary_priority(project_id),
             self.uow.task_repo.get_report_assignee_stats(project_id),
             self.uow.task_repo.get_report_weekly_stats(
                 project_id, start_day, end_day
             ),
+            self.uow.task_repo.list_by_filters(filters={"project_id": project_id}),
         )
 
         # Fetch user info (assignee) sekali
@@ -752,4 +768,18 @@ class ProjectService:
                 low=summary_data["low"],
             ),
             weakly_report=weekly_items,
+            tasks_estimation=[
+                TaskEstimationItem(
+                    task_id=t.id,
+                    milestone_id=t.milestone_id,
+                    name=t.name,
+                    status=t.status,
+                    finish_duration=t.finish_duration,
+                    estimated_duration=t.estimated_duration,
+                    start_date=t.start_date,
+                    due_date=t.due_date,
+                    completed_at=t.completed_at,
+                )
+                for t in tasks
+            ],
         )
