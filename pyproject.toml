@@ -5,13 +5,13 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "aiohttp>=3.12.15",
     "alembic>=1.16.4",
     "asyncpg>=0.30.0",
     "cloudinary>=1.44.1",
     "fastapi-mail>=1.5.0",
     "fastapi-utils>=0.8.0",
     "fastapi[standard]>=0.116.1",
+    "httpx[http2]>=0.28.1",
     "pusher>=3.3.3",
     "python-multipart>=0.0.20",
     "sqlalchemy[asyncio]>=2.0.42",
@@ -39,7 +39,6 @@ exclude = [
     "buck-out",
     "build",
     "venv",
-    "client",
     "migrations",
 ]
 

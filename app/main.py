@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     register_event_handlers()
 
     # inisialisasi httpx.AsyncClient untuk digunakan di seluruh aplikasi
-    async with AsyncClient() as client:
+    async with AsyncClient(http2=True) as client:
         yield {"client": client}
 
 
