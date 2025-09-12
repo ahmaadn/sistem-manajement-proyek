@@ -114,7 +114,6 @@ class PegawaiService:
         map_users = []
         for user in users:
             if user:
-                print(user)
                 map_users.append(await self.map_to_pegawai_info(user))
             else:
                 map_users.append(None)
