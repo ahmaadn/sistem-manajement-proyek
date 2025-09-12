@@ -1,3 +1,3 @@
-from .pegawai_client import PegawaiApiClient
+from .pegawai_client import PegawaiAiohttpClient, PegawaiApiClient
 
-__all__ = ("PegawaiApiClient",)
+__all__ = ("PegawaiAiohttpClient", "PegawaiApiClient")

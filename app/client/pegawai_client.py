@@ -7,6 +7,7 @@ from fastapi import Request
 
 from app.core.config.settings import get_settings
 from app.middleware.request import request_object
+from app.utils.aiohttp_client import SingletonAiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -332,3 +333,115 @@ class PegawaiApiClient:
         except Exception:
             logger.exception("Error during get_bulk_pegawai request")
             return None
+
+
+class PegawaiAiohttpClient:
+    """Client HTTP berbasis aiohttp via SingletonAiohttp."""
+
+    @staticmethod
+    async def _request(
+        method: str,
+        url: str,
+        *,
+        json: Any = None,
+        headers: dict[str, str] | None = None,
+    ) -> tuple[int, Any | None, str]:
+        start = perf_counter()
+        client = SingletonAiohttp.get_aiohttp_client()
+        try:
+            async with client.request(
+                method, url, json=json, headers=headers
+            ) as resp:
+                status = resp.status
+                text = await resp.text()
+                data = None
+                ct = resp.headers.get("Content-Type", "")
+                if "application/json" in ct.lower():
+                    try:
+                        data = await resp.json()
+                    except Exception:
+                        data = None
+                logger.debug(
+                    "%s %s -> %s in %.2f ms",
+                    method.upper(),
+                    url,
+                    status,
+                    (perf_counter() - start) * 1000,
+                )
+                return status, data, text
+        except Exception:
+            logger.exception("HTTP %s %s failed (aiohttp)", method.upper(), url)
+            raise
+
+    @staticmethod
+    async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
+        status, data, text = await PegawaiAiohttpClient._request(
+            "POST",
+            PegawaiApiUrls.LOGIN,
+            json=payload,
+            headers={"Accept": "application/json"},
+        )
+        if status != 200 or not isinstance(data, dict):
+            logger.warning("Login failed: %s - %s", status, text)
+            return None
+
+        raw_token = data.get("token")
+        user = data.get("user") or {}
+        token = (
+            raw_token.split("|")[-1]
+            if isinstance(raw_token, str) and "|" in raw_token
+            else raw_token
+        )
+        user_id = user.get("id")
+        if not token or user_id is None:
+            logger.warning("Unexpected login payload: %s", data)
+            return None
+        return {"access_token": token, "user": user, "user_id": user_id}
+
+    @staticmethod
+    async def validation_token(*, token: str | None = None) -> bool:
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        status, _, _ = await PegawaiAiohttpClient._request(
+            "POST", PegawaiApiUrls.VALIDATION, headers=headers
+        )
+        return status == 200
+
+    @staticmethod
+    async def get_pegawai_me(*, token: str | None = None):
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        status, data, _ = await PegawaiAiohttpClient._request(
+            "GET", PegawaiApiUrls.PEGAWAI_ME, headers=headers
+        )
+        return data if status == 200 else None
+
+    @staticmethod
+    async def get_pegawai_detail(*, user_id: int, token: str | None = None):
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        status, data, _ = await PegawaiAiohttpClient._request(
+            "GET", PegawaiApiUrls.pegawai_detail(user_id), headers=headers
+        )
+        return data if status == 200 else None
+
+    @staticmethod
+    async def get_list_pegawai(*, token: str | None = None):
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        status, data, _ = await PegawaiAiohttpClient._request(
+            "GET", PegawaiApiUrls.PEGAWAI_LIST, headers=headers
+        )
+        return data if status == 200 else None
+
+    @staticmethod
+    async def get_bulk_pegawai(*, ids: list[int], token: str | None = None):
+        req = request_object.get()
+        headers = {**_auth_headers(req, token), "Content-Type": "application/json"}
+        status, data, _ = await PegawaiAiohttpClient._request(
+            "POST",
+            PegawaiApiUrls.PEGAWAI_BULK,
+            json={"ids": ids},
+            headers=headers,
+        )
+        return data if status == 200 else None
