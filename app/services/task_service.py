@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import selectinload
@@ -11,7 +12,7 @@ from app.core.domain.events.task import (
     TaskStatusChangedEvent,
     TaskUpdatedEvent,
 )
-from app.core.domain.policies.task import (
+from app.core.policies.task import (
     ensure_assignee_is_project_member,
     ensure_only_assignee_can_change_status,
 )
@@ -21,11 +22,11 @@ from app.db.models.task_assigne_model import TaskAssignee
 from app.db.models.task_model import StatusTask, Task
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.task import (
-    TaskAttachmentResponse,
+    TaskAssigneeRead,
+    TaskAttachmentRead,
     TaskCreate,
-    TaskDetailResponse,
+    TaskDetail,
     TaskUpdate,
-    UserTaskAssignmentResponse,
 )
 from app.schemas.user import User
 from app.services.pegawai_service import PegawaiService
@@ -55,11 +56,9 @@ class TaskService:
         Returns:
             Task | None: Tugas yang diminta, atau None jika tidak ditemukan.
         """
-        return await self.repo.get(task_id, options=options)
+        return await self.repo.get_by_id(task_id, options=options)
 
-    async def get_detail_task(
-        self, *, user: User, task_id: int
-    ) -> TaskDetailResponse:
+    async def get_detail_task(self, *, user: User, task_id: int) -> TaskDetail:
         """Mendapatkan detail tugas untuk proyek tertentu.
 
         Args:
@@ -74,7 +73,7 @@ class TaskService:
         Returns:
             Task: Tugas yang diminta.
         """
-        task = await self.repo.get(
+        task = await self.repo.get_by_id(
             task_id,
             options=[
                 selectinload(Task.assignees),
@@ -100,7 +99,7 @@ class TaskService:
             data=assigns_user_ids
         )
         users = [
-            UserTaskAssignmentResponse(
+            TaskAssigneeRead(
                 user_id=user.id,
                 name=user.name,
                 email=user.email,
@@ -112,19 +111,20 @@ class TaskService:
 
         # attachments
         attachments = [
-            TaskAttachmentResponse(
-                attachment_id=attachment.id,
+            TaskAttachmentRead(
+                id=attachment.id,
                 file_name=attachment.file_name,
                 file_path=attachment.file_path,
                 file_size=attachment.file_size,
                 created_at=attachment.created_at,
+                mime_type=attachment.mime_type,
             )
-            for attachment in await self.uow.attachment_repo.fetch_attachments_for_task(
+            for attachment in await self.uow.attachment_repo.list_by_task_without_comment(
                 task_id=task.id
             )
         ]
 
-        return TaskDetailResponse(
+        return TaskDetail(
             id=task.id,
             name=task.name,
             description=task.description,
@@ -158,7 +158,7 @@ class TaskService:
         Returns:
             list[Task]: Daftar tugas yang ditemukan.
         """
-        return await self.repo.list(
+        return await self.repo.list_by_filters(
             filters=filters, order_by=order_by, custom_query=custom_query
         )
 
@@ -176,7 +176,10 @@ class TaskService:
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
-        project_exists, is_member = await self.uow.project_repo.get_membership_flags(
+        (
+            project_exists,
+            is_member,
+        ) = await self.uow.project_repo.get_project_membership_flags(
             user_id=user.id, project_id=task.project_id
         )
 
@@ -188,7 +191,7 @@ class TaskService:
                 "hanya anggota proyek yang dapat mengakses sub-tugas"
             )
 
-        return await self.repo.list(
+        return await self.repo.list_by_filters(
             filters={"parent_id": task.id},
             order_by=Task.display_order,
             custom_query=lambda s: s.options(selectinload(Task.sub_tasks)),
@@ -215,7 +218,7 @@ class TaskService:
             raise exceptions.MilestoneNotFoundError("Milestone tidak ditemukan")
 
         # Cek status member
-        is_owner = await self.uow.project_repo.is_project_owner(
+        is_owner = await self.uow.project_repo.is_user_owner_of_project(
             user_id=user.id, project_id=milestone.project_id
         )
 
@@ -226,18 +229,38 @@ class TaskService:
 
         # buat task
         data = payload.model_dump(exclude_unset=True)
+        estimated_duration = 0
+
         data.update(
             {
                 "created_by": user.id,
                 "milestone_id": milestone.id,
                 "project_id": milestone.project_id,
-                "display_order": await self.repo.validate_display_order(
+                "display_order": await self.repo.ensure_valid_display_order(
                     project_id=milestone.project_id,
                     display_order=payload.display_order,
                 ),
+                "estimated_duration": estimated_duration,  # Set 0 untuk sementara
             }
         )
-        return await self.uow.task_repo.create(payload=data)
+
+        task = await self.uow.task_repo.create_task(payload=data)
+
+        # Jika start_date tidak diisi, set ke created_at
+        start_date = task.created_at if task.start_date is None else task.start_date
+
+        # Hitung estimasi durasi dalam menit dari due_date - start_date.
+        # Jika salah satu bernilai None, jangan dihitung.
+        if (
+            task.estimated_duration is None or task.estimated_duration == 0
+        ) and task.due_date:
+            delta_minutes = int((task.due_date - start_date).total_seconds() // 60)
+            estimated_duration = max(0, delta_minutes)
+
+        return await self.uow.task_repo.update_task(
+            task,
+            {"estimated_duration": estimated_duration, "start_date": start_date},
+        )
 
     async def create_subtask(
         self, *, user: User, task_id: int, payload: TaskCreate
@@ -253,12 +276,12 @@ class TaskService:
             Task: Tugas yang telah dibuat.
         """
         # get milestone
-        parent_task = await self.repo.get(task_id)
+        parent_task = await self.repo.get_by_id(task_id)
         if not parent_task:
             raise exceptions.TaskNotFoundError("Task tidak ditemukan")
 
         # Cek status member
-        is_owner = await self.uow.project_repo.is_project_owner(
+        is_owner = await self.uow.project_repo.is_user_owner_of_project(
             user_id=user.id, project_id=parent_task.project_id
         )
 
@@ -275,13 +298,13 @@ class TaskService:
                 "milestone_id": parent_task.milestone_id,
                 "project_id": parent_task.project_id,
                 "parent_id": parent_task.id,
-                "display_order": await self.repo.validate_display_order(
+                "display_order": await self.repo.ensure_valid_display_order(
                     project_id=parent_task.project_id,
                     display_order=payload.display_order,
                 ),
             }
         )
-        return await self.uow.task_repo.create(payload=data)
+        return await self.uow.task_repo.create_task(payload=data)
 
     async def update_task(
         self, *, user: User, task_id: int, payload: TaskUpdate
@@ -299,23 +322,33 @@ class TaskService:
         Returns:
             Task: Tugas yang telah diperbarui.
         """
-        task = await self.repo.get(task_id)
+        task = await self.repo.get_by_id(task_id)
 
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
-        is_owner = self.uow.project_repo.ensure_member_in_project(
+        # cek status member (Owner)
+        is_owner = await self.uow.project_repo.ensure_member_in_project(
             user_id=user.id,
             project_id=task.project_id,
             required_role=RoleProject.OWNER,
         )
 
+        # hanya owner project dan admin yang bisa update task
         if not is_owner and user.role != Role.ADMIN:
             raise exceptions.ForbiddenError(
                 "Tidak punya akses untuk mengupdate task"
             )
 
-        updated = await self.repo.update(task, payload)
+        task_update_data: dict[str, Any] = payload.model_dump(exclude_unset=True)
+
+        # handle jika status berubah ke COMPLETED atau dari COMPLETED ke status lain
+        if payload.status:
+            task_update_data.update(
+                **self.handle_completed_status(payload.status, task, task.status)
+            )
+
+        updated = await self.repo.update_task(task, task_update_data)
 
         self.uow.add_event(
             TaskUpdatedEvent(
@@ -360,7 +393,9 @@ class TaskService:
         Raises:
             exceptions.TaskNotFoundError: Jika tugas tidak ditemukan.
         """
-        task = await self.repo.get(task_id, options=[selectinload(Task.sub_tasks)])
+        task = await self.repo.get_by_id(
+            task_id, options=[selectinload(Task.sub_tasks)]
+        )
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
@@ -374,9 +409,9 @@ class TaskService:
             raise exceptions.ForbiddenError("Tidak punya akses untuk menghapus task")
 
         # delete subtask
-        await self.repo.cascade_soft_delete_subtasks(task.id)
+        await self.repo.cascade_hard_delete_subtasks(task.id)
         # kemudian delete task
-        await self.repo.delete(task)
+        await self.repo.hard_delete_task(task)
 
     # Status change
     async def change_status(
@@ -398,27 +433,86 @@ class TaskService:
             Task: Tugas yang telah diperbarui.
         """
 
-        task = await self.repo.get_task_with_assignees(task_id)
+        # Mendapatkan task beserta assignees-nya
+        task = await self.repo.get_by_id_with_assignees(task_id)
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
+        # pastikan hanya assignee (user yang ditugaskan) yang bisa mengubah status
         ensure_only_assignee_can_change_status(
             task_assignee_user_ids=[a.user_id for a in task.assignees],
             actor_user_id=actor_user_id,
         )
 
-        old = getattr(task.status, "name", str(task.status))
-        updated = await self.repo.update(task, {"status": new_status})
+        prev_status = task.status
+        payload_update: dict[str, Any] = {"status": new_status}
+
+        # handle jika status berubah ke COMPLETED atau dari COMPLETED ke status lain
+        payload_update.update(
+            **self.handle_completed_status(new_status, task, prev_status)
+        )
+
+        task = await self.repo.update_task(task, payload_update)
+
+        # catat event
         self.uow.add_event(
             TaskStatusChangedEvent(
                 performed_by=actor_user_id,
                 task_id=task.id,
                 project_id=task.project_id,
-                old_status=old,
+                old_status=prev_status,
                 new_status=getattr(new_status, "name", str(new_status)),
             )
         )
-        return updated
+        return task
+
+    def handle_completed_status(
+        self,
+        new_status: StatusTask,
+        task: Task,
+        prev_status: StatusTask,
+    ) -> dict[str, Any]:
+        """Mengelola status tugas yang telah selesai.
+
+        Args:
+            new_status (StatusTask): Status baru yang akan diterapkan.
+            task (Task): Tugas yang akan diperbarui.
+            prev_status (StatusTask): Status sebelumnya dari tugas.
+
+        Returns:
+            dict[str, Any]: Payload yang berisi pembaruan untuk tugas.
+        """
+        payload_update = {}
+        if new_status == StatusTask.COMPLETED:
+            # Jika status diubah ke COMPLETED, set tanggal selesai (completed_at)
+            completed_at = datetime.now(timezone.utc)
+
+            # Hitung durasi penyelesaian tugas dalam menit,
+            # yaitu selisih antara start_date dan completed_at dan
+            # dibatasi minimal 0 menit
+            finish_duration = max(
+                (
+                    (completed_at - task.start_date).total_seconds() // 60
+                    if task.start_date
+                    else 0
+                ),
+                0,
+            )
+
+            payload_update.update(
+                completed_at=completed_at, finish_duration=finish_duration
+            )
+        elif (
+            new_status
+            in {StatusTask.CANCELLED, StatusTask.PENDING, StatusTask.IN_PROGRESS}
+            and prev_status == StatusTask.COMPLETED
+        ):
+            # Jika status diubah dari COMPLETED ke status lain, reset completed_at
+            # dan finish_duration
+            payload_update.update(completed_at=None, finish_duration=0)
+        elif task.completed_at is not None:
+            payload_update.update(completed_at=None, finish_duration=0)
+        return payload_update
 
     async def assign_user(self, actor_id, task_id: int, *, user: User) -> None:
         """Menugaskan pengguna ke tugas tertentu.
@@ -435,7 +529,7 @@ class TaskService:
         Returns:
             TaskAssignee: Objek penugasan tugas yang berhasil dibuat.
         """
-        task = await self.repo.get(task_id)
+        task = await self.repo.get_by_id(task_id)
         if not task:
             raise exceptions.TaskNotFoundError("Task not found")
 
@@ -444,7 +538,7 @@ class TaskService:
             project_member_user_ids=member_ids, target_user_id=user.id
         )
 
-        await self.repo.assign_user(task, user.id)
+        await self.repo.assign_user_to_task(task, user.id)
         self.uow.add_event(
             TaskAssignedAddedEvent(
                 task_id=task.id,
@@ -475,7 +569,7 @@ class TaskService:
             project_member_user_ids=member_ids, target_user_id=user.id
         )
 
-        await self.repo.unassign_user(user.id, task.id)
+        await self.repo.unassign_user_from_task(user.id, task.id)
 
         self.uow.add_event(
             TaskAssignedRemovedEvent(
@@ -500,7 +594,7 @@ class TaskService:
         Raises:
             ValueError: Jika urutan tampilan tidak valid.
         """
-        return await self.repo.validate_display_order(project_id, display_order)
+        return await self.repo.ensure_valid_display_order(project_id, display_order)
 
     async def get_user_task_statistics(self, user_id: int) -> dict:
         """Mengambil statistik tugas untuk pengguna tertentu.
@@ -514,7 +608,7 @@ class TaskService:
         return await self.repo.get_user_task_statistics(user_id)
 
     async def list_user_tasks(self, *, user: User):
-        return await self.repo.list(
+        return await self.repo.list_by_filters(
             order_by=Task.display_order,
             custom_query=lambda s: s.join(
                 TaskAssignee, TaskAssignee.task_id == Task.id

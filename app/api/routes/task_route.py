@@ -10,12 +10,7 @@ from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user, get_user_pm
 from app.db.models.task_model import StatusTask
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.task import (
-    SimpleTaskResponse,
-    TaskCreate,
-    TaskDetailResponse,
-    TaskUpdate,
-)
+from app.schemas.task import MyTaskRead, TaskCreate, TaskDetail, TaskRead, TaskUpdate
 from app.schemas.user import User
 from app.services.task_service import TaskService
 from app.utils import exceptions
@@ -32,12 +27,12 @@ class _Task:
 
     @r.post(
         "/milestones/{milestone_id}/tasks",
-        response_model=SimpleTaskResponse,
+        response_model=TaskRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_201_CREATED: {
                 "description": "Task berhasil dibuat",
-                "model": SimpleTaskResponse,
+                "model": TaskRead,
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Project tidak ditemukan",
@@ -63,12 +58,12 @@ class _Task:
 
     @r.post(
         "/tasks/{task_id}/subtasks",
-        response_model=SimpleTaskResponse,
+        response_model=TaskRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_201_CREATED: {
                 "description": "Task berhasil dibuat",
-                "model": SimpleTaskResponse,
+                "model": TaskRead,
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Project tidak ditemukan",
@@ -94,7 +89,7 @@ class _Task:
 
     @r.get(
         "/tasks/{task_id}",
-        response_model=TaskDetailResponse,
+        response_model=TaskDetail,
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_403_FORBIDDEN: {
@@ -145,12 +140,12 @@ class _Task:
 
     @r.put(
         "/tasks/{task_id}",
-        response_model=SimpleTaskResponse,
+        response_model=TaskRead,
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "Task berhasil diupdate",
-                "model": SimpleTaskResponse,
+                "model": TaskRead,
             },
             status.HTTP_404_NOT_FOUND: {
                 "description": "Task tidak ditemukan",
@@ -175,12 +170,12 @@ class _Task:
 
     @r.patch(
         "/tasks/{task_id}/status",
-        response_model=SimpleTaskResponse,
+        response_model=TaskRead,
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "Status Task berhasil diupdate",
-                "model": SimpleTaskResponse,
+                "model": TaskRead,
             },
             status.HTTP_403_FORBIDDEN: {
                 "description": "Hanya assignee yang boleh mengubah status task",
@@ -210,7 +205,7 @@ class _Task:
 
     @r.get(
         "/users/me/tasks",
-        response_model=list[SimpleTaskResponse],
+        response_model=list[MyTaskRead],
         status_code=status.HTTP_200_OK,
     )
     async def get_user_tasks(self):

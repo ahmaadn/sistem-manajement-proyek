@@ -1,16 +1,33 @@
-from fastapi import APIRouter, Depends, status
+from enum import Enum
+
+from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.services import get_milestone_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.milestone import MilestoneCreate, MilestoneResponse
+from app.schemas.milestone import (
+    MilestoneCreate,
+    MilestoneDetail,
+    MilestoneRead,
+    MilestoneUpdate,
+)
 from app.schemas.user import User
 from app.services.milestone_service import MilestoneService
 from app.utils.exceptions import AppErrorResponse
 
 r = router = APIRouter(tags=["Milestone"])
+
+
+class TaskSortBy(Enum):
+    display_order = "display_order"
+    due_date = "due_date"
+    start_date = "start_date"
+    title = "title"
+    created_at = "created_at"
+    priority = "priority"
+    status = "status"
 
 
 @cbv(r)
@@ -21,12 +38,12 @@ class _Milestone:
 
     @r.get(
         "/projects/{project_id}/milestone",
-        response_model=list[MilestoneResponse],
+        response_model=list[MilestoneDetail],
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "Daftar tugas berhasil diambil",
-                "model": list[MilestoneResponse],
+                "model": list[MilestoneDetail],
             },
             status.HTTP_403_FORBIDDEN: {
                 "description": "User tidak memiliki akses ke proyek ini",
@@ -34,7 +51,12 @@ class _Milestone:
             },
         },
     )
-    async def get_milestones(self, project_id: int):
+    async def get_milestones(
+        self,
+        project_id: int,
+        sort_by: TaskSortBy = Query(default=TaskSortBy.display_order),
+        descending: bool = Query(default=False),
+    ):
         """
         Mendapatkan daftar milestone untuk proyek tertentu.
         - Hanya user yang terdaftar sebagai anggota proyek yang dapat mengakses
@@ -47,12 +69,15 @@ class _Milestone:
 
         # pastikan user adalah member project
         return await self.milestone_service.list_milestones(
-            project_id=project_id, user=self.user
+            project_id=project_id,
+            user=self.user,
+            sort_by=sort_by.value,
+            descending=descending,
         )
 
     @r.post(
         "/projects/{project_id}/milestone",
-        response_model=MilestoneResponse,
+        response_model=MilestoneRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_403_FORBIDDEN: {
@@ -103,3 +128,33 @@ class _Milestone:
                 user=self.user, milestone_id=milestone_id
             )
             await self.uow.commit()
+
+    @r.put(
+        "/milestones/{milestone_id}",
+        status_code=status.HTTP_200_OK,
+        response_model=MilestoneRead,
+        responses={
+            status.HTTP_404_NOT_FOUND: {
+                "description": "Milestone tidak ditemukan",
+                "model": AppErrorResponse,
+            },
+            status.HTTP_403_FORBIDDEN: {
+                "description": "Hanya pemilik proyek yang dapat menghapus milestone",
+                "model": AppErrorResponse,
+            },
+        },
+    )
+    async def update_milestone(self, milestone_id: int, payload: MilestoneUpdate):
+        """
+        Menghapus milestone berdasarkan ID.
+
+        **Akses**: Owner Project
+        """
+        async with self.uow:
+            result = await self.milestone_service.update_milestone(
+                user=self.user,
+                milestone_id=milestone_id,
+                payload=payload.model_dump(exclude_unset=True),
+            )
+            await self.uow.commit()
+        return result

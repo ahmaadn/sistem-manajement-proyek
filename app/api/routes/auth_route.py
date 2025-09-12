@@ -6,7 +6,7 @@ from app.api.dependencies.authentication import AuthHandler, auth_handler
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_user_service
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.token import TokenAuth
+from app.schemas.token import AuthToken
 from app.services.user_service import UserService
 from app.utils import exceptions
 
@@ -21,7 +21,7 @@ class _Auth:
         responses={
             status.HTTP_200_OK: {
                 "description": "Login Berhasil",
-                "model": TokenAuth,
+                "model": AuthToken,
             },
             status.HTTP_401_UNAUTHORIZED: {
                 "description": "Kredensial tidak valid",
@@ -44,6 +44,6 @@ class _Auth:
             await user_service.assign_role_to_user(user_id=user_info.id, user=user_info)
             await uow.commit()
 
-        return TokenAuth(
+        return AuthToken(
             access_token=token["access_token"],
         )

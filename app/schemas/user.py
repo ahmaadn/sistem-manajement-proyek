@@ -5,7 +5,7 @@ from app.db.models.role_model import Role
 from app.schemas.base import BaseSchema
 
 
-class PegawaiInfo(BaseSchema):
+class UserBase(BaseSchema):
     id: int = Field(..., description="ID pengguna")
     name: str = Field(..., description="Nama pengguna")
     employee_role: str = Field(..., description="Jabatan pengguna")
@@ -16,13 +16,13 @@ class PegawaiInfo(BaseSchema):
     profile_url: str = Field(..., description="URL profil pengguna")
 
 
-class User(PegawaiInfo):
+class User(UserBase):
     role: Role = Field(
         ..., description="Peran pengguna di aplikasi sistem manajemen proyek"
     )
 
 
-class ProjectSummary(BaseSchema):
+class UserProjectStats(BaseSchema):
     total_project: int = Field(0, description="Total proyek yang diikuti pengguna")
     project_active: int = Field(
         0, description="Jumlah proyek aktif yang diikuti pengguna"
@@ -42,14 +42,16 @@ class ProjectSummary(BaseSchema):
     )
 
 
-class ProjectParticipant(BaseSchema):
+class ProjectParticipation(BaseSchema):
     project_id: int = Field(..., description="ID proyek")
     project_name: str = Field(..., description="Nama proyek")
     user_role: RoleProject = Field(..., description="Peran pengguna dalam proyek")
 
 
 class UserDetail(User):
-    statistics: ProjectSummary = Field(..., description="Statistik proyek pengguna")
+    statistics: UserProjectStats = Field(
+        ..., description="Statistik proyek pengguna"
+    )
     # projects: list[ProjectParticipant] = Field(
     #     default_factory=list, description="Daftar proyek yang diikuti pengguna"
     # )

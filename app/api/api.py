@@ -5,6 +5,7 @@ from app.core.config import settings
 from .routes import assignee_task_route as assignee_task
 from .routes import attachment_route as attachment
 from .routes import auth_route as auth
+from .routes import category_route as category
 from .routes import comment_route as comment
 from .routes import dashboard_route as dashboard
 from .routes import milestone_route as milestone
@@ -26,3 +27,4 @@ router.include_router(assignee_task.router)
 router.include_router(dashboard.router)
 router.include_router(comment.router)
 router.include_router(attachment.router)
+router.include_router(category.router)

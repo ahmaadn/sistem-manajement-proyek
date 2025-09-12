@@ -10,7 +10,7 @@ from app.db.models.mixin import TimeStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.attachment_model import Attachment
-    from app.db.models.audit_model import AuditLog
+    from app.db.models.category_model import Category
     from app.db.models.comment_model import Comment
     from app.db.models.milestone_model import Milestone
     from app.db.models.project_model import Project
@@ -41,7 +41,7 @@ class Task(Base, TimeStampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     """ID tugas."""
 
-    milestone_id: Mapped[int | None] = mapped_column(
+    milestone_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("milestone.id"), nullable=False
     )
     """ID mileston"""
@@ -52,7 +52,7 @@ class Task(Base, TimeStampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     """Deskripsi tugas."""
 
-    status: Mapped[StatusTask | None] = mapped_column(
+    status: Mapped[StatusTask] = mapped_column(
         Enum(StatusTask, name="status_task"), nullable=True
     )
     """Status tugas."""
@@ -78,21 +78,31 @@ class Task(Base, TimeStampMixin):
     estimated_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     """Estimasi waktu pengerjaan dalam satuan menit."""
 
-    total_time_logged: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    """Total waktu yang dicatat dalam satuan menit."""
+    finish_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    """Total waktu yang dikerjakan dalam satuan menit."""
 
     created_by: Mapped[int] = mapped_column(Integer, nullable=False)
     """ID pengguna yang membuat tugas."""
 
     project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("project.id"), nullable=False
+        Integer, ForeignKey("project.id", ondelete="CASCADE"), nullable=False
     )
     """ID proyek tempat tugas ini berada."""
 
     parent_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("task.id"), nullable=True
+        Integer, ForeignKey("task.id", ondelete="CASCADE"), nullable=True
     )
     """ID tugas induk jika tugas ini merupakan sub-tugas."""
+
+    category_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("category.id", ondelete="SET NULL"), nullable=True
+    )
+    """ID kategori tempat tugas ini berada."""
+
+    completed_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(True), nullable=True
+    )
+    """Tanggal dan waktu tugas diselesaikan."""
 
     # Relasi
     project: Mapped["Project"] = relationship("Project", back_populates="tasks")
@@ -111,7 +121,12 @@ class Task(Base, TimeStampMixin):
     sub-tugas)
     """
 
-    sub_tasks: Mapped[List["Task"]] = relationship("Task", back_populates="parent")
+    sub_tasks: Mapped[List["Task"]] = relationship(
+        "Task",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     """
     Relasi ke sub-tugas jika tugas ini merupakan tugas induk,
     relasi ini bersifat one to many (satu tugas induk dapat memiliki
@@ -119,7 +134,10 @@ class Task(Base, TimeStampMixin):
     """
 
     assignees: Mapped[List["TaskAssignee"]] = relationship(
-        "TaskAssignee", back_populates="task", cascade="all, delete-orphan"
+        "TaskAssignee",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Relasi ke pengguna yang ditugaskan untuk tugas ini,
@@ -127,16 +145,11 @@ class Task(Base, TimeStampMixin):
     pengguna)
     """
 
-    audit_logs: Mapped[List["AuditLog"]] = relationship(
-        "AuditLog", back_populates="task"
-    )
-    """
-    Relasi ke AuditLog.
-    relasi bersifat one-to-many (1 task dapat memiliki banyak audit log)
-    """
-
     comments: Mapped[List["Comment"]] = relationship(
-        "Comment", back_populates="task", cascade="all, delete-orphan"
+        "Comment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Relasi ke komentar yang dibuat untuk tugas ini,
@@ -144,7 +157,10 @@ class Task(Base, TimeStampMixin):
     """
 
     attachments: Mapped[List["Attachment"]] = relationship(
-        "Attachment", back_populates="task", cascade="all, delete-orphan"
+        "Attachment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     """
     Relasi ke lampiran yang dibuat untuk tugas ini,
@@ -157,4 +173,12 @@ class Task(Base, TimeStampMixin):
     """
     Relasi ke milestone yang terkait dengan tugas ini,
     relasi ini bersifat one to many (satu milestone dapat memiliki banyak tugas)
+    """
+
+    category: Mapped[Optional["Category"]] = relationship(
+        "Category", back_populates="tasks"
+    )
+    """
+    Relasi ke kategori yang terkait dengan tugas ini,
+    relasi ini bersifat one to many (satu kategori dapat memiliki banyak tugas)
     """

@@ -1,9 +1,10 @@
 import logging
-from typing import Optional, Sequence
+from typing import Optional
 
 from app.db.models.comment_model import Comment
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.comment import CommentCreate
+from app.schemas.comment import CommentCreate, CommentDetail
+from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,9 @@ class CommentService:
         payload: CommentCreate,
         is_admin: bool = False,
     ) -> Comment:
-        is_active = await self.uow.task_repo.is_active_task(task_id=task_id)
+        is_active = await self.uow.task_repo.is_task_in_active_project(
+            task_id=task_id
+        )
         if not is_active:
             logger.debug(
                 f"User {user_id} is trying to add comment to inactive task {task_id}"
@@ -30,7 +33,7 @@ class CommentService:
             )
 
         if not is_admin:
-            is_member = await self.uow.task_repo.is_member_of_task_project(
+            is_member = await self.uow.task_repo.is_user_member_of_task_project(
                 task_id=task_id, user_id=user_id
             )
 
@@ -43,13 +46,13 @@ class CommentService:
                 )
 
         logger.info(f"User {user_id} is adding comment to task {task_id}")
-        return await self.uow.comment_repo.create(
+        return await self.uow.comment_repo.create_comment(
             task_id=task_id, user_id=user_id, content=payload.content
         )
 
     async def list_comments(
         self, task_id: int, user_id: int, is_admin: bool = False
-    ) -> Sequence[Comment]:
+    ):
         """
         Mendapatkan daftar komentar untuk tugas tertentu. komentar yang hanya dapat
         dilihat oleh anggota proyek (termasuk owner) atau admin.
@@ -67,7 +70,7 @@ class CommentService:
             Sequence[Comment]: Daftar komentar yang ditemukan.
         """
         if not is_admin:
-            is_member = await self.uow.task_repo.is_member_of_task_project(
+            is_member = await self.uow.task_repo.is_user_member_of_task_project(
                 task_id=task_id, user_id=user_id
             )
             if not is_member:
@@ -75,7 +78,39 @@ class CommentService:
                     "Anda tidak memiliki izin untuk melihat komentar ini"
                 )
 
-        return await self.uow.comment_repo.list_by_task(task_id=task_id)
+        comments = await self.uow.comment_repo.list_by_task_id(task_id=task_id)
+        user_ids = {comment.user_id for comment in comments}
+
+        pegawai_service = PegawaiService()
+        users = await pegawai_service.list_user_by_ids(list(user_ids))
+
+        return [
+            CommentDetail(
+                id=comment.id,
+                task_id=comment.task_id,
+                user_id=comment.user_id,
+                content=comment.content,
+                created_at=comment.created_at,
+                profile_url=next(
+                    (
+                        user.profile_url
+                        for user in users
+                        if user and user.id == comment.user_id
+                    ),
+                    None,
+                ),
+                user_name=next(
+                    (
+                        user.name
+                        for user in users
+                        if user and user.id == comment.user_id
+                    ),
+                    None,
+                ),
+                attachments=list(comment.attachments)
+            )
+            for comment in comments
+        ]
 
     async def get_comment(
         self, task_id: int, user_id: int, comment_id: int, is_admin: bool = False
@@ -96,7 +131,7 @@ class CommentService:
         Returns:
             Optional[Comment]: Komentar yang ditemukan, atau None jika tidak ada.
         """
-        is_member = await self.uow.task_repo.is_member_of_task_project(
+        is_member = await self.uow.task_repo.is_user_member_of_task_project(
             user_id, task_id
         )
         if not is_member and not is_admin:
@@ -107,7 +142,7 @@ class CommentService:
                 "Anda tidak memiliki izin untuk melihat komentar ini"
             )
 
-        return await self.uow.comment_repo.get(
+        return await self.uow.comment_repo.get_by_id_in_task(
             comment_id=comment_id, task_id=task_id
         )
 
@@ -132,7 +167,7 @@ class CommentService:
             bool: True jika komentar berhasil dihapus, False jika tidak.
         """
         # Ambil komentar terlebih dahulu untuk cek kepemilikan
-        comment = await self.uow.comment_repo.get(
+        comment = await self.uow.comment_repo.get_by_id_in_task(
             comment_id=comment_id, task_id=task_id
         )
         if not comment:
@@ -141,19 +176,19 @@ class CommentService:
         # Admin selalu boleh
         if is_admin:
             logger.info(f"Admin {user_id} is deleting comment {comment_id}")
-            return await self.uow.comment_repo.delete_by_id(
+            return await self.uow.comment_repo.delete_by_id_in_task(
                 comment_id=comment_id, task_id=task_id
             )
 
         # Pembuat komentar boleh
         if comment.user_id == user_id:
             logger.info(f"User {user_id} is deleting their own comment {comment_id}")
-            return await self.uow.comment_repo.delete_by_id(
+            return await self.uow.comment_repo.delete_by_id_in_task(
                 comment_id=comment_id, task_id=task_id
             )
 
         # Owner project tempat task berada juga boleh
-        is_owner = await self.uow.task_repo.is_owner_of_project_by_task(
+        is_owner = await self.uow.task_repo.is_user_owner_of_tasks_project(
             user_id, task_id
         )
         if not is_owner:
@@ -163,6 +198,6 @@ class CommentService:
             )
 
         logger.info(f"Owner {user_id} is deleting comment {comment_id}")
-        return await self.uow.comment_repo.delete_by_id(
+        return await self.uow.comment_repo.delete_by_id_in_task(
             comment_id=comment_id, task_id=task_id
         )

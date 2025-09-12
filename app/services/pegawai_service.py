@@ -11,7 +11,7 @@ import aiohttp
 
 from app.core.config.settings import get_settings
 from app.middleware.request import request_object
-from app.schemas.user import PegawaiInfo
+from app.schemas.user import UserBase
 
 logger = logging.getLogger(__name__)
 
@@ -294,7 +294,7 @@ class PegawaiService:
         encoded_name = urllib.parse.quote_plus(safe_name)
         dummy_profile_url = f"https://ui-avatars.com/api/?name={encoded_name}&background=random&bold=true&size=256"
 
-        return PegawaiInfo(
+        return UserBase(
             id=data.get("id"),
             name=name,
             employee_role=data.get("role"),
@@ -306,7 +306,7 @@ class PegawaiService:
         )
 
     def _map_to_user_profile(self, data):
-        return PegawaiInfo(
+        return UserBase(
             id=data.get("user_id"),
             name=data.get("nama"),
             employee_role=data.get("role"),
@@ -317,7 +317,7 @@ class PegawaiService:
             profile_url=data.get("profile_url"),
         )
 
-    async def list_user(self) -> list[PegawaiInfo]:
+    async def list_user(self) -> list[UserBase]:
         """Mendapatkan daftar semua pengguna.
 
         Returns:
@@ -331,7 +331,7 @@ class PegawaiService:
         users = result.get('data', [])
         return [await self.map_to_pegawai_info(user) for user in users]
 
-    async def list_user_by_ids(self, data: list[int]) -> list[PegawaiInfo | None]:
+    async def list_user_by_ids(self, data: list[int]) -> list[UserBase | None]:
         """Mendapatkan daftar user berdasarkan list ID yang diberikan.
         Jika suatu ID tidak ditemukan di data, kembalikan None pada posisi tersebut.
 

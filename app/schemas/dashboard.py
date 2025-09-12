@@ -3,13 +3,8 @@ from datetime import datetime
 from app.db.models.project_model import StatusProject
 from app.db.models.role_model import Role
 from app.schemas.base import BaseSchema
-from app.schemas.task import SimpleTaskResponse
-from app.schemas.user import ProjectSummary, User
-
-
-class AdminDashboardResponse(BaseSchema):
-    top_users: list[User]
-    role_counts: dict[Role, int]
+from app.schemas.task import TaskRead
+from app.schemas.user import User, UserProjectStats
 
 
 class ProjectStatusSummary(BaseSchema):
@@ -17,6 +12,12 @@ class ProjectStatusSummary(BaseSchema):
     active_projects: int
     completed_projects: int
     new_this_month: int
+
+
+class AdminDashboardResponse(BaseSchema):
+    top_users: list[User]
+    role_counts: dict[Role, int]
+    project_summary: ProjectStatusSummary
 
 
 class YearlySummary(BaseSchema):
@@ -43,5 +44,5 @@ class PMDashboardResponse(BaseSchema):
 
 
 class UserDashboardResponse(BaseSchema):
-    project_summary: ProjectSummary
-    upcoming_tasks: list[SimpleTaskResponse]
+    project_summary: UserProjectStats
+    upcoming_tasks: list[TaskRead]

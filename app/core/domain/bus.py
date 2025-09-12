@@ -72,7 +72,7 @@ class EventBus:
     def subscribe(self, event_type: Type[DomainEvent], handler: Handler) -> None:
         self._handlers[event_type].append((handler, HandlerMode.IMMEDIATE))
 
-        logger.info(
+        logger.debug(
             "event.subscribe immediate %s -> %s",
             event_type.__name__,
             getattr(handler, "__name__", str(handler)),
@@ -92,7 +92,11 @@ class EventBus:
     async def publish(self, event: DomainEvent) -> None:
         pairs = self._handlers.get(type(event), [])
         if not pairs:
-            logger.debug("event.no_handlers", extra={"event": event.name})
+            logger.debug(
+                "event.no_handlers for %s. current: %s",
+                event.name,
+                len(self._handlers),
+            )
             return
 
         # Pisahkan immediate vs background
@@ -146,35 +150,18 @@ class EventBus:
                     task.add_done_callback(background_handlers.discard)
 
 
-PENDING_EVENT = []
 _event_bus = EventBus()
 subscribe = _event_bus.subscribe
 subscribe_background = _event_bus.subscribe_background
 publish = _event_bus.publish
 
 
-def enqueue_event(event: DomainEvent) -> None:
-    """Entri sebuah event untuk diproses nanti.
-
-    Args:
-        session (AsyncSession): Sesi database.
-        event (DomainEvent): Event yang akan dimasukkan dalam antrean.
+async def dispatch_pending_events(events: list[DomainEvent]) -> None:
     """
-    PENDING_EVENT.append(event)
-    logger.info("Event enqueued: %s", event.__class__.__name__)
-
-
-async def dispatch_pending_events() -> None:
+    Jalankan daftar event yang tertunda (per-UoW/per-session), bukan global.
     """
-    Menjalankan event yang tertunda.
-
-    Args:
-        session (AsyncSession): Sesi database.
-    """
-    for ev in PENDING_EVENT:
+    for ev in events:
         try:
             await publish(ev)
         except Exception:
             logger.exception("event.handler.error", extra={"event": ev.name})
-
-    PENDING_EVENT.clear()

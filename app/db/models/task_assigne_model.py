@@ -13,7 +13,10 @@ class TaskAssignee(Base):
     __tablename__ = "task_assignee"
 
     task_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("task.id"), primary_key=True, autoincrement=False
+        Integer,
+        ForeignKey("task.id", ondelete="CASCADE"),
+        primary_key=True,
+        autoincrement=False,
     )
     """
     ID tugas yang ditugaskan kepada pengguna.

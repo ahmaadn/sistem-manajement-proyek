@@ -333,3 +333,48 @@ class MilestoneNotFoundError(AppException):
         super().__init__(
             message, error_code, status_code=status.HTTP_404_NOT_FOUND, **extra
         )
+
+
+class ValidationError(AppException):
+    def __init__(
+        self,
+        message: str = "Terjadi kesalahan validasi",
+        /,
+        error_code: ErrorCode = ErrorCode.VALIDATION_ERROR,
+        errors: dict[str, list[str]] | None = None,
+        status_code: int = status.HTTP_422_UNPROCESSABLE_ENTITY,
+        **extra: Any,
+    ):
+        super().__init__(
+            message,
+            error_code,
+            status_code=status_code,
+            errors=errors or {},
+            **extra,
+        )
+
+
+class CategoryNotFoundError(AppException):
+    def __init__(
+        self,
+        message: str = "Kategori tidak ditemukan",
+        /,
+        error_code: ErrorCode = ErrorCode.CATEGORY_NOT_FOUND,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_404_NOT_FOUND, **extra
+        )
+
+
+class InvalidCategoryAssignmentError(AppException):
+    def __init__(
+        self,
+        message: str = "Kategori tidak valid untuk tugas",
+        /,
+        error_code: ErrorCode = ErrorCode.INVALID_CATEGORY_ASSIGNMENT,
+        **extra: Any,
+    ):
+        super().__init__(
+            message, error_code, status_code=status.HTTP_406_NOT_ACCEPTABLE, **extra
+        )

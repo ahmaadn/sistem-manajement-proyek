@@ -4,18 +4,18 @@ from typing import Optional
 from app.schemas.base import BaseSchema
 
 
-class AttachmentBase(BaseSchema):
+class AttachmentCreate(BaseSchema):
     task_id: int
     comment_id: Optional[int] = None
-
-
-class AttachmentCreate(AttachmentBase):
     file_name: str
     file_size: str
 
 
-class AttachmentResponse(AttachmentBase):
+class AttachmentRead(BaseSchema):
     id: int
+    task_id: int
+    comment_id: Optional[int] = None
+    mime_type: str
     file_name: str
     file_path: str
     file_size: str
@@ -23,6 +23,6 @@ class AttachmentResponse(AttachmentBase):
     created_at: datetime.datetime
 
 
-class AttachmentListResponse(BaseSchema):
-    items: list[AttachmentResponse]
-    total: int
+class AttachmentLinkCreate(BaseSchema):
+    link: str
+    link_name: str | None = None

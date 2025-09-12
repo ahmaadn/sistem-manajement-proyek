@@ -23,7 +23,7 @@ class InterfaceMilestoneRepository(Protocol):
         """
         ...
 
-    async def create(self, *, payload: dict[str, Any]) -> Milestone:
+    async def create_milestone(self, *, payload: dict[str, Any]) -> Milestone:
         """Membuat milestone baru
 
         Args:
@@ -41,6 +41,10 @@ class InterfaceMilestoneRepository(Protocol):
             milestone (Milestone): Objek milestone yang akan dihapus.
         """
         ...
+
+    async def update(
+        self, *, milestone: Milestone, payload: dict[str, Any]
+    ) -> Milestone: ...
 
     async def list_by_project(
         self,
@@ -60,7 +64,7 @@ class InterfaceMilestoneRepository(Protocol):
         """
         ...
 
-    async def get_by_id_for_project(
+    async def get_by_id_in_project(
         self,
         *,
         project_id: int,
@@ -77,7 +81,7 @@ class InterfaceMilestoneRepository(Protocol):
         """
         ...
 
-    async def next_display_order(self, project_id: int) -> int:
+    async def get_next_display_order(self, project_id: int) -> int:
         """
         Menghitung nilai display_order berikutnya untuk sebuah proyek.
         Dipakai untuk menjaga urutan tampilan task.
@@ -105,7 +109,7 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
     ) -> Milestone | None:
         return await self.session.get(Milestone, milestone_id, options=options)
 
-    async def create(self, *, payload: dict[str, Any]) -> Milestone:
+    async def create_milestone(self, *, payload: dict[str, Any]) -> Milestone:
         milestone = Milestone(**payload)
         self.session.add(milestone)
         await self.session.commit()
@@ -151,7 +155,7 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
 
-    async def get_by_id_for_project(
+    async def get_by_id_in_project(
         self, *, project_id: int, milestone_id: int
     ) -> Milestone | None:
         stmt = (
@@ -165,7 +169,7 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
 
-    async def next_display_order(self, project_id: int) -> int:
+    async def get_next_display_order(self, project_id: int) -> int:
         q = await self.session.execute(
             select(Milestone)
             .where(Milestone.project_id == project_id)
@@ -178,7 +182,7 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
         self, project_id: int, display_order: Optional[int]
     ) -> int:
         if display_order is None or display_order <= 0:
-            return await self.next_display_order(project_id)
+            return await self.get_next_display_order(project_id)
 
         exists_same = await self.session.execute(
             select(Milestone.id)
@@ -189,5 +193,15 @@ class MilestoneSQLAlchemyRepository(InterfaceMilestoneRepository):
             .limit(1)
         )
         if exists_same.first():
-            return await self.next_display_order(project_id)
+            return await self.get_next_display_order(project_id)
         return display_order
+
+    async def update(
+        self, *, milestone: Milestone, payload: dict[str, Any]
+    ) -> Milestone:
+        for key, value in payload.items():
+            setattr(milestone, key, value)
+        self.session.add(milestone)
+        await self.session.flush()
+        await self.session.refresh(milestone)
+        return milestone

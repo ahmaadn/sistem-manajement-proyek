@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, List, Protocol, runtime_checkable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.domain.bus import dispatch_pending_events, enqueue_event
+from app.core.domain.bus import dispatch_pending_events
 from app.db.repositories.attachment_repository import (
     AttachmentSQLAlchemyRepository,
     InterfaceAttachmentRepository,
+)
+from app.db.repositories.category_repository import (
+    CategorySQLAlchemyRepository,
+    InterfaceCategoryRepository,
 )
 from app.db.repositories.comment_repository import (
     CommentSQLAlchemyRepository,
@@ -37,6 +42,8 @@ from app.db.repositories.user_repository import (
 if TYPE_CHECKING:
     from app.core.domain.event import DomainEvent
 
+logger = logging.getLogger(__name__)
+
 
 @runtime_checkable
 class UnitOfWork(Protocol):
@@ -45,10 +52,11 @@ class UnitOfWork(Protocol):
     comment_repo: InterfaceCommentRepository
     task_repo: InterfaceTaskRepository
     project_repo: InterfaceProjectRepository
-    dashboard_repository: InterfaceDashboardReadRepository
+    dashboard_repo: InterfaceDashboardReadRepository
     user_repository: InterfaceUserRepository
     attachment_repo: InterfaceAttachmentRepository
     milestone_repo: InterfaceMilestoneRepository
+    category_repo: InterfaceCategoryRepository
 
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
@@ -68,11 +76,14 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.comment_repo = CommentSQLAlchemyRepository(self.session)
         self.task_repo = TaskSQLAlchemyRepository(self.session)
         self.project_repo = ProjectSQLAlchemyRepository(self.session)
-        self.dashboard_repository = DashboardSQLAlchemyReadRepository(self.session)
+        self.dashboard_repo = DashboardSQLAlchemyReadRepository(self.session)
         self.user_repository = UserSQLAlchemyRepository(self.session)
         self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
         self.milestone_repo: InterfaceMilestoneRepository = (
             MilestoneSQLAlchemyRepository(self.session)
+        )
+        self.category_repo: InterfaceCategoryRepository = (
+            CategorySQLAlchemyRepository(self.session)
         )
 
     def add_event(self, event: "DomainEvent") -> None:
@@ -82,15 +93,18 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             event (DomainEvent): Event yang akan ditambahkan.
         """
         # Simpan di buffer dan enqueue ke session (agar konsisten dengan bus)
+        logger.info("Event enqueued: %s", event.__class__.__name__)
         self._events.append(event)
-        enqueue_event(event)
 
     async def commit(self) -> None:
         """Commit the current transaction."""
         await self.session.commit()
         try:
             # Publish seluruh pending events yang ter-enqueue di session
-            await dispatch_pending_events()
+            logger.info(
+                "Committing transaction and dispatching %d events", len(self._events)
+            )
+            await dispatch_pending_events(self._events)
         finally:
             self._events.clear()
         self._committed = True

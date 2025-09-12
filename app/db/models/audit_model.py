@@ -10,7 +10,6 @@ from app.db.models.mixin import CreateStampMixin
 
 if TYPE_CHECKING:
     from app.db.models.project_model import Project
-    from app.db.models.task_model import Task
 
 
 class AuditLog(Base, CreateStampMixin):
@@ -23,13 +22,14 @@ class AuditLog(Base, CreateStampMixin):
     """ID pengguna yang terkait dengan audit log."""
 
     project_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("project.id"), nullable=True, default=None
+        Integer,
+        ForeignKey("project.id", ondelete="CASCADE"),
+        nullable=True,
+        default=None,
     )
     """ID proyek yang terkait dengan audit log."""
 
-    task_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("task.id"), nullable=True, default=None
-    )
+    task_id: Mapped[int] = mapped_column(Integer, nullable=True, default=None)
     """ID tugas yang terkait dengan audit log."""
 
     action_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -47,12 +47,6 @@ class AuditLog(Base, CreateStampMixin):
     """
     Relasi ke Project.
     relasi bersifat one-to-one (1 audit log hanya 1 project)
-    """
-
-    task: Mapped["Task"] = relationship("Task", back_populates="audit_logs")
-    """
-    Relasi ke Task.
-    relasi bersifat one-to-one (1 audit log hanya 1 task)
     """
 
 

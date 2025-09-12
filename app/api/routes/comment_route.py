@@ -8,11 +8,7 @@ from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.comment import (
-    CommentCreate,
-    CommentResponse,
-    CommentWithAttachmentResponse,
-)
+from app.schemas.comment import CommentCreate, CommentDetail, CommentRead
 from app.schemas.user import User
 from app.services.comment_service import CommentService
 from app.utils import exceptions
@@ -30,7 +26,7 @@ class _Comment:
 
     @r.post(
         "/comments",
-        response_model=CommentResponse,
+        response_model=CommentRead,
         status_code=status.HTTP_201_CREATED,
         responses={
             status.HTTP_406_NOT_ACCEPTABLE: {
@@ -57,7 +53,7 @@ class _Comment:
 
     @r.get(
         "/tasks/{task_id}/comments",
-        response_model=list[CommentWithAttachmentResponse],
+        response_model=list[CommentDetail],
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_403_FORBIDDEN: {
