@@ -15,12 +15,28 @@ class PegawaiService:
         self.client = PegawaiAiohttpClient
 
     async def validate_token(self, token: str) -> bool:
-        """Validasi token dengan mencocokkan pada FAKE_USERS."""
+        """Validasi token Bearer ke layanan Pegawai.
+
+        Args:
+            token (str): Token Bearer eksplisit (opsional). Jika tidak ada,
+                fallback ke header Authorization request. Default to None
+
+        Returns:
+            bool: True jika valid (HTTP 200), False jika tidak valid atau terjadi
+                error.
+        """
         result = await asyncio.gather(self.client.validation_token(token=token))
         return bool(result[0])
 
     async def get_user_info(self, user_id: int):
-        """Ambil info user berdasarkan user_id."""
+        """Ambil info user berdasarkan user_id.
+
+        Args:
+            user_id (int): ID pengguna/pegawai.
+
+        Returns:
+            UserBase | None: Objek informasi pegawai jika ditemukan, None jika tidak.
+        """
         result = await asyncio.gather(
             self.client.get_pegawai_detail(user_id=user_id)
         )
@@ -30,7 +46,15 @@ class PegawaiService:
         return await self.map_to_pegawai_info(user.copy())
 
     async def get_user_info_by_token(self, token: str):
-        """Ambil info user berdasarkan access_token, tanpa access_token di hasil."""
+        """Ambil info user berdasarkan token.
+
+        Args:
+            token (str): Token Bearer eksplisit (opsional). Jika tidak ada,
+                fallback ke header Authorization request. Default to None.
+
+        Returns:
+            UserBase | None: Objek informasi pegawai jika ditemukan, None jika tidak.
+        """
         result = await asyncio.gather(self.client.get_pegawai_me(token=token))
         user = result[0]
         if not user:
@@ -38,9 +62,15 @@ class PegawaiService:
         return await self.map_to_pegawai_info(user.copy())
 
     async def login(self, email: str, password: str):
-        """
-        Login via BASE_API_PEGAWAI: POST {api_url}/login. Return access_token jika
-        berhasil.
+        """Lakukan login dan ambil token akses.
+
+        Args:
+            email (str): Alamat email pengguna.
+            password (str): Kata sandi pengguna.
+
+        Returns:
+            dict[str, Any] | None: Berisi 'access_token', 'user', dan 'user_id'
+                jika sukses; None jika gagal/format tak sesuai.
         """
         payload = {"email": email, "password": password}
         result = await asyncio.gather(self.client.login(payload=payload))
@@ -55,7 +85,6 @@ class PegawaiService:
         Returns:
             UserBase: Mapped UserBase object.
         """
-
         role = data.get("role")
 
         if role == "admin":

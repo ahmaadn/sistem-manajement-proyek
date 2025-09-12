@@ -4,7 +4,7 @@ from typing import Any
 
 import aiohttp
 from fastapi import Request
-from httpx import AsyncClient
+from httpx import AsyncClient, Response
 
 from app.core.config.api_pegawai import PegawaiApiUrls
 from app.middleware.request import request_object
@@ -19,10 +19,10 @@ def _get_bearer_from_ctx(req: Request) -> dict:
     Jika header tidak diawali 'Bearer ', ia akan ditambahkan secara otomatis.
 
     Args:
-        req: Objek request yang memiliki atribut headers.
+        req (Request): Objek request yang memiliki atribut headers.
 
     Returns:
-        Dict header Authorization jika tersedia, atau dict kosong jika tidak ada.
+        dict: header Authorization jika tersedia, atau dict kosong jika tidak ada.
     """
     auth = req.headers.get("authorization") or req.headers.get("Authorization")
     if not auth:
@@ -38,11 +38,12 @@ def _auth_headers(req: Request, token: str | None) -> dict[str, str]:
     """Bangun header untuk permintaan HTTP dengan Accept JSON.
 
     Args:
-        req: Objek request aktif (untuk fallback Authorization).
-        token: Token Bearer eksplisit. Jika diberikan, digunakan sebagai prioritas.
+        req (Request): Objek request aktif (untuk fallback Authorization).
+        token (str | None): Token Bearer eksplisit. Jika diberikan, digunakan sebagai
+            prioritas. Default to None.
 
     Returns:
-        Dict header yang berisi Authorization (jika ada) dan Accept.
+        dict[str, str]: header yang berisi Authorization (jika ada) dan Accept.
     """
     if token:
         return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
@@ -57,7 +58,7 @@ class PegawaiApiClient:
         *,
         json: Any = None,
         headers: dict[str, str] | None = None,
-    ):
+    ) -> Response:
         """Wrapper generik untuk mengirim request HTTP.
 
         Args:
@@ -72,7 +73,7 @@ class PegawaiApiClient:
             Exception: Jika permintaan HTTP gagal (dilempar ulang setelah logging).
 
         Returns:
-            _type_: Objek response dari client HTTP yang digunakan.
+            Response: Objek response dari client HTTP yang digunakan.
         """
 
         # dapatkan request aktif dari context var
@@ -172,7 +173,8 @@ class PegawaiApiClient:
                 fallback ke header Authorization request. Default to None
 
         Returns:
-            True jika valid (HTTP 200), False jika tidak valid atau terjadi error.
+            bool: True jika valid (HTTP 200), False jika tidak valid atau terjadi
+                error.
         """
         req = request_object.get()
         headers = _auth_headers(req, token)
