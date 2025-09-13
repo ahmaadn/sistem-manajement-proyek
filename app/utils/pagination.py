@@ -6,7 +6,12 @@ from app.middleware.request import request_object
 
 class Paginator:
     def __init__(
-        self, session: AsyncSession, query: Select, page: int, per_page: int
+        self,
+        session: AsyncSession,
+        query: Select,
+        page: int,
+        per_page: int,
+        scalar: bool = True,
     ):
         self.session = session
         self.query = query
@@ -15,6 +20,8 @@ class Paginator:
         self.limit = per_page * page
         self.offset = (page - 1) * per_page
         self.request = request_object.get()
+        self.scalar = scalar
+
         # computed later
         self.number_of_pages = 0
         self.next_page = ""
@@ -33,13 +40,16 @@ class Paginator:
         return str(url)
 
     async def get_response(self) -> dict:
+        q = self.query.limit(self.limit).offset(self.offset)
+        if self.scalar:
+            result = await self.session.scalars(q)
+        else:
+            result = await self.session.execute(q)
+            result = result.all()
+
         return {
             "count": await self._get_total_count(),
-            "items": list(
-                await self.session.scalars(
-                    self.query.limit(self.limit).offset(self.offset)
-                )
-            ),
+            "items": list(result),
             "curr_page": self.page,
             "total_page": self.number_of_pages,
             "next_page": self._get_next_page(),
@@ -61,6 +71,12 @@ class Paginator:
         return count
 
 
-async def paginate(session: AsyncSession, query: Select, page: int, per_page: int):
-    paginator = Paginator(session, query, page, per_page)
+async def paginate(
+    session: AsyncSession,
+    query: Select,
+    page: int,
+    per_page: int,
+    scalar: bool = True,
+) -> dict:
+    paginator = Paginator(session, query, page, per_page, scalar=scalar)
     return await paginator.get_response()
