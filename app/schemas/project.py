@@ -83,7 +83,13 @@ class ProjectSummary(BaseSchema):
     project_cancel: int = Field(0, description="Proyek batal")
 
 
-class ProjectListPage(PaginationSchema[ProjectRead]):
+class ProjectPaginationItem(ProjectRead):
+    total_tasks: int = Field(
+        default=0, description="Jumlah total tugas dalam proyek"
+    )
+
+
+class ProjectListPage(PaginationSchema[ProjectPaginationItem]):
     summary: ProjectSummary = Field(..., description="Ringkasan proyek")
 
 

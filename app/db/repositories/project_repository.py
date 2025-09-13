@@ -8,11 +8,13 @@ from sqlalchemy.orm import selectinload
 from app.db.models.project_member_model import ProjectMember, RoleProject
 from app.db.models.project_model import Project, StatusProject
 from app.db.models.role_model import Role
+from app.db.models.task_model import Task
 from app.db.repositories.generic_repository import (
     InterfaceRepository,
     SQLAlchemyGenericRepository,
 )
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.utils.pagination import paginate
 
 
 class InterfaceProjectRepository(
@@ -377,13 +379,21 @@ class ProjectSQLAlchemyRepository(
             conditions.append(Project.start_date >= date(sy, 1, 1))
             conditions.append(Project.start_date <= date(ey, 12, 31))
 
-        # Paginatiion
-        return await self.pagination(
-            page=page,
-            per_page=per_page,
-            custom_query=lambda q: q.where(*conditions).order_by(
-                Project.start_date.desc()
-            ),
+        # Subquery untuk menghitung total tugas dalam proyek
+        total_tasks_sq = (
+            select(func.count())
+            .where(Task.project_id == Project.id)
+            .correlate(Project)
+            .scalar_subquery()
+        )
+        q = (
+            select(Project, total_tasks_sq.label("total_tasks"))
+            .where(*conditions)
+            .order_by(Project.start_date.desc())
+        )
+
+        return await paginate(
+            session=self.session, query=q, page=page, per_page=per_page, scalar=False
         )
 
     async def summarize_user_projects(

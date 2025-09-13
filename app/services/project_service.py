@@ -36,7 +36,7 @@ from app.schemas.project import (
     ProjectDetail,
     ProjectListPage,
     ProjectMemberRead,
-    ProjectRead,
+    ProjectPaginationItem,
     ProjectReport,
     ProjectReportAssignee,
     ProjectReportPriority,
@@ -278,7 +278,7 @@ class ProjectService:
             for row in rows
         ]
 
-    async def get_user_projects(
+    async def list_user_projects(
         self,
         *,
         user: User,
@@ -287,7 +287,7 @@ class ProjectService:
         status_project: StatusProject | None = None,
         start_year: int | None = None,
         end_year: int | None = None,
-    ) -> PaginationSchema[ProjectRead]:
+    ) -> PaginationSchema[ProjectPaginationItem]:
         """Mengambil daftar proyek untuk pengguna.
 
         Args:
@@ -299,38 +299,41 @@ class ProjectService:
             PaginationSchema[ProjectResponse]: Daftar proyek untuk pengguna.
         """
         validate_status_by_role(user=user, status_project=status_project)
-
         normalize_year_range(start_year=start_year, end_year=end_year)
 
-        paginate = await self.repo.paginate_user_projects(
-            user_id=user.id,
-            user_role=user.role,
-            page=page,
-            per_page=per_page,
-            status_filter=status_project,
-            start_year=start_year,
-            end_year=end_year,
-        )
-
-        items = [
-            ProjectRead(
-                id=item.id,
-                title=item.title,
-                description=item.description,
-                start_date=item.start_date,
-                end_date=item.end_date,
-                status=item.status,
-                created_by=item.created_by,
-            )
-            for item in paginate["items"]
-        ]
-        paginate.update({"items": items})
-        return ProjectListPage(
-            **paginate,
-            summary=await self.summarize_user_projects(
+        # Jalankan query paginasi dan ringkasan secara bersamaan
+        paginate, summary = await asyncio.gather(
+            self.repo.paginate_user_projects(
+                user_id=user.id,
+                user_role=user.role,
+                page=page,
+                per_page=per_page,
+                status_filter=status_project,
+                start_year=start_year,
+                end_year=end_year,
+            ),
+            self.summarize_user_projects(
                 user=user, start_year=start_year, end_year=end_year
             ),
         )
+
+        # Konversi item ke ProjectListItem
+        items = [
+            ProjectPaginationItem(
+                id=item[0].id,
+                title=item[0].title,
+                description=item[0].description,
+                start_date=item[0].start_date,
+                end_date=item[0].end_date,
+                status=item[0].status,
+                created_by=item[0].created_by,
+                total_tasks=item[1] or 0,  # Total tasks
+            )
+            for item in paginate.get("items", [])
+        ]
+
+        paginate.update({"items": items})
+        return ProjectListPage(**paginate, summary=summary)
 
     async def summarize_user_projects(
         self,
