@@ -31,7 +31,7 @@ class Attachment(Base, CreateStampMixin):
     ID tugas yang dilampirkan
     """
 
-    comment_id: Mapped[int] = mapped_column(
+    comment_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("comment.id"), nullable=True
     )
 

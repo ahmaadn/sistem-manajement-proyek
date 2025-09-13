@@ -151,7 +151,7 @@ class AttachmentService:
         att: Attachment = await self.repo.create_attachment(
             payload={
                 "user_id": user.id,
-                "task_id": None,
+                "task_id": comment.task_id,
                 "comment_id": comment_id,
                 "file_name": payload.link_name or payload.link,
                 "file_size": str("0"),
