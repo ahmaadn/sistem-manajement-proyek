@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from time import perf_counter
 from typing import Any
@@ -303,13 +304,18 @@ class PegawaiAiohttpClient:
         *,
         json: Any = None,
         headers: dict[str, str] | None = None,
+        timeout_sec: float = 20.0,
     ) -> tuple[int, Any | None, str]:
         start = perf_counter()
         try:
             # Pakai session singleton yang loop-aware
             session = await SingletonAiohttp.get_aiohttp_client()
             async with session.request(
-                method, url, json=json, headers=headers
+                method,
+                url,
+                json=json,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30),
             ) as resp:
                 status = resp.status
                 text = await resp.text()
@@ -321,20 +327,20 @@ class PegawaiAiohttpClient:
                     except Exception:
                         data = None
 
-        except (RuntimeError, aiohttp.ClientError) as e:
+        except (RuntimeError, aiohttp.ClientError, asyncio.TimeoutError) as e:
             # dikarenakan di hosting di serverles lifespan/startup
             # kadang tidak konsisten. Jika singleton aiohttp tidak bisa
             # digunakan, maka kita perlu membuat session baru.
             logger.warning(
                 "aiohttp singleton unusable (%s). Falling back to temp session.", e
             )
-            timeout = aiohttp.ClientTimeout(total=30)
+            timeout = aiohttp.ClientTimeout(total=min(60, timeout_sec * 2))
             connector = aiohttp.TCPConnector(limit=100, enable_cleanup_closed=True)
             async with aiohttp.ClientSession(  # noqa: SIM117
                 timeout=timeout, connector=connector, trust_env=True
             ) as temp:
                 async with temp.request(
-                    method, url, json=json, headers=headers
+                    method, url, json=json, headers=headers, timeout=timeout
                 ) as resp:
                     status = resp.status
                     text = await resp.text()
@@ -360,37 +366,45 @@ class PegawaiAiohttpClient:
 
     @staticmethod
     async def login(*, payload: dict[str, Any]) -> dict[str, Any] | None:
-        status, data, text = await PegawaiAiohttpClient._request(
-            "POST",
-            PegawaiApiUrls.LOGIN,
-            json=payload,
-            headers={"Accept": "application/json"},
-        )
-        if status != 200 or not isinstance(data, dict):
-            logger.warning("Login failed: %s - %s", status, text)
-            return None
+        try:
+            status, data, text = await PegawaiAiohttpClient._request(
+                "POST",
+                PegawaiApiUrls.LOGIN,
+                json=payload,
+                headers={"Accept": "application/json"},
+            )
+            if status != 200 or not isinstance(data, dict):
+                logger.warning("Login failed: %s - %s", status, text)
+                return None
 
-        raw_token = data.get("token")
-        user = data.get("user") or {}
-        token = (
-            raw_token.split("|")[-1]
-            if isinstance(raw_token, str) and "|" in raw_token
-            else raw_token
-        )
-        user_id = user.get("id")
-        if not token or user_id is None:
-            logger.warning("Unexpected login payload: %s", data)
+            raw_token = data.get("token")
+            user = data.get("user") or {}
+            token = (
+                raw_token.split("|")[-1]
+                if isinstance(raw_token, str) and "|" in raw_token
+                else raw_token
+            )
+            user_id = user.get("id")
+            if not token or user_id is None:
+                logger.warning("Unexpected login payload: %s", data)
+                return None
+            return {"access_token": token, "user": user, "user_id": user_id}
+        except Exception as e:
+            logger.error("Error during login request: %s", e)
             return None
-        return {"access_token": token, "user": user, "user_id": user_id}
 
     @staticmethod
     async def validation_token(*, token: str | None = None) -> bool:
         req = request_object.get()
         headers = _auth_headers(req, token)
-        status, _, _ = await PegawaiAiohttpClient._request(
-            "POST", PegawaiApiUrls.VALIDATION, headers=headers
-        )
-        return status == 200
+        try:
+            status, _, _ = await PegawaiAiohttpClient._request(
+                "POST", PegawaiApiUrls.VALIDATION, headers=headers
+            )
+            return status == 200
+        except Exception as e:
+            logger.error("Error validating token: %s", e)
+            return False
 
     @staticmethod
     async def get_pegawai_me(*, token: str | None = None):
@@ -405,28 +419,40 @@ class PegawaiAiohttpClient:
     async def get_pegawai_detail(*, user_id: int, token: str | None = None):
         req = request_object.get()
         headers = _auth_headers(req, token)
-        status, data, _ = await PegawaiAiohttpClient._request(
-            "GET", PegawaiApiUrls.pegawai_detail(user_id), headers=headers
-        )
-        return data if status == 200 else None
+        try:
+            status, data, _ = await PegawaiAiohttpClient._request(
+                "GET", PegawaiApiUrls.pegawai_detail(user_id), headers=headers
+            )
+            return data if status == 200 else None
+        except Exception as e:
+            logger.error("Error fetching pegawai detail: %s", e)
+            return None
 
     @staticmethod
     async def get_list_pegawai(*, token: str | None = None):
         req = request_object.get()
         headers = _auth_headers(req, token)
-        status, data, _ = await PegawaiAiohttpClient._request(
-            "GET", PegawaiApiUrls.PEGAWAI_LIST, headers=headers
-        )
-        return data if status == 200 else None
+        try:
+            status, data, _ = await PegawaiAiohttpClient._request(
+                "GET", PegawaiApiUrls.PEGAWAI_LIST, headers=headers
+            )
+            return data if status == 200 else None
+        except Exception as e:
+            logger.error("Error fetching list pegawai: %s", e)
+            return None
 
     @staticmethod
     async def get_bulk_pegawai(*, ids: list[int], token: str | None = None):
         req = request_object.get()
         headers = {**_auth_headers(req, token), "Content-Type": "application/json"}
-        status, data, _ = await PegawaiAiohttpClient._request(
-            "POST",
-            PegawaiApiUrls.PEGAWAI_BULK,
-            json={"ids": ids},
-            headers=headers,
-        )
-        return data if status == 200 else None
+        try:
+            status, data, _ = await PegawaiAiohttpClient._request(
+                "POST",
+                PegawaiApiUrls.PEGAWAI_BULK,
+                json={"ids": ids},
+                headers=headers,
+            )
+            return data if status == 200 else None
+        except Exception as e:
+            logger.error("Error fetching bulk pegawai: %s", e)
+            return None
