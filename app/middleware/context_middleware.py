@@ -1,6 +1,4 @@
 from fastapi import Request
-from starlette.middleware import Middleware
-from starlette_context import plugins
 from starlette_context.middleware import ContextMiddleware
 
 
@@ -13,9 +11,3 @@ class CustomContextMiddleware(ContextMiddleware):
         context["user_info_cache"] = {}
 
         return context
-
-
-request_context_middleware = Middleware(
-    ContextMiddleware,
-    plugins=(plugins.RequestIdPlugin(), plugins.CorrelationIdPlugin()),
-)
