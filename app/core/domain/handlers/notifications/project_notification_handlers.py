@@ -67,6 +67,11 @@ async def notification_on_create_project(ev: ProjectCreatedEvent) -> None:
 
 
 async def notification_on_project_change_status(ev: ProjectStatusChangedEvent):
+    """Menganangi notifikasi event
+
+    Args:
+        ev (ProjectStatusChangedEvent): event project update
+    """
     async with async_session_maker() as session:
         message = (
             f"Project '{ev.project_title}' status changed from {ev.before} to "
