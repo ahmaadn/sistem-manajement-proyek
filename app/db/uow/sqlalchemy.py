@@ -119,7 +119,7 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             logger.info(
                 "Committing transaction and dispatching %d events", len(self._events)
             )
-            await dispatch_pending_events(self._events)
+            await dispatch_pending_events(self._events, self.background_tasks)
         finally:
             self._events.clear()
 

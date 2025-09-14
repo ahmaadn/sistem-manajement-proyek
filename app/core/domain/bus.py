@@ -156,16 +156,22 @@ subscribe_background = _event_bus.subscribe_background
 publish = _event_bus.publish
 
 
-async def dispatch_pending_events(events: list[DomainEvent]) -> None:
+async def dispatch_pending_events(
+    events: list[DomainEvent], background_tasks: BackgroundTasks | None = None
+) -> None:
     """
     Jalankan daftar event yang tertunda (per-UoW/per-session), bukan global.
     """
+    set_event_background(background_tasks)
+
     start_time = asyncio.get_event_loop().time()
+
     for ev in events:
         try:
             await publish(ev)
         except Exception:
             logger.exception("event.handler.error", extra={"event": ev.name})
+
     elapsed = asyncio.get_event_loop().time() - start_time
     if events:
         logger.info(
