@@ -9,6 +9,7 @@ from app.services.category_service import CategoryService
 from app.services.comment_service import CommentService
 from app.services.dashboard_service import DashboardService
 from app.services.milestone_service import MilestoneService
+from app.services.notification_service import NotificationService
 from app.services.project_service import ProjectService
 from app.services.task_service import TaskService
 
@@ -49,3 +50,7 @@ def get_milestone_service(uow: UnitOfWork = Depends(get_uow)) -> MilestoneServic
 
 def get_category_service(uow: UnitOfWork = Depends(get_uow)):
     return CategoryService(uow=uow)
+
+
+def get_notification_service(uow: UnitOfWork = Depends(get_uow)):
+    return NotificationService(uow)
