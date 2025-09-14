@@ -65,6 +65,9 @@ class ProjectMemberRead(BaseSchema):
     name: str = Field(..., description="Nama pengguna")
     email: str = Field(..., description="Email pengguna")
     project_role: RoleProject = Field(..., description="Peran dalam proyek")
+    profile_url: str | None = Field(
+        default=None, description="URL foto profil pengguna"
+    )
 
 
 class ProjectDetail(ProjectRead):

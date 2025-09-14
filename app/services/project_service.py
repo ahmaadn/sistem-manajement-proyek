@@ -47,13 +47,12 @@ from app.schemas.project import (
     ProjectUpdate,
     TaskEstimationItem,
 )
-from app.schemas.user import ProjectParticipation, User
+from app.schemas.user import ProjectParticipation, User, UserBase
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
 if TYPE_CHECKING:
-    from app.services.task_service import TaskService
-    from app.services.user_service import UserService
+    pass
 
 
 class ProjectService:
@@ -375,12 +374,52 @@ class ProjectService:
             project_cancel=(raw.get("project_cancel", 0) if is_admin_or_pm else 0),
         )
 
+    async def get_project_members(
+        self, members: list[ProjectMember]
+    ) -> list[ProjectMemberRead]:
+        """
+        Mengambil detail anggota proyek.
+
+        Args:
+            members (list[ProjectMember]): Daftar anggota proyek.
+
+        Returns:
+            list[ProjectMemberRead]: Daftar detail anggota proyek.
+        """
+
+        pegawai_service = PegawaiService()
+        users = await pegawai_service.list_user_by_ids([m.user_id for m in members])
+
+        # TODO: missing user belum di handle. mising user bisa terjadi jika user
+        # tidak lagi aktif atau terhapus. handle bisa dilakukan dengan menghapus
+        # anggota proyek yang tidak ditemukan. untuk saat ini hanya diabaikan saja
+
+        mapped_members = []
+        for m in members:
+            matched: UserBase | None = next(
+                (u for u in users if u and u.id == m.user_id), None
+            )
+
+            if not matched:
+                continue
+
+            # jika user tidak ditemukan, abaikan anggota proyek ini
+            mapped_members.append(
+                ProjectMemberRead(
+                    user_id=m.user_id,
+                    name=matched.name,
+                    email=matched.email,
+                    project_role=m.role,
+                    profile_url=matched.profile_url,
+                )
+            )
+
+        return mapped_members
+
     async def get_project_detail(
         self,
         user: User,
         project_id: int,
-        task_service: "TaskService",
-        user_service: "UserService",
     ) -> ProjectDetail:
         project = await self.repo.get_user_scoped_project_detail(
             user_id=user.id,
@@ -388,31 +427,15 @@ class ProjectService:
             is_admin=user.role == Role.ADMIN,
             is_pm=user.role == Role.PROJECT_MANAGER,
         )
+
         if not project:
             raise exceptions.ProjectNotFoundError
 
-        tasks = await task_service.list_task(filters={"project_id": project_id})
-
-        total_tasks = len(tasks)
-        total_completed_tasks = sum(
-            1 for t in tasks if t.status == StatusTask.COMPLETED
+        # Jalankan query task dan member secara bersamaan
+        tasks, members = await asyncio.gather(
+            self.uow.task_repo.list_by_filters(filters={"project_id": project.id}),
+            self.get_project_members(project.members),
         )
-
-        members: list[ProjectMemberRead] = []
-        users = await user_service.list_user()
-        for team_member in project.members:
-            detail_member = next(
-                (u for u in users if u.id == team_member.user_id), None
-            )
-            if detail_member:
-                members.append(
-                    ProjectMemberRead(
-                        user_id=detail_member.id,
-                        name=detail_member.name,
-                        email=detail_member.email,
-                        project_role=team_member.role,
-                    )
-                )
 
         return ProjectDetail(
             id=project.id,
@@ -424,8 +447,10 @@ class ProjectService:
             created_by=project.created_by,
             members=members,
             stats=ProjectStats(
-                total_tasks=total_tasks,
-                total_completed_tasks=total_completed_tasks,
+                total_tasks=len(tasks),
+                total_completed_tasks=sum(
+                    1 for t in tasks if t.status == StatusTask.COMPLETED
+                ),
             ),
         )
 

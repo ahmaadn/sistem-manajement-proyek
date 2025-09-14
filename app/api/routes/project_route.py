@@ -5,13 +5,12 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies.services import get_project_service, get_task_service
+from app.api.dependencies.services import get_project_service
 from app.api.dependencies.sessions import get_async_session
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import (
     get_current_user,
     get_user_pm,
-    get_user_service,
     permission_required,
 )
 from app.db.models.project_model import StatusProject
@@ -27,8 +26,6 @@ from app.schemas.project import (
 )
 from app.schemas.user import User
 from app.services.project_service import ProjectService
-from app.services.task_service import TaskService
-from app.services.user_service import UserService
 from app.utils import exceptions
 
 r = router = APIRouter(tags=["Projects"])
@@ -92,28 +89,16 @@ class _Project:
             },
         },
     )
-    async def get_detail_project(
-        self,
-        project_id: int,
-        task_service: TaskService = Depends(get_task_service),
-        user_service: UserService = Depends(get_user_service),
-    ):
+    async def get_detail_project(self, project_id: int):
         """
         Mengambil detail project, bedasarkan project yang di ikuti
 
         **Akses** : User, Project Manajer, Admin
         """
 
-        # terpaksa menggunakan uow karena dimungkinkan beberaapa pegawai belum
-        # mendapatkan role atau ada pegawai yang dinonaktifkan
-        async with self.uow:
-            project = await self.project_service.get_project_detail(
-                self.user, project_id, task_service, user_service
-            )
-
-            await self.uow.commit()
-
-        return project
+        return await self.project_service.get_project_detail(
+            user=self.user, project_id=project_id
+        )
 
     @r.put(
         "/projects/{project_id}",
