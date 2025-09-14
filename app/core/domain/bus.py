@@ -160,8 +160,16 @@ async def dispatch_pending_events(events: list[DomainEvent]) -> None:
     """
     Jalankan daftar event yang tertunda (per-UoW/per-session), bukan global.
     """
+    start_time = asyncio.get_event_loop().time()
     for ev in events:
         try:
             await publish(ev)
         except Exception:
             logger.exception("event.handler.error", extra={"event": ev.name})
+    elapsed = asyncio.get_event_loop().time() - start_time
+    if events:
+        logger.info(
+            "Dispatched %d events in %.2f seconds",
+            len(events),
+            elapsed,
+        )
