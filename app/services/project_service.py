@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import selectinload
+from starlette_context import context
 
 from app.core.domain.events.project import (
     ProjectCreatedEvent,
@@ -67,13 +68,22 @@ class ProjectService:
             project_create, extra_fields={"created_by": user.id}
         )
         # auto set owner
-        await self.repo.add_project_member(result.id, user.id, RoleProject.OWNER)
+
+        owner, admin_recipients = await asyncio.gather(
+            self.repo.add_project_member(result.id, user.id, RoleProject.OWNER),
+            self.uow.user_repository.get_admin_user_ids(),
+        )
 
         self.uow.add_event(
             ProjectCreatedEvent(
                 performed_by=user.id,
                 project_id=result.id,
                 project_title=result.title,
+                user=user,
+                admin_recipients=admin_recipients,
+                metadata={
+                    "context": context.data.copy(),
+                },
             )
         )
         return result

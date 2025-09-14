@@ -69,6 +69,12 @@ class InterfaceUserRepository(ABC):
         Menghitung jumlah pengguna dengan peran tertentu.
         """
 
+    @abstractmethod
+    async def get_admin_user_ids(self) -> list[int]:
+        """
+        Mendapatkan daftar ID pengguna dengan peran ADMIN.
+        """
+
 
 class UserSQLAlchemyRepository(InterfaceUserRepository):
     def __init__(self, session: AsyncSession) -> None:
@@ -134,3 +140,9 @@ class UserSQLAlchemyRepository(InterfaceUserRepository):
         )
         count = res.scalar_one()
         return int(count or 0)
+
+    async def get_admin_user_ids(self) -> list[int]:
+        res = await self.session.execute(
+            select(UserRole.user_id).where(UserRole.role == Role.ADMIN)
+        )
+        return [row[0] for row in res.fetchall()]
