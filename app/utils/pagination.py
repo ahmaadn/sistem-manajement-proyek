@@ -1,7 +1,7 @@
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.middleware.request import request_object
+from app.middleware.request_middleware import request_object
 
 
 class Paginator:

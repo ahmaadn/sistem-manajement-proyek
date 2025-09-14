@@ -8,7 +8,7 @@ from fastapi import Request
 from httpx import AsyncClient, Response
 
 from app.core.config.api_pegawai import PegawaiApiUrls
-from app.middleware.request import request_object
+from app.middleware.request_middleware import request_object
 from app.utils.aiohttp_client import SingletonAiohttp
 
 logger = logging.getLogger(__name__)
