@@ -207,10 +207,11 @@ class PegawaiService:
             # jika tidak ada di cache, tandai untuk fetch
             if cval is None and f"id:{uid}" not in cache:
                 missing_ids.append(uid)
-                logger.debug(f"Cache miss for user_id {uid}")
 
             # isi result_list dengan nilai dari cache atau None
             result_list.append(cval if f"id:{uid}" in cache else None)
+
+        logger.debug("Cache miss for user_id %s (need fetch)", missing_ids)
 
         # Fetch yang belum ada
         fetched: list[dict | None] = []
