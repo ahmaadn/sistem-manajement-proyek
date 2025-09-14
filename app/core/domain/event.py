@@ -26,31 +26,27 @@ class DomainEvent:
 
 class EventType(StrEnum):
     # Task
-    TASK_CREATED = "task_created"
-    TASK_UPDATED = "task_updated"
-    TASK_DELETED = "task_deleted"
-    TASK_STATUS_CHANGED = "task_status_changed"
-    TASK_DUE_DATE_CHANGED = "task_due_date_changed"
-    TASK_PRIORITY_CHANGED = "task_priority_changed"
-    TASK_TITLE_CHANGED = "task_title_changed"
-
-    # Assign
-    TASK_ASSIGNEE_ADDED = "task_assignee_added"
-    TASK_ASSIGNEE_REMOVED = "task_assignee_removed"
-    USER_ROLE_ASSIGNED = "user_role_assigned"
+    TASK_CREATED = "task.created"
+    TASK_UPDATED = "task.updated"
+    TASK_DELETED = "task.deleted"
+    TASK_STATUS_CHANGED = "task.status.changed"
+    TASK_DUE_DATE_CHANGED = "task.due_date.changed"
+    TASK_PRIORITY_CHANGED = "task.priority.changed"
+    TASK_TITLE_CHANGED = "task.title.changed"
 
     # Project
-    PROJECT_CREATED = "project_created"
-    PROJECT_UPDATED = "project_updated"
-    PROJECT_REMOVED = "project_removed"
-    PROJECT_MEMBER_ADDED = "project_member_added"
-    PROJECT_MEMBER_UPDATED = "project_member_updated"
-    PROJECT_MEMBER_REMOVED = "project_member_removed"
-    PROJECT_STATUS_CHANGED = "project_status_changed"
+    PROJECT_CREATED = "project.created"
+    PROJECT_UPDATED = "project.updated"
+    PROJECT_REMOVED = "project.removed"
+    PROJECT_MEMBER_ADDED = "project.member.added"
+    PROJECT_MEMBER_UPDATED = "project.member.updated"
+    PROJECT_MEMBER_REMOVED = "project.member.removed"
+    PROJECT_STATUS_CHANGED = "project.status.changed"
 
     # subtask
-    SUBTASKS_DETACHED = "subtasks_detached"
+    SUBTASKS_DETACHED = "subtasks.detached"
 
     # Assignment
-    TASK_ASSIGNED_ADDED = "task_assigned_added"
-    TASK_ASSIGNED_REMOVED = "task_assigned_removed"
+    TASK_ASSIGNED_ADDED = "task.assigned.added"
+    TASK_ASSIGNED_REMOVED = "task.assigned.removed"
+    USER_ROLE_ASSIGNED = "user.role.assigned"
