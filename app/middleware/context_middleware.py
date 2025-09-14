@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import Request
 from starlette_context.middleware import ContextMiddleware
+
+logger = logging.getLogger(__name__)
 
 
 class CustomContextMiddleware(ContextMiddleware):
@@ -9,5 +13,6 @@ class CustomContextMiddleware(ContextMiddleware):
 
         # Add custom data0"
         context["user_info_cache"] = {}
+        logger.debug("Custom context initialized with user_info_cache")
 
         return context
