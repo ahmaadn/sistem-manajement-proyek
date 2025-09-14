@@ -26,6 +26,10 @@ from app.db.repositories.milestone_repository import (
     InterfaceMilestoneRepository,
     MilestoneSQLAlchemyRepository,
 )
+from app.db.repositories.notification_repository import (
+    InterfaceNotificationRepository,
+    NotificationSQLAlchemyRepository,
+)
 from app.db.repositories.project_repository import (
     InterfaceProjectRepository,
     ProjectSQLAlchemyRepository,
@@ -57,6 +61,7 @@ class UnitOfWork(Protocol):
     attachment_repo: InterfaceAttachmentRepository
     milestone_repo: InterfaceMilestoneRepository
     category_repo: InterfaceCategoryRepository
+    notification_repo: InterfaceNotificationRepository
 
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
@@ -84,6 +89,9 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         )
         self.category_repo: InterfaceCategoryRepository = (
             CategorySQLAlchemyRepository(self.session)
+        )
+        self.notification_repo: InterfaceNotificationRepository = (
+            NotificationSQLAlchemyRepository(self.session)
         )
 
     def add_event(self, event: "DomainEvent") -> None:
