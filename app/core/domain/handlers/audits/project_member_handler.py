@@ -1,20 +1,20 @@
 import logging
 
 from app.core.domain.bus import subscribe
+from app.core.domain.event import EventType
 from app.core.domain.events.project_member import (
     ProjectMemberAddedEvent,
     ProjectMemberRemovedEvent,
     ProjectMemberUpdatedEvent,
 )
 from app.core.domain.handlers.audit_handler import write_audit
-from app.db.models.audit_model import AuditEventType
 
 logger = logging.getLogger(__name__)
 
 
 async def on_project_member_added(ev: ProjectMemberAddedEvent):
     await write_audit(
-        action_type=AuditEventType.PROJECT_MEMBER_ADDED,
+        action_type=EventType.PROJECT_MEMBER_ADDED,
         performed_by=ev.performed_by,
         project_id=ev.project_id,
         details={
@@ -31,7 +31,7 @@ async def on_project_member_added(ev: ProjectMemberAddedEvent):
 
 async def on_project_member_updated(ev: ProjectMemberUpdatedEvent):
     await write_audit(
-        action_type=AuditEventType.PROJECT_MEMBER_UPDATED,
+        action_type=EventType.PROJECT_MEMBER_UPDATED,
         performed_by=ev.performed_by,
         project_id=ev.project_id,
         details={
@@ -49,7 +49,7 @@ async def on_project_member_updated(ev: ProjectMemberUpdatedEvent):
 
 async def on_project_member_removed(ev: ProjectMemberRemovedEvent):
     await write_audit(
-        action_type=AuditEventType.PROJECT_MEMBER_REMOVED,
+        action_type=EventType.PROJECT_MEMBER_REMOVED,
         performed_by=ev.performed_by,
         project_id=ev.project_id,
         details={

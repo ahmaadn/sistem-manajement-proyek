@@ -3,14 +3,15 @@ import logging
 from sqlalchemy.exc import IntegrityError
 
 from app.api.dependencies.sessions import async_session_maker
-from app.db.models.audit_model import AuditEventType, AuditLog
+from app.core.domain.event import EventType
+from app.db.models.audit_model import AuditLog
 
 logger = logging.getLogger(__name__)
 
 
 async def write_audit(
     *,
-    action_type: AuditEventType,
+    action_type: EventType,
     performed_by: int | None = None,
     project_id: int | None = None,
     task_id: int | None = None,
