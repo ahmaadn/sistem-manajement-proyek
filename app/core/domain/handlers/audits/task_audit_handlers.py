@@ -1,6 +1,7 @@
 import logging
 
 from app.core.domain.bus import subscribe
+from app.core.domain.event import EventType
 from app.core.domain.events.task import (
     SubTasksDetachedFromSectionEvent,
     TaskCreatedEvent,
@@ -10,7 +11,6 @@ from app.core.domain.events.task import (
     TaskUpdatedEvent,
 )
 from app.core.domain.handlers.audit_handler import write_audit
-from app.db.models.audit_model import AuditEventType
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ async def on_task_created(ev: TaskCreatedEvent):
     """Audit event untuk tugas yang dibuat."""
 
     await write_audit(
-        action_type=AuditEventType.TASK_CREATED,
+        action_type=EventType.TASK_CREATED,
         performed_by=ev.created_by,
         task_id=ev.performed_by,
         project_id=ev.project_id,
@@ -33,7 +33,7 @@ async def on_task_renamed(ev: TaskRenameEvent):
     """Audit event untuk tugas yang diubah namanya."""
 
     await write_audit(
-        action_type=AuditEventType.TASK_TITLE_CHANGED,
+        action_type=EventType.TASK_TITLE_CHANGED,
         performed_by=ev.updated_by,
         task_id=ev.performed_by,
         project_id=ev.project_id,
@@ -46,7 +46,7 @@ async def on_task_updated(ev: TaskUpdatedEvent):
     """Audit event untuk tugas yang diubah namanya."""
 
     await write_audit(
-        action_type=AuditEventType.TASK_UPDATED,
+        action_type=EventType.TASK_UPDATED,
         performed_by=ev.updated_by,
         task_id=ev.performed_by,
         project_id=ev.project_id,
@@ -58,7 +58,7 @@ async def on_task_deleted(ev: TaskDeletedEvent):
     """Audit event untuk tugas yang dihapus."""
 
     await write_audit(
-        action_type=AuditEventType.TASK_DELETED,
+        action_type=EventType.TASK_DELETED,
         performed_by=ev.deleted_by,
         task_id=ev.performed_by,
         project_id=ev.project_id,
@@ -71,7 +71,7 @@ async def on_task_status_changed(ev: TaskStatusChangedEvent):
     """Audit event untuk tugas yang diubah statusnya."""
 
     await write_audit(
-        action_type=AuditEventType.TASK_STATUS_CHANGED,
+        action_type=EventType.TASK_STATUS_CHANGED,
         performed_by=ev.performed_by,
         task_id=ev.task_id,
         project_id=ev.project_id,
@@ -87,7 +87,7 @@ async def on_task_detached(ev: SubTasksDetachedFromSectionEvent):
     """Audit event untuk sub-tugas yang dipisahkan dari seksi."""
 
     await write_audit(
-        action_type=AuditEventType.SUBTASKS_DETACHED,
+        action_type=EventType.SUBTASKS_DETACHED,
         performed_by=ev.user_id,
         task_id=ev.section_task_id,
         project_id=ev.project_id,

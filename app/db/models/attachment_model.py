@@ -14,7 +14,9 @@ if TYPE_CHECKING:
 class Attachment(Base, CreateStampMixin):
     __tablename__ = "attachment"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
     """
     ID lampiran
     """

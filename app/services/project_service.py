@@ -1,9 +1,10 @@
 import asyncio
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 from sqlalchemy.orm import selectinload
+from starlette_context import context
 
 from app.core.domain.events.project import (
     ProjectCreatedEvent,
@@ -67,13 +68,22 @@ class ProjectService:
             project_create, extra_fields={"created_by": user.id}
         )
         # auto set owner
-        await self.repo.add_project_member(result.id, user.id, RoleProject.OWNER)
+
+        owner, admin_recipients = await asyncio.gather(
+            self.repo.add_project_member(result.id, user.id, RoleProject.OWNER),
+            self.uow.user_repository.get_admin_user_ids(),
+        )
 
         self.uow.add_event(
             ProjectCreatedEvent(
                 performed_by=user.id,
                 project_id=result.id,
                 project_title=result.title,
+                user=user,
+                admin_recipients=admin_recipients,
+                metadata={
+                    "context": context.data.copy(),
+                },
             )
         )
         return result
@@ -111,7 +121,7 @@ class ProjectService:
             pass
 
     async def update_project(
-        self, project: Project, project_update: ProjectUpdate
+        self, project_id: int, user: User, project_update: ProjectUpdate
     ) -> Project:
         """Memperbarui proyek bedasarkan kepemilikan jika user owner dari project
         maka dia berhak mengedit project. akses yang diberikan hanya owener saja
@@ -123,10 +133,59 @@ class ProjectService:
         Returns:
             Project: Proyek yang diperbarui.
         """
-        project = await self.repo.update(project, project_update)
+        project = await self.get_project_by_owner(user.id, project_id)
+
+        await self._on_update_project(
+            user=user, project=project, payload_update=project_update
+        )
+
+        await self.repo.update(project, project_update)
+
+        return project
+
+    async def _on_update_project(
+        self, user: User, project: Project, payload_update: ProjectUpdate
+    ):
+        """Mengirimkan notifikasi perubahan kepada member, adamin, atau project member
+
+        Args:
+            user (User): User yang melakukan emit notifikasi
+            project (Project): Object project yang sebelum di ubah
+            payload_update (ProjectUpdate): perubahan data
+        """
+
+        # Kontributor hanya dapat notifikasi jika status project sebelumnya adalah
+        # ACTIVE atau COMPLETED dan status project setelahnya adalah ACTIVE atau
+        # COMPLETED
+        send_contributor = False
+        if project.status in (
+            StatusProject.ACTIVE,
+            StatusProject.COMPLETED,
+            StatusProject.TENDER,
+        ) and payload_update.status in (
+            StatusProject.ACTIVE,
+            StatusProject.COMPLETED,
+        ):
+            send_contributor = True
+
+        # Mendapatkan admin untuk mendapatkan notifikasi juga walaupun dia bukan
+        # member
+        admins, members = await asyncio.gather(
+            *[
+                self.uow.user_repository.get_admin_user_ids(),
+                self.uow.project_repo.list_project_members(
+                    project_id=project.id,
+                    role=None if send_contributor else RoleProject.OWNER,
+                ),
+            ]
+        )
+
+        # menggunakan set agar tidak ada double notifikasi
+        recipients = {m.user_id for m in members if m.user_id != user.id}
+        recipients.update(admins)
 
         # Tambah event update
-        if project_update.title and project.title != project_update.title:
+        if payload_update.title and project.title != payload_update.title:
             self.uow.add_event(
                 ProjectUpdatedEvent(
                     performed_by=project.created_by,
@@ -136,17 +195,18 @@ class ProjectService:
             )
 
         # Tambah event status change
-        if project_update.status and project.status != project_update.status:
+        if payload_update.status and project.status != payload_update.status:
             self.uow.add_event(
                 ProjectStatusChangedEvent(
                     performed_by=project.created_by,
+                    project_title=project.title,
                     project_id=project.id,
                     before=project.status,
-                    after=project_update.status,
+                    after=payload_update.status,
+                    user=user,
+                    recipients=list(recipients),
                 )
             )
-
-        return project
 
     async def add_member(
         self, project_id: int, user_id: int, role: RoleProject
@@ -811,3 +871,14 @@ class ProjectService:
                 for t in tasks
             ],
         )
+
+    async def get_members(self, project_id: int) -> Sequence[ProjectMember]:
+        """Mendapatkan anggota proyek berdasarkan ID proyek.
+
+        Args:
+            project_id (int): ID proyek.
+
+        Returns:
+            Sequence[ProjectMember]: Daftar anggota proyek.
+        """
+        return await self.repo.list_project_members(project_id)

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.db.models.category_model import Category
     from app.db.models.comment_model import Comment
     from app.db.models.milestone_model import Milestone
+    from app.db.models.notification_model import Notification
     from app.db.models.project_model import Project
     from app.db.models.task_assigne_model import TaskAssignee
 
@@ -182,3 +183,10 @@ class Task(Base, TimeStampMixin):
     Relasi ke kategori yang terkait dengan tugas ini,
     relasi ini bersifat one to many (satu kategori dapat memiliki banyak tugas)
     """
+
+    notifications: Mapped[List["Notification"]] = relationship(
+        "Notification",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
