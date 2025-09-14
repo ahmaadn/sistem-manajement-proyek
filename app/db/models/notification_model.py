@@ -2,7 +2,7 @@ import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -57,7 +57,7 @@ class Notification(Base, CreateStampMixin):
     """Status apakah notifikasi sudah dibaca atau belum."""
 
     read_at: Mapped[datetime.datetime | None] = mapped_column(
-        String(), nullable=True, default=None
+        DateTime(timezone=True), nullable=True, default=None
     )
     """Waktu ketika notifikasi dibaca."""
 

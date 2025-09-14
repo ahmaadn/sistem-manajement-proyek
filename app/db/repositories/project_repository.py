@@ -163,6 +163,11 @@ class InterfaceProjectRepository(
             tuple[bool, bool]: (project_exists, allowed)
         """
 
+    @abstractmethod
+    async def list_project_members(
+        self, project_id: int, role: RoleProject | None = None
+    ) -> Sequence[ProjectMember]: ...
+
 
 class ProjectSQLAlchemyRepository(
     InterfaceProjectRepository,
@@ -581,3 +586,16 @@ class ProjectSQLAlchemyRepository(
         res = await self.session.execute(stmt)
         row = res.one()
         return bool(row.project_exists), bool(row.allowed)
+
+    async def list_project_members(
+        self, project_id: int, role: RoleProject | None = None
+    ) -> Sequence[ProjectMember]:
+        stmt = (
+            select(ProjectMember)
+            .where(ProjectMember.project_id == project_id)
+            .order_by(ProjectMember.role.asc(), ProjectMember.user_id.asc())
+        )
+        if role is not None:
+            stmt = stmt.where(ProjectMember.role == role)
+        res = await self.session.execute(stmt)
+        return res.scalars().all()

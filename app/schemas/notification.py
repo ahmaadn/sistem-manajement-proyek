@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 
 from app.schemas.base import BaseSchema
 
@@ -9,7 +9,7 @@ class NotificationRead(BaseSchema):
 
     type: str = ""
     message: str = ""
-    created_at: datetime.datetime
+    created_at: datetime
 
     actor_id: int
     actor_name: str = ""
@@ -22,4 +22,4 @@ class NotificationRead(BaseSchema):
     task_name: str | None = None
 
     is_read: bool = False
-    read_at: datetime.datetime | None = None
+    read_at: datetime | None = None

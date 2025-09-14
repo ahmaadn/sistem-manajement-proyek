@@ -7,9 +7,8 @@ Create Date: 2025-09-14 07:17:32.022609
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'ddae15ee943b'
@@ -29,7 +28,7 @@ def upgrade() -> None:
     sa.Column('type', sa.String(length=50), nullable=False),
     sa.Column('message', sa.String(), nullable=False),
     sa.Column('is_read', sa.Boolean(), nullable=False),
-    sa.Column('read_at', sa.String(), nullable=True),
+    sa.Column('read_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['project_id'], ['project.id'], name=op.f('fk_notification_project_id_project'), ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['task_id'], ['task.id'], name=op.f('fk_notification_task_id_task'), ondelete='CASCADE'),

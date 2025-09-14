@@ -123,8 +123,6 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         finally:
             self._events.clear()
 
-        logger.debug("Transaction committed")
-        logger.debug("background tasks: %s", self.background_tasks)
         self._committed = True
 
     async def rollback(self) -> None:
