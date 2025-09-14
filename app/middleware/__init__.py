@@ -1,8 +1,15 @@
 from starlette.middleware import Middleware
+from starlette_context import plugins
 
-from .context_middleware import request_context_middleware
+from .context_middleware import CustomContextMiddleware
 from .request_middleware import RequestMiddleware
 
-__all__ = ("RequestMiddleware", "middleware", "request_context_middleware")
+__all__ = ("CustomContextMiddleware", "RequestMiddleware", "middleware")
 
-middleware = [Middleware(RequestMiddleware), request_context_middleware]
+middleware = [
+    Middleware(RequestMiddleware),
+    Middleware(
+        CustomContextMiddleware,
+        plugins=(plugins.RequestIdPlugin(), plugins.CorrelationIdPlugin()),
+    ),
+]
