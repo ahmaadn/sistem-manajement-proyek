@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, List, Protocol, runtime_checkable
 
+from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.domain.bus import dispatch_pending_events
@@ -58,11 +59,15 @@ class UnitOfWork(Protocol):
     milestone_repo: InterfaceMilestoneRepository
     category_repo: InterfaceCategoryRepository
 
+    background_tasks: BackgroundTasks | None
+
     def add_event(self, event: "DomainEvent") -> None: ...
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...
     async def __aenter__(self) -> "UnitOfWork": ...
     async def __aexit__(self, exc_type, exc, tb) -> None: ...
+
+    def set_background_tasks(self, background_tasks: BackgroundTasks) -> None: ...
 
 
 class SQLAlchemyUnitOfWork(UnitOfWork):
@@ -86,6 +91,8 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             CategorySQLAlchemyRepository(self.session)
         )
 
+        self.background_tasks = None
+
     def add_event(self, event: "DomainEvent") -> None:
         """Menambahkan event ke dalam unit of work.
 
@@ -107,6 +114,9 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
             await dispatch_pending_events(self._events)
         finally:
             self._events.clear()
+
+        logger.debug("Transaction committed")
+        logger.debug("background tasks: %s", self.background_tasks)
         self._committed = True
 
     async def rollback(self) -> None:
@@ -135,3 +145,11 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         """
         if exc:
             await self.rollback()
+
+    def set_background_tasks(self, background_tasks: BackgroundTasks) -> None:
+        """Set background tasks untuk unit of work.
+
+        Args:
+            background_tasks (BackgroundTasks): Background tasks yang akan diset.
+        """
+        self.background_tasks = background_tasks

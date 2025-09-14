@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.services import get_attachment_service
 from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
-from app.core.domain.bus import set_event_background
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.attachment import AttachmentLinkCreate, AttachmentRead
@@ -53,7 +52,6 @@ class _Attachment:
     )
     async def upload_task_attachment(
         self,
-        bg_tasks: BackgroundTasks,
         task_id: int,
         file: UploadFile = File(...),
     ):
@@ -63,7 +61,6 @@ class _Attachment:
 
         **Akses**: Project Member, Admin
         """
-        set_event_background(bg_tasks)
 
         async with self.uow:
             att = await self.attachment_service.create_task_attachment(
@@ -187,7 +184,6 @@ class _Attachment:
     )
     async def upload_comment_attachment(
         self,
-        bg_tasks: BackgroundTasks,
         comment_id: int,
         file: UploadFile = File(...),
     ):
@@ -197,7 +193,6 @@ class _Attachment:
 
         **Akses**: Orang yang berkomentar
         """
-        set_event_background(bg_tasks)
 
         async with self.uow:
             att = await self.attachment_service.create_comment_attachment(
@@ -219,13 +214,12 @@ class _Attachment:
             },
         },
     )
-    async def delete_attachment(self, attachment_id: int, bg_tasks: BackgroundTasks):
+    async def delete_attachment(self, attachment_id: int):
         """
         Menghapus file lampiran.
 
         **Akses**: Owner Project, Admin
         """
-        set_event_background(bg_tasks)
 
         async with self.uow:
             await self.attachment_service.delete_attachment(
