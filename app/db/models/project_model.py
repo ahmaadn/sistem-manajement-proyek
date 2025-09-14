@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.db.models.audit_model import AuditLog
     from app.db.models.category_model import Category
     from app.db.models.milestone_model import Milestone
+    from app.db.models.notification_model import Notification
     from app.db.models.project_member_model import ProjectMember
     from app.db.models.task_model import Task
 
@@ -92,4 +93,15 @@ class Project(Base, TimeStampMixin, SoftDeleteMixin):
     """
     Daftar kategori yang terkait dengan proyek ini.
     relasi one to many (satu proyek memiliki banyak kategori)
+    """
+
+    notifications: Mapped[List["Notification"]] = relationship(
+        "Notification",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    """
+    Daftar notifikasi yang terkait dengan proyek ini.
+    relasi one to many (satu proyek memiliki banyak notifikasi)
     """
