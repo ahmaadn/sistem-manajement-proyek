@@ -121,9 +121,10 @@ class PusherDriver:
     async def send_to_user(self, user_id: int, message: dict) -> None:
         """
         Mengirim ke channel private milik satu user.
-        Channel: 'private-user-123'
+        Channel: 'user-123'
         """
-        channel_name = f"private-user-{user_id}"
+        channel_name = f"user-{user_id}"
+
         event_name = message.get("type", "message")
         data = message.get("data", {})
 
@@ -141,7 +142,7 @@ class PusherDriver:
         for user_id in user_ids:
             batch_data.append(
                 {
-                    "channel": f"private-user-{user_id}",
+                    "channel": f"user-{user_id}",
                     "name": event_name,
                     "data": data,
                 }
