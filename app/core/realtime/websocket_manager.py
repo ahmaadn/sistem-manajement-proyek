@@ -163,7 +163,6 @@ def get_manager() -> WebSocketManager:
     Returns:
         ConnectionManager: Instance dari ConnectionManager.
     """
-    print("get_manager called")
     if not hasattr(get_manager, "instance"):
         get_manager.instance = WebSocketManager()  # type: ignore[reportFunctionMemberAccess]
 
