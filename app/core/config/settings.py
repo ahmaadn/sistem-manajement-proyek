@@ -1,3 +1,5 @@
+import logging
+
 from fastapi_mail import ConnectionConfig
 from pydantic import SecretStr, computed_field
 from pydantic_core import MultiHostUrl
@@ -5,7 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
 
     PROJECT_NAME: str = "Template FastApi Backend"
     VERSION_API: int = 1
@@ -66,14 +73,8 @@ class Settings(BaseSettings):
 
     # REALTIME DRIVERS
     # contoh isi : websocket,sse,pusher
+    # konfigurasi punjer ada di app/core/config/pusher.py
     REALTIME_DRIVERS: str = "websocket,sse,pusher"
-
-    # PUSHER
-    PUSHER_APP_ID: str = ""
-    PUSHER_KEY: str = ""
-    PUSHER_SECRET: str = ""
-    PUSHER_CLUSTER: str = "ap1"  # singapura
-    PUSHER_SSL: bool = True
 
     _ALLOWED = {"websocket", "sse", "pusher"}
 
@@ -86,7 +87,27 @@ class Settings(BaseSettings):
         items = {
             x.strip().lower() for x in self.REALTIME_DRIVERS.split(",") if x.strip()
         }
-        return {x for x in items if x in self._ALLOWED}
+        enabled = {x for x in items if x in self._ALLOWED}
+
+        # Beritahu jika Pusher diaktifkan tapi setting yang diperlukan tidak lengkap
+        if "pusher" in enabled:
+            try:
+                from app.core.config.pusher import get_pusher_config
+
+                cfg = get_pusher_config()
+                if not cfg.cek_valid():
+                    enabled.remove("pusher")
+            except Exception:
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    (
+                        "REALTIME_DRIVERS includes 'pusher' but PusherConfig "
+                        "is not available"
+                    )
+                )
+                enabled.remove("pusher")
+
+        return enabled
 
 
 def _singleton(cls):

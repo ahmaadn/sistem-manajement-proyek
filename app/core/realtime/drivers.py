@@ -3,9 +3,12 @@ from __future__ import annotations
 from typing import Any, Iterable, Optional, Protocol, Set
 
 import pusher
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.templating import Jinja2Templates
 
+from app.core.config.pusher import get_pusher_config
 from app.core.config.settings import get_settings
+from app.templates import templates
 
 
 class RealtimeDriver(Protocol):
@@ -106,17 +109,47 @@ class PusherDriver:
     name = "pusher"
 
     def __init__(self) -> None:
+        cfg = get_pusher_config()
         self._client = pusher.Pusher(
-            app_id=get_settings().PUSHER_APP_ID,
-            key=get_settings().PUSHER_KEY,
-            secret=get_settings().PUSHER_SECRET,
-            cluster=get_settings().PUSHER_CLUSTER,
-            ssl=True,
+            app_id=cfg.PUSHER_APP_ID,
+            key=cfg.PUSHER_KEY,
+            secret=cfg.PUSHER_SECRET,
+            cluster=cfg.PUSHER_CLUSTER,
+            ssl=cfg.PUSHER_SSL,
         )
 
     def get_router(self) -> Optional[APIRouter]:
-        """Pusher tidak memerlukan endpoint di backend."""
-        return None
+        """Sediakan endpoint test sederhana untuk Pusher (opsional)."""
+        cfg = get_pusher_config()
+        if not cfg.PUSHER_TEST_ENABLE:
+            return None
+
+        router = APIRouter(tags=["Pusher"])
+
+        path = cfg.PUSHER_TEST_PATH or "/test/pusher/user/{user_id}"
+        if "{user_id}" not in path:
+            path = "/test/pusher/user/{user_id}"
+
+        @router.get(path)
+        async def test_pusher_page(request: Request, user_id: int):
+            """Webpage sederhana untuk mengetes Pusher."""
+            ctx = {
+                "request": request,
+                "pusher_key": cfg.PUSHER_KEY,
+                "pusher_cluster": cfg.PUSHER_CLUSTER,
+                "user_id": user_id,
+            }
+            template_name = cfg.PUSHER_TEMPLATE_NAME or "pusher_test_notify.html"
+            # Use configured template directory when provided; fallback to default
+            if (
+                cfg.PUSHER_TEMPLATE_DIR
+                and cfg.PUSHER_TEMPLATE_DIR != "app/templates"
+            ):
+                local_templates = Jinja2Templates(directory=cfg.PUSHER_TEMPLATE_DIR)
+                return local_templates.TemplateResponse(template_name, ctx)
+            return templates.TemplateResponse(template_name, ctx)
+
+        return router
 
     async def send_to_user(self, user_id: int, message: dict) -> None:
         """
