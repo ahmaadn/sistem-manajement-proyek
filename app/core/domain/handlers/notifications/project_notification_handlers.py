@@ -41,7 +41,7 @@ async def notification_on_create_project(ev: ProjectCreatedEvent) -> None:
             *[
                 send_to_user(
                     user_id=notif.recipient_id,
-                    type_=notif.type,
+                    type_=EventType.NOTIFICATION_SENT,
                     data=jsonable_encoder(
                         NotificationRead(
                             id=notif.id,
@@ -91,7 +91,7 @@ async def notification_on_project_change_status(ev: ProjectStatusChangedEvent):
             *[
                 send_to_user(
                     user_id=notif.recipient_id,
-                    type_=notif.type,
+                    type_=EventType.NOTIFICATION_SENT,
                     data=jsonable_encoder(
                         NotificationRead(
                             id=notif.id,

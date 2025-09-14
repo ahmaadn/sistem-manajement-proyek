@@ -50,3 +50,6 @@ class EventType(StrEnum):
     TASK_ASSIGNED_ADDED = "task.assigned.added"
     TASK_ASSIGNED_REMOVED = "task.assigned.removed"
     USER_ROLE_ASSIGNED = "user.role.assigned"
+
+    # Notification
+    NOTIFICATION_SENT = "notification.sent"
