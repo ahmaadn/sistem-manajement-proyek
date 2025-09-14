@@ -161,7 +161,8 @@ class ProjectService:
         if project.status in (
             StatusProject.ACTIVE,
             StatusProject.COMPLETED,
-        ) and payload_update.status == (
+            StatusProject.TENDER,
+        ) and payload_update.status in (
             StatusProject.ACTIVE,
             StatusProject.COMPLETED,
         ):
