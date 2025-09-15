@@ -11,6 +11,10 @@ from app.db.repositories.attachment_repository import (
     AttachmentSQLAlchemyRepository,
     InterfaceAttachmentRepository,
 )
+from app.db.repositories.audit_repository import (
+    AuditSQLAlchemyRepository,
+    InterfaceAuditRepository,
+)
 from app.db.repositories.category_repository import (
     CategorySQLAlchemyRepository,
     InterfaceCategoryRepository,
@@ -58,6 +62,7 @@ class UnitOfWork(Protocol):
     task_repo: InterfaceTaskRepository
     project_repo: InterfaceProjectRepository
     dashboard_repo: InterfaceDashboardReadRepository
+    audit_repo: InterfaceAuditRepository
     user_repository: InterfaceUserRepository
     attachment_repo: InterfaceAttachmentRepository
     milestone_repo: InterfaceMilestoneRepository
@@ -89,6 +94,9 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self.dashboard_repo = DashboardSQLAlchemyReadRepository(self.session)
         self.user_repository = UserSQLAlchemyRepository(self.session)
         self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
+        self.audit_repo: InterfaceAuditRepository = AuditSQLAlchemyRepository(
+            self.session
+        )
         self.milestone_repo: InterfaceMilestoneRepository = (
             MilestoneSQLAlchemyRepository(self.session)
         )

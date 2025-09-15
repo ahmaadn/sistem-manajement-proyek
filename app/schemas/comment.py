@@ -1,8 +1,10 @@
 from datetime import datetime
+from typing import Literal, Union
 
 from pydantic import Field
 
 from app.schemas.attachment import AttachmentRead
+from app.schemas.audit import TaskAuditSchema
 from app.schemas.base import BaseSchema
 
 
@@ -23,3 +25,8 @@ class CommentDetail(CommentRead):
     profile_url: str | None = None
     user_name: str | None = None
     attachments: list[AttachmentRead] = Field(default_factory=list)
+
+
+class CommentWithEventsRead(BaseSchema):
+    type: Literal["comment", "event"]
+    data: Union[CommentDetail, TaskAuditSchema]
