@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, cast
+from typing import Any, Mapping, Optional, cast
 
 from app.core.domain.event import EventType
 from app.db.models.comment_model import Comment
@@ -134,89 +134,179 @@ class CommentService:
         is_admin: bool = False,
         include_audits: bool = True,
     ) -> list[CommentWithCommentRead | CommentWithAuditRead]:
-        """Gabungkan komentar dan event audit untuk sebuah task.
+        """Menggabungkan komentar dan event audit terpilih untuk suatu task.
 
-        - Akses dibatasi pada anggota project (termasuk owner) atau admin.
-        - Jika ``include_events`` True, event audit tertentu akan disertakan.
-        - Hasil diurutkan dari yang paling lama ke paling baru
+        - Akses dibatasi untuk anggota proyek (termasuk owner) atau admin.
+        - Jika ``include_audits`` True, event audit akan disertakan.
+        - Hasil diurutkan dari yang paling lama ke yang paling baru
           berdasarkan waktu pembuatan.
         """
 
-        # Reuse permission checks and enrichment from existing list_comments
-        comments_detail = await self.list_comments(
-            task_id=task_id, user_id=user_id, is_admin=is_admin
+        # Cek permisi
+        if not is_admin:
+            is_member = await self.uow.task_repo.is_user_member_of_task_project(
+                task_id=task_id, user_id=user_id
+            )
+            if not is_member:
+                raise exceptions.ForbiddenError(
+                    "Anda tidak memiliki izin untuk melihat komentar ini"
+                )
+
+        # Ambil komentar mentah dan audit terlebih dahulu
+        comments = await self.uow.comment_repo.list_by_task_id(task_id=task_id)
+
+        audits = []
+        if include_audits:
+            audits = await self._get_audits_raw(task_id)
+
+        # Kumpulkan semua id pengguna (penulis komentar + pelaksana audit)
+        user_ids: set[int] = {c.user_id for c in comments}
+        user_ids.update(
+            x.performed_by for x in audits if getattr(x, "performed_by", None)
         )
 
-        combined: list[tuple] = []
+        # Memperkaya pengguna melalui satu panggilan
+        users_by_id = await self._get_users_map(list(user_ids))
 
-        # Bungkus komentar ke bentuk union output
-        for c in comments_detail:
-            combined.append(
-                (
-                    c.created_at,
-                    CommentWithCommentRead(type="comment", data=c),
-                )
+        # Membuat komentar
+        comment_items: list[CommentWithCommentRead] = []
+        for comment in comments:
+            u = users_by_id.get(comment.user_id)
+            detail = CommentDetail(
+                id=comment.id,
+                task_id=comment.task_id,
+                user_id=comment.user_id,
+                content=comment.content,
+                created_at=comment.created_at,
+                profile_url=(u.profile_url if u else None),
+                user_name=(u.name if u else None),
+                attachments=list(comment.attachments),  # type: ignore
             )
+            comment_items.append(CommentWithCommentRead(type="comment", data=detail))
 
+        # Membuar audit
+        audit_items: list[CommentWithAuditRead] = []
         if include_audits:
-            # Ambil hanya event yang diminta
-            event_types = [
-                EventType.TASK_STATUS_CHANGED.value,
-                EventType.TASK_TITLE_CHANGED.value,
-                EventType.TASK_ASSIGNED_ADDED.value,
-                EventType.TASK_ASSIGNED_REMOVED.value,
-            ]
-
-            audits = await self.uow.audit_repo.list_task_audits(
-                task_id=task_id, event_types=event_types
-            )
-
             for a in audits:
-                # Tentukan schema detail berdasarkan tipe event
-                atype = EventType(a.action_type)
-                if atype == EventType.TASK_STATUS_CHANGED:
-                    det = TaskStatusChangeAuditSchema(
-                        old_status=str((a.details or {}).get("old_status", "")),
-                        new_status=str((a.details or {}).get("new_status", "")),
-                    )
-                elif atype == EventType.TASK_TITLE_CHANGED:
-                    det = TaskTitleChangeAuditSchema(
-                        before=str((a.details or {}).get("before", "")),
-                        after=str((a.details or {}).get("after", "")),
-                    )
-                elif atype == EventType.TASK_ASSIGNED_ADDED:
-                    det = TaskAssignAddedAuditSchama(
-                        assignee_id=str((a.details or {}).get("assignee_id", "")),
-                        assignee_name=str(
-                            (a.details or {}).get("assignee_name", "")
-                        ),
-                    )
-                else:  # EventType.TASK_ASSIGNED_REMOVED
-                    det = TaskAssignRemovedAuditSchama(
-                        assignee_id=str((a.details or {}).get("assignee_id", "")),
-                        assignee_name=str(
-                            (a.details or {}).get("assignee_name", "")
-                        ),
-                    )
+                audit_schema = self._map_audit_to_schema(a, users_by_id)
+                audit_items.append(
+                    CommentWithAuditRead(type="audit", data=audit_schema)
+                )
 
-                audit_schema = TaskAuditSchema(
+        # Gabungkan dan urutkan berdasarkan waktu pembuatan
+        combined: list[tuple] = []
+        for item in comment_items:
+            combined.append((item.data.created_at, item))
+        for idx in range(len(audits)):
+            combined.append((audits[idx].created_at, audit_items[idx]))
+
+        combined.sort(key=lambda x: x[0])
+        return [item for _, item in combined]
+
+    async def get_audits(self, *, task_id: int) -> list[TaskAuditSchema]:
+        """Mengambil daftar audit bertipe (tanpa enrikmen data user).
+
+        Cocok untuk pemakaian internal atau endpoint terpisah.
+        """
+        audits = await self._get_audits_raw(task_id)
+        out: list[TaskAuditSchema] = []
+
+        for a in audits:
+            atype = EventType(a.action_type)
+            if atype == EventType.TASK_STATUS_CHANGED:
+                det = TaskStatusChangeAuditSchema(
+                    old_status=str((a.details or {}).get("old_status", "")),
+                    new_status=str((a.details or {}).get("new_status", "")),
+                )
+            elif atype == EventType.TASK_TITLE_CHANGED:
+                det = TaskTitleChangeAuditSchema(
+                    before=str((a.details or {}).get("before", "")),
+                    after=str((a.details or {}).get("after", "")),
+                )
+            elif atype == EventType.TASK_ASSIGNED_ADDED:
+                det = TaskAssignAddedAuditSchama(
+                    assignee_id=str((a.details or {}).get("assignee_id", "")),
+                    assignee_name=str((a.details or {}).get("assignee_name", "")),
+                )
+            else:
+                det = TaskAssignRemovedAuditSchama(
+                    assignee_id=str((a.details or {}).get("assignee_id", "")),
+                    assignee_name=str((a.details or {}).get("assignee_name", "")),
+                )
+
+            out.append(
+                TaskAuditSchema(
+                    audit_id=getattr(a, "id", 0) or 0,
+                    user_id=getattr(a, "performed_by", 0) or 0,
+                    profile_url=0,
+                    user_name="",
                     task_id=str(a.task_id) if a.task_id is not None else "",
                     created_at=(a.created_at.isoformat() if a.created_at else ""),
                     action_type=cast(TaskActionType, atype),
                     details=det,
                 )
-                combined.append(
-                    (
-                        a.created_at,
-                        CommentWithAuditRead(type="audit", data=audit_schema),
-                    )
-                )
+            )
+        return out
 
-        # Urutkan dari yang paling lama ke paling baru
-        combined.sort(key=lambda x: x[0])
+    async def _get_users_map(self, user_ids: list[int]):
+        if not user_ids:
+            return {}
+        pegawai_service = PegawaiService()
+        users = await pegawai_service.list_user_by_ids(user_ids)
+        return {u.id: u for u in users if u}
 
-        # Kembalikan hanya payload union-nya
-        return [item for _, item in combined]
+    async def _get_audits_raw(self, task_id: int):
+        event_types = [
+            EventType.TASK_STATUS_CHANGED.value,
+            EventType.TASK_TITLE_CHANGED.value,
+            EventType.TASK_ASSIGNED_ADDED.value,
+            EventType.TASK_ASSIGNED_REMOVED.value,
+        ]
+        return await self.uow.audit_repo.list_task_audits(
+            task_id=task_id, event_types=event_types
+        )
+
+    def _map_audit_details(self, atype: EventType, details: dict | None):
+        d = details or {}
+        if atype == EventType.TASK_STATUS_CHANGED:
+            return TaskStatusChangeAuditSchema(
+                old_status=str(d.get("old_status", "")),
+                new_status=str(d.get("new_status", "")),
+            )
+        if atype == EventType.TASK_TITLE_CHANGED:
+            return TaskTitleChangeAuditSchema(
+                before=str(d.get("before", "")),
+                after=str(d.get("after", "")),
+            )
+        if atype == EventType.TASK_ASSIGNED_ADDED:
+            return TaskAssignAddedAuditSchama(
+                assignee_id=str(d.get("assignee_id", "")),
+                assignee_name=str(d.get("assignee_name", "")),
+            )
+        return TaskAssignRemovedAuditSchama(
+            assignee_id=str(d.get("assignee_id", "")),
+            assignee_name=str(d.get("assignee_name", "")),
+        )
+
+    def _map_audit_to_schema(
+        self,
+        a,
+        users_by_id: Mapping[int, Any],
+    ) -> TaskAuditSchema:
+        atype = EventType(a.action_type)
+        det = self._map_audit_details(atype, getattr(a, "details", None))
+        performer = users_by_id.get(getattr(a, "performed_by", 0) or 0)
+        user_name = getattr(performer, "name", "") if performer else ""
+        return TaskAuditSchema(
+            audit_id=getattr(a, "id", 0) or 0,
+            user_id=getattr(a, "performed_by", 0) or 0,
+            profile_url=0,
+            user_name=user_name,
+            task_id=str(a.task_id) if a.task_id is not None else "",
+            created_at=(a.created_at.isoformat() if a.created_at else ""),
+            action_type=cast(TaskActionType, atype),
+            details=det,
+        )
 
     async def get_comment(
         self, task_id: int, user_id: int, comment_id: int, is_admin: bool = False
