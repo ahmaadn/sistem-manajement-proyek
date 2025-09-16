@@ -1,5 +1,7 @@
 import logging
 
+from fastapi.encoders import jsonable_encoder
+
 from app.core.domain.bus import subscribe
 from app.core.domain.event import EventType
 from app.core.domain.events.task import (
@@ -50,6 +52,7 @@ async def on_task_updated(ev: TaskUpdatedEvent):
         performed_by=ev.updated_by,
         task_id=ev.task_id,
         project_id=ev.project_id,
+        details=jsonable_encoder(ev.details),
     )
     logger.info(f"Task updated: {ev.task_id}")
 
