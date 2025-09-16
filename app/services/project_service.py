@@ -584,31 +584,50 @@ class ProjectService:
         return created
 
     async def remove_member_by_actor(
-        self, project_id: int, actor: User, member: User, target_user_id: int
+        self, project_id: int, actor: User, member: User
     ) -> None:
+        """Menghapus anggota dari proyek.
+
+        Args:
+            project_id (int): ID proyek
+            actor (User): Pengguna yang melakukan aksi
+            member (User): Anggota yang akan dihapus
+            target_user_id (int): ID pengguna target yang akan dihapus
+
+        Raises:
+            exceptions.ProjectNotFoundError: Jika proyek tidak ditemukan
+            exceptions.MemberNotFoundError: Jika anggota tidak ditemukan
+            exceptions.CannotRemoveMemberError: Jika anggota adalah pemilik proyek
+        """
+
         # pastikan actor owner (dan dapatkan owner id)
-        project = await self.repo.get_owned_project_by_user(actor.id, project_id)
+        project = await self.repo.get_project_by_id(
+            project_id=project_id,
+            user_id=actor.id,
+            required_role=None if actor.role == Role.ADMIN else RoleProject.OWNER,
+            allow_deleted=False,
+        )
         if not project:
             raise exceptions.ProjectNotFoundError
+
+        # pastikan member ada
+        if not await self.repo.get_member_by_ids(project_id, member.id):
+            raise exceptions.MemberNotFoundError
 
         # validasi aturan penghapusan
         ensure_actor_can_remove_member(
             project_owner_id=project.created_by,
             actor_user_id=actor.id,
-            target_user_id=target_user_id,
+            target_user_id=member.id,
         )
 
-        # pastikan member ada
-        if not await self.repo.get_member_by_ids(project_id, target_user_id):
-            raise exceptions.MemberNotFoundError
-
-        await self.repo.remove_project_member(project_id, target_user_id)
+        await self.repo.remove_project_member(project_id, member.id)
 
         self.uow.add_event(
             ProjectMemberRemovedEvent(
                 performed_by=actor.id,
                 project_id=project.id,
-                member_id=target_user_id,
+                member_id=member.id,
                 member_name=member.name,
             )
         )

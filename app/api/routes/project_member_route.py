@@ -58,7 +58,7 @@ class _Project:
         """
         Menambahkan anggota ke proyek
 
-        **Akses** : Project Manajer (Owner), Admin (Owner)
+        **Akses** : Project Manajer (Owner), Admin
         """
         # Ambil info user yang akan ditambahkan (tanpa logika bisnis di router)
         member_info = await self.user_service.get_user(user_id=payload.user_id)
@@ -100,7 +100,7 @@ class _Project:
         - tidak bisa menghapus diri sendiri
         - tidak bisa menghapus creator proyek
 
-        **Akses** : Project Manajer (Owner), Admin (Owner)
+        **Akses** : Project Manajer (Owner), Admin
         """
         member_info = await self.user_service.get_user(user_id)
         if not member_info:
@@ -108,7 +108,7 @@ class _Project:
 
         async with self.uow:
             await self.project_service.remove_member_by_actor(
-                project_id, self.user, member_info, user_id
+                project_id, self.user, member_info
             )
             await self.uow.commit()
 
