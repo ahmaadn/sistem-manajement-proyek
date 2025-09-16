@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy.orm import selectinload
 
 from app.core.domain.events.assignee_task import (
@@ -353,6 +354,7 @@ class TaskService:
                 project_id=updated.project_id,
                 task_id=task.id,
                 updated_by=user.id,
+                details=jsonable_encoder(task_update_data),
             )
         )
 

@@ -26,6 +26,7 @@ class TaskUpdatedEvent(DomainEvent):
     project_id: int
     task_id: int
     updated_by: int
+    details: dict | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
