@@ -48,7 +48,7 @@ from app.schemas.project import (
     ProjectUpdate,
     TaskEstimationItem,
 )
-from app.schemas.user import ProjectParticipation, User, UserBase
+from app.schemas.user import ProjectParticipation, User
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -455,22 +455,24 @@ class ProjectService:
         # anggota proyek yang tidak ditemukan. untuk saat ini hanya diabaikan saja
 
         mapped_members = []
-        for m in members:
-            matched: UserBase | None = next(
-                (u for u in users if u and u.id == m.user_id), None
-            )
-
-            if not matched:
+        for user in users:
+            if not user:
                 continue
+
+            project_role = RoleProject.CONTRIBUTOR
+            for m in members:
+                if m.user_id == user.id:
+                    project_role = m.role
+                    break
 
             # jika user tidak ditemukan, abaikan anggota proyek ini
             mapped_members.append(
                 ProjectMemberRead(
-                    user_id=m.user_id,
-                    name=matched.name,
-                    email=matched.email,
-                    project_role=m.role,
-                    profile_url=matched.profile_url,
+                    user_id=user.id,
+                    name=user.name,
+                    email=user.email,
+                    project_role=project_role,
+                    profile_url=user.profile_url,
                 )
             )
 

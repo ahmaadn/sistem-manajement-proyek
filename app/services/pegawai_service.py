@@ -220,22 +220,18 @@ class PegawaiService:
                 await asyncio.gather(self.client.get_bulk_pegawai(ids=missing_ids))
             )[0] or []
 
-        # Map fetched ke cache
-        idx = 0
-        for i, uid in enumerate(data):
-            if result_list[i] is not None or f"id:{uid}" in cache:
-                continue
+            logger.debug("Fetched %d users from Pegawai service", len(fetched))
 
-            raw = fetched[idx] if idx < len(fetched) else None
-            idx = 1
+        # Map fetched ke cache
+        for raw in fetched:
             if raw:
                 mapped = await self.map_to_pegawai_info(raw)
-                cache[f"id:{uid}"] = mapped
-                result_list[i] = mapped
-            else:
-                cache[f"id:{uid}"] = None
-                result_list[i] = None
+                uid = getattr(mapped, "id", None)
+                if uid is not None:
+                    cache[f"id:{uid}"] = mapped
 
+                # Perbarui result_list pada posisi yang sesuai
+                result_list[data.index(uid)] = mapped  # type: ignore
         return result_list
 
 
