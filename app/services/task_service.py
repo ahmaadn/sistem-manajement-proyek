@@ -362,23 +362,21 @@ class TaskService:
                 **self.handle_completed_status(payload.status, task, task.status)
             )
 
-        updated = await self.repo.update_task(task, task_update_data)
-
-        self.uow.add_event(
-            TaskUpdatedEvent(
-                performed_by=updated.id,
-                project_id=updated.project_id,
-                task_id=task.id,
-                updated_by=user.id,
-                details=jsonable_encoder(task_update_data),
+            self.uow.add_event(
+                TaskUpdatedEvent(
+                    performed_by=user.id,
+                    project_id=task.project_id,
+                    task_id=task.id,
+                    updated_by=user.id,
+                    details=jsonable_encoder(task_update_data),
+                )
             )
-        )
 
         if payload.name and payload.name != task.name:
             self.uow.add_event(
                 TaskRenameEvent(
-                    performed_by=updated.id,
-                    project_id=updated.project_id,
+                    performed_by=user.id,
+                    project_id=task.project_id,
                     task_id=task.id,
                     updated_by=user.id,
                     before=task.name,
@@ -390,14 +388,14 @@ class TaskService:
             self.uow.add_event(
                 TaskStatusChangedEvent(
                     performed_by=user.id,
-                    task_id=updated.id,
-                    project_id=updated.project_id,
+                    task_id=task.id,
+                    project_id=task.project_id,
                     old_status=task.status or "",
                     new_status=payload.status,
                 )
             )
 
-        return updated
+        return await self.repo.update_task(task, task_update_data)
 
     async def delete_task(self, *, user: User, task_id: int) -> None:
         """Menghapus tugas berdasarkan ID.
@@ -476,7 +474,7 @@ class TaskService:
                 task_id=task.id,
                 project_id=task.project_id,
                 old_status=prev_status,
-                new_status=getattr(new_status, "name", str(new_status)),
+                new_status=new_status,
             )
         )
         return task

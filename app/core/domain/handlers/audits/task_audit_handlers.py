@@ -21,7 +21,7 @@ async def on_task_created(ev: TaskCreatedEvent):
     await write_audit(
         action_type=EventType.TASK_CREATED,
         performed_by=ev.created_by,
-        task_id=ev.performed_by,
+        task_id=ev.task_id,
         project_id=ev.project_id,
         details={"item_type": ev.item_type, "task_name": ev.task_name},
     )
@@ -35,7 +35,7 @@ async def on_task_renamed(ev: TaskRenameEvent):
     await write_audit(
         action_type=EventType.TASK_TITLE_CHANGED,
         performed_by=ev.updated_by,
-        task_id=ev.performed_by,
+        task_id=ev.task_id,
         project_id=ev.project_id,
         details={"before": ev.before, "after": ev.after},
     )
@@ -48,7 +48,7 @@ async def on_task_updated(ev: TaskUpdatedEvent):
     await write_audit(
         action_type=EventType.TASK_UPDATED,
         performed_by=ev.updated_by,
-        task_id=ev.performed_by,
+        task_id=ev.task_id,
         project_id=ev.project_id,
     )
     logger.info(f"Task updated: {ev.task_id}")
@@ -60,7 +60,7 @@ async def on_task_deleted(ev: TaskDeletedEvent):
     await write_audit(
         action_type=EventType.TASK_DELETED,
         performed_by=ev.deleted_by,
-        task_id=ev.performed_by,
+        task_id=None,
         project_id=ev.project_id,
     )
 
