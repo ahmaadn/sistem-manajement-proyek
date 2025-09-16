@@ -12,7 +12,7 @@ from app.schemas.audit import (
     TaskStatusChangeAuditSchema,
     TaskTitleChangeAuditSchema,
 )
-from app.schemas.comment import CommentCreate, CommentDetail, CommentWithEventsRead
+from app.schemas.comment import CommentCreate, CommentDetail, CommentWithAuditsRead
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -121,14 +121,14 @@ class CommentService:
             for comment in comments
         ]
 
-    async def list_comments_with_events(
+    async def list_comments_with_audits(
         self,
         *,
         task_id: int,
         user_id: int,
         is_admin: bool = False,
-        include_events: bool = True,
-    ) -> list[CommentWithEventsRead]:
+        include_audits: bool = True,
+    ) -> list[CommentWithAuditsRead]:
         """Gabungkan komentar dan event audit untuk sebuah task.
 
         - Akses dibatasi pada anggota project (termasuk owner) atau admin.
@@ -149,11 +149,11 @@ class CommentService:
             combined.append(
                 (
                     c.created_at,
-                    CommentWithEventsRead(type="comment", data=c),
+                    CommentWithAuditsRead(type="comment", data=c),
                 )
             )
 
-        if include_events:
+        if include_audits:
             # Ambil hanya event yang diminta
             event_types = [
                 EventType.TASK_STATUS_CHANGED.value,
@@ -203,7 +203,7 @@ class CommentService:
                 combined.append(
                     (
                         a.created_at,
-                        CommentWithEventsRead(type="event", data=audit_schema),
+                        CommentWithAuditsRead(type="audit", data=audit_schema),
                     )
                 )
 

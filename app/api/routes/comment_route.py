@@ -8,7 +8,7 @@ from app.api.dependencies.uow import get_uow
 from app.api.dependencies.user import get_current_user
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.comment import CommentCreate, CommentRead, CommentWithEventsRead
+from app.schemas.comment import CommentCreate, CommentRead, CommentWithAuditsRead
 from app.schemas.user import User
 from app.services.comment_service import CommentService
 from app.utils import exceptions
@@ -53,7 +53,7 @@ class _Comment:
 
     @r.get(
         "/tasks/{task_id}/comments",
-        response_model=list[CommentWithEventsRead],
+        response_model=list[CommentWithAuditsRead],
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_403_FORBIDDEN: {
@@ -67,22 +67,20 @@ class _Comment:
     async def list_comments(
         self,
         task_id: int,
-        include_events: bool = Query(
+        include_audits: bool = Query(
             True,
-            description=(
-                "Tampilkan event audit (status/title/assignee) bersama komentar"
-            ),
+            description="Tampilkan audit (status/title/assignee) bersama komentar",
         ),
     ):
         """Mendapatkan daftar komentar untuk tugas tertentu.
 
         **Akses** : Anggota Proyek (Termasuk Owner), Admin
         """
-        return await self.service.list_comments_with_events(
+        return await self.service.list_comments_with_audits(
             task_id=task_id,
             user_id=self.user.id,
             is_admin=self.user.role == Role.ADMIN,
-            include_events=include_events,
+            include_audits=include_audits,
         )
 
     @r.delete(
