@@ -48,7 +48,7 @@ type TaskActionType = Literal[
 
 class TaskAuditSchema(BaseSchema):
     task_id: str
-    create_at: str
+    created_at: str
     action_type: TaskActionType
     details: TaskAuditListSchema
 

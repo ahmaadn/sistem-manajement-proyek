@@ -27,6 +27,16 @@ class CommentDetail(CommentRead):
     attachments: list[AttachmentRead] = Field(default_factory=list)
 
 
-class CommentWithAuditsRead(BaseSchema):
+class OLDCommentWithAuditsRead(BaseSchema):
     type: Literal["comment", "audit"]
     data: Union[CommentDetail, TaskAuditSchema]
+
+
+class CommentWithCommentRead(BaseSchema):
+    type: Literal["comment"] = "comment"
+    data: CommentDetail
+
+
+class CommentWithAuditRead(BaseSchema):
+    type: Literal["audit"] = "audit"
+    data: TaskAuditSchema
