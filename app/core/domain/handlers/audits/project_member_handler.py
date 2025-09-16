@@ -24,8 +24,9 @@ async def on_project_member_added(ev: ProjectMemberAddedEvent):
         },
     )
     logger.info(
-        f"Audit log created for project member addition: {ev.member_name!r} ",
-        f"to project ID {ev.project_id}",
+        "Audit log created for project member addition: %s to project ID %s",
+        ev.member_name,
+        ev.project_id,
     )
 
 
