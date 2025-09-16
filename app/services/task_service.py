@@ -340,6 +340,22 @@ class TaskService:
 
         task_update_data: dict[str, Any] = payload.model_dump(exclude_unset=True)
 
+        # handle jika start_date atau due_date diubah
+        if payload.start_date or payload.due_date:
+            start_date = payload.start_date or task.start_date
+            due_date = payload.due_date or task.due_date
+
+            if start_date and due_date:
+                # Hitung estimasi durasi dalam menit dari due_date - start_date.
+                # Jika salah satu bernilai None, jangan dihitung.
+                delta_minutes = int((due_date - start_date).total_seconds() // 60)
+                estimated_duration = max(0, delta_minutes)
+                task_update_data.update(
+                    {
+                        "estimated_duration": estimated_duration,
+                    }
+                )
+
         # handle jika status berubah ke COMPLETED atau dari COMPLETED ke status lain
         if payload.status:
             task_update_data.update(
