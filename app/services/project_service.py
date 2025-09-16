@@ -484,8 +484,7 @@ class ProjectService:
         project = await self.repo.get_user_scoped_project_detail(
             user_id=user.id,
             project_id=project_id,
-            is_admin=user.role == Role.ADMIN,
-            is_pm=user.role == Role.PROJECT_MANAGER,
+            user_role=user.role,
         )
 
         if not project:

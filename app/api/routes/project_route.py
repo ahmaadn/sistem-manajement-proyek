@@ -95,7 +95,6 @@ class _Project:
 
         **Akses** : User, Project Manajer, Admin
         """
-
         return await self.project_service.get_project_detail(
             user=self.user, project_id=project_id
         )

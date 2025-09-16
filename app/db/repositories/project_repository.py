@@ -100,8 +100,7 @@ class InterfaceProjectRepository(
         self,
         user_id: int,
         project_id: int,
-        is_admin: bool = False,
-        is_pm: bool = False,
+        user_role: Role,
     ) -> Project | None:
         """Detail proyek untuk pengguna."""
 
@@ -498,40 +497,29 @@ class ProjectSQLAlchemyRepository(
         self,
         user_id: int,
         project_id: int,
-        is_admin: bool = False,
-        is_pm: bool = False,
+        user_role: Role,
     ) -> Project | None:
         conditions = [Project.id == project_id, Project.deleted_at.is_(None)]
-        if not is_admin:
+
+        # semua project yang diikuti
+        if user_role in (Role.PROJECT_MANAGER, Role.TEAM_MEMBER):
             conditions.append(
                 exists(
                     select(1)
                     .select_from(ProjectMember)
                     .where(
-                        ProjectMember.project_id == Project.id,
+                        ProjectMember.project_id == project_id,
                         ProjectMember.user_id == user_id,
                     )
                 ),
             )
 
-            if not is_pm:
-                conditions.append(
-                    Project.status.in_(
-                        [StatusProject.ACTIVE, StatusProject.COMPLETED]
-                    )
-                )
-        else:
-            conditions.extend(
-                [
-                    exists(
-                        select(1)
-                        .select_from(ProjectMember)
-                        .where(
-                            ProjectMember.project_id == Project.id,
-                        )
-                    ),
-                ]
+        # member biasa hanya boleh akses project ACTIVE/COMPLETED
+        if user_role == Role.TEAM_MEMBER:
+            conditions.append(
+                Project.status.in_([StatusProject.ACTIVE, StatusProject.COMPLETED])
             )
+
         stmt = (
             select(Project).options(selectinload(Project.members)).where(*conditions)
         )
