@@ -552,18 +552,23 @@ class ProjectService:
             ProjectMember: Anggota proyek yang baru ditambahkan
         """
 
-        # pastikan actor adalah owner project
-        project = await self.repo.get_owned_project_by_user(actor.id, project_id)
+        project = await self.repo.get_project_by_id(
+            project_id=project_id,
+            user_id=actor.id,
+            required_role=None if actor.role == Role.ADMIN else RoleProject.OWNER,
+            allow_deleted=False,
+        )
+
         if not project:
             # samakan response dengan "tidak ditemukan/akses"
             raise exceptions.ProjectNotFoundError
 
-        # validasi aturan role
-        ensure_can_assign_member_role(member.role, role)
-
         # tidak boleh duplikat member
         if await self.repo.get_member_by_ids(project_id, member.id):
             raise exceptions.MemberAlreadyExistsError
+
+        # validasi aturan role
+        ensure_can_assign_member_role(member.role, role)
 
         created = await self.repo.add_project_member(project_id, member.id, role)
 

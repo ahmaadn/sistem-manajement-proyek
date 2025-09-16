@@ -168,6 +168,30 @@ class InterfaceProjectRepository(
         self, project_id: int, role: RoleProject | None = None
     ) -> Sequence[ProjectMember]: ...
 
+    @abstractmethod
+    async def get_project_by_id(
+        self,
+        *,
+        project_id: int,
+        allow_deleted: bool = False,
+        user_id: int | None = None,
+        required_role: RoleProject | None = None,
+    ) -> Project | None:
+        """Mendapatkan proyek berdasarkan keanggotaan user.
+
+        Args:
+            project_id (int): ID proyek.
+            allow_deleted (bool, optional): Mengizinkan pengambilan proyek yang
+                dihapus. Defaults to False.
+            user_id (int | None, optional): ID pengguna untuk memeriksa keanggotaan.
+                Defaults to None.
+            required_role (RoleProject | None, optional): Peran yang diperlukan
+                dalam proyek. Defaults to None.
+
+        Returns:
+            Project | None: Proyek yang ditemukan atau None.
+        """
+
 
 class ProjectSQLAlchemyRepository(
     InterfaceProjectRepository,
@@ -599,3 +623,33 @@ class ProjectSQLAlchemyRepository(
             stmt = stmt.where(ProjectMember.role == role)
         res = await self.session.execute(stmt)
         return res.scalars().all()
+
+    async def get_project_by_id(
+        self,
+        *,
+        project_id: int,
+        allow_deleted: bool = False,
+        user_id: int | None = None,
+        required_role: RoleProject | None = None,
+    ) -> Project | None:
+        q = select(Project).where(Project.id == project_id)
+        condition = []
+        if not allow_deleted:
+            condition.append(Project.deleted_at.is_(None))
+
+        if required_role is not None and user_id is not None:
+            condition.append(
+                exists(
+                    select(1)
+                    .select_from(ProjectMember)
+                    .where(
+                        ProjectMember.project_id == project_id,
+                        ProjectMember.user_id == user_id,
+                        ProjectMember.role == required_role,
+                    )
+                )
+            )
+
+        q.where(*condition)
+        res = await self.session.execute(q)
+        return res.scalars().first()
