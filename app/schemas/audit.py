@@ -49,7 +49,7 @@ type TaskActionType = Literal[
 class TaskAuditSchema(BaseSchema):
     audit_id: int
     user_id: int
-    profile_url: int
+    profile_url: str
     user_name: str
     task_id: str
     created_at: str

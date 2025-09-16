@@ -1,7 +1,8 @@
 import logging
-from typing import Any, Mapping, Optional, cast
+from typing import Mapping, Optional, cast
 
 from app.core.domain.event import EventType
+from app.db.models.audit_model import AuditLog
 from app.db.models.comment_model import Comment
 from app.db.uow.sqlalchemy import UnitOfWork
 from app.schemas.audit import (
@@ -18,6 +19,7 @@ from app.schemas.comment import (
     CommentWithAuditRead,
     CommentWithCommentRead,
 )
+from app.schemas.user import UserBase
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
@@ -187,8 +189,8 @@ class CommentService:
         # Membuar audit
         audit_items: list[CommentWithAuditRead] = []
         if include_audits:
-            for a in audits:
-                audit_schema = self._map_audit_to_schema(a, users_by_id)
+            for audit in audits:
+                audit_schema = self._map_audit_to_schema(audit, users_by_id)
                 audit_items.append(
                     CommentWithAuditRead(type="audit", data=audit_schema)
                 )
@@ -203,52 +205,7 @@ class CommentService:
         combined.sort(key=lambda x: x[0])
         return [item for _, item in combined]
 
-    async def get_audits(self, *, task_id: int) -> list[TaskAuditSchema]:
-        """Mengambil daftar audit bertipe (tanpa enrikmen data user).
-
-        Cocok untuk pemakaian internal atau endpoint terpisah.
-        """
-        audits = await self._get_audits_raw(task_id)
-        out: list[TaskAuditSchema] = []
-
-        for a in audits:
-            atype = EventType(a.action_type)
-            if atype == EventType.TASK_STATUS_CHANGED:
-                det = TaskStatusChangeAuditSchema(
-                    old_status=str((a.details or {}).get("old_status", "")),
-                    new_status=str((a.details or {}).get("new_status", "")),
-                )
-            elif atype == EventType.TASK_TITLE_CHANGED:
-                det = TaskTitleChangeAuditSchema(
-                    before=str((a.details or {}).get("before", "")),
-                    after=str((a.details or {}).get("after", "")),
-                )
-            elif atype == EventType.TASK_ASSIGNED_ADDED:
-                det = TaskAssignAddedAuditSchama(
-                    assignee_id=str((a.details or {}).get("assignee_id", "")),
-                    assignee_name=str((a.details or {}).get("assignee_name", "")),
-                )
-            else:
-                det = TaskAssignRemovedAuditSchama(
-                    assignee_id=str((a.details or {}).get("assignee_id", "")),
-                    assignee_name=str((a.details or {}).get("assignee_name", "")),
-                )
-
-            out.append(
-                TaskAuditSchema(
-                    audit_id=getattr(a, "id", 0) or 0,
-                    user_id=getattr(a, "performed_by", 0) or 0,
-                    profile_url=0,
-                    user_name="",
-                    task_id=str(a.task_id) if a.task_id is not None else "",
-                    created_at=(a.created_at.isoformat() if a.created_at else ""),
-                    action_type=cast(TaskActionType, atype),
-                    details=det,
-                )
-            )
-        return out
-
-    async def _get_users_map(self, user_ids: list[int]):
+    async def _get_users_map(self, user_ids: list[int]) -> dict[int, UserBase]:
         if not user_ids:
             return {}
         pegawai_service = PegawaiService()
@@ -290,20 +247,21 @@ class CommentService:
 
     def _map_audit_to_schema(
         self,
-        a,
-        users_by_id: Mapping[int, Any],
+        audit: AuditLog,
+        users_by_id: Mapping[int, UserBase],
     ) -> TaskAuditSchema:
-        atype = EventType(a.action_type)
-        det = self._map_audit_details(atype, getattr(a, "details", None))
-        performer = users_by_id.get(getattr(a, "performed_by", 0) or 0)
-        user_name = getattr(performer, "name", "") if performer else ""
+        atype = EventType(audit.action_type)
+        det = self._map_audit_details(atype, getattr(audit, "details", None))
+        performer = users_by_id.get(audit.performed_by or 0)
+        user_name = performer.name if performer else ""
+
         return TaskAuditSchema(
-            audit_id=getattr(a, "id", 0) or 0,
-            user_id=getattr(a, "performed_by", 0) or 0,
-            profile_url=0,
+            audit_id=getattr(audit, "id", 0) or 0,
+            user_id=getattr(audit, "performed_by", 0) or 0,
+            profile_url=performer.profile_url if performer else "",
             user_name=user_name,
-            task_id=str(a.task_id) if a.task_id is not None else "",
-            created_at=(a.created_at.isoformat() if a.created_at else ""),
+            task_id=str(audit.task_id) if audit.task_id is not None else "",
+            created_at=(audit.created_at.isoformat() if audit.created_at else ""),
             action_type=cast(TaskActionType, atype),
             details=det,
         )
