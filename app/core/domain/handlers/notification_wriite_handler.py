@@ -24,7 +24,7 @@ async def write_notifications(
     project_id: int | None = None,
     task_id: int | None = None,
     session: AsyncSession,
-    send_to_me: bool = False,
+    send_to_me: bool = True,
 ) -> list[Notification]:
     """
     Tulis notifikasi ke banyak penerima.
