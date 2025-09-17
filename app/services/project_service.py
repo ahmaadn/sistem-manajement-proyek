@@ -1,7 +1,8 @@
 import asyncio
+import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from typing import TYPE_CHECKING, Sequence
+from typing import Sequence
 
 from sqlalchemy.orm import selectinload
 from starlette_context import context
@@ -52,8 +53,7 @@ from app.schemas.user import ProjectParticipation, User
 from app.services.pegawai_service import PegawaiService
 from app.utils import exceptions
 
-if TYPE_CHECKING:
-    pass
+logger = logging.getLogger(__name__)
 
 
 class ProjectService:
@@ -155,18 +155,18 @@ class ProjectService:
         """
 
         # Kontributor hanya dapat notifikasi jika status project sebelumnya adalah
-        # ACTIVE atau COMPLETED dan status project setelahnya adalah ACTIVE atau
-        # COMPLETED
-        # send_contributor = False
-        # if project.status in (
-        #     StatusProject.ACTIVE,
-        #     StatusProject.COMPLETED,
-        #     StatusProject.TENDER,
-        # ) and payload_update.status in (
-        #     StatusProject.ACTIVE,
-        #     StatusProject.COMPLETED,
-        # ):
-        #     send_contributor = True
+        # TENDER, ACTIVE atau COMPLETED dan status project setelahnya adalah ACTIVE
+        # atau COMPLETED
+        send_contributor = False
+        if project.status in (
+            StatusProject.ACTIVE,
+            StatusProject.COMPLETED,
+            StatusProject.TENDER,
+        ) and payload_update.status in (
+            StatusProject.ACTIVE,
+            StatusProject.COMPLETED,
+        ):
+            send_contributor = True
 
         # Mendapatkan admin untuk mendapatkan notifikasi juga walaupun dia bukan
         # member
@@ -175,7 +175,7 @@ class ProjectService:
                 self.uow.user_repository.get_admin_user_ids(),
                 self.uow.project_repo.list_project_members(
                     project_id=project.id,
-                    role=RoleProject.OWNER,
+                    role=None if send_contributor else RoleProject.OWNER,
                 ),
             ]
         )
@@ -183,6 +183,8 @@ class ProjectService:
         # menggunakan set agar tidak ada double notifikasi
         recipients = {m.user_id for m in members}
         recipients.update(admins)
+
+        logger.debug("Project update recipients: %s", recipients)
 
         # Tambah event update
         if payload_update.title and project.title != payload_update.title:
