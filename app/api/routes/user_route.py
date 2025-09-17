@@ -98,7 +98,7 @@ class _User:
         per_page: int = Query(
             100,
             ge=10,
-            le=100,
+            le=1000,
             description="Jumlah user per halaman (min 10, max 100)",
         ),
         search: str | None = Query(
