@@ -401,11 +401,13 @@ class ProjectSQLAlchemyRepository(
             )
 
         # Filter tahun mulai
-        if start_year is not None or end_year is not None:
+        if start_year is not None:
             sy = start_year or 1970
-            ey = end_year or date.today().year
             conditions.append(Project.start_date >= date(sy, 1, 1))
-            conditions.append(Project.start_date <= date(ey, 12, 31))
+
+        # Filter tahun akhir
+        if end_year:
+            conditions.append(Project.start_date <= date(end_year, 12, 31))
 
         # Subquery untuk menghitung total tugas dalam proyek
         total_tasks_sq = (
