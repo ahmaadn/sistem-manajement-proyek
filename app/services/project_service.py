@@ -32,7 +32,6 @@ from app.db.models.role_model import Role
 from app.db.models.task_model import PriorityLevel, StatusTask, Task
 from app.db.repositories.project_repository import InterfaceProjectRepository
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.pagination import PaginationSchema
 from app.schemas.project import (
     ProjectCreate,
     ProjectDetail,
@@ -339,7 +338,7 @@ class ProjectService:
             for row in rows
         ]
 
-    async def list_user_projects(
+    async def list_projects(
         self,
         *,
         user: User,
@@ -348,23 +347,28 @@ class ProjectService:
         status_project: StatusProject | None = None,
         start_year: int | None = None,
         end_year: int | None = None,
-    ) -> PaginationSchema[ProjectPaginationItem]:
+    ) -> ProjectListPage:
         """Mengambil daftar proyek untuk pengguna.
 
         Args:
             user (User): Pengguna yang proyeknya akan diambil.
             page (int, optional): Halaman yang akan diambil. Defaults to 1.
             per_page (int, optional): Jumlah proyek per halaman. Defaults to 10.
+            status_project (StatusProject | None, optional): Filter status proyek.
+            start_year (int | None, optional): Tahun mulai untuk filter. Defaults
+                to None.
+            end_year (int | None, optional): Tahun akhir untuk filter. Defaults
+                to None.
 
         Returns:
-            PaginationSchema[ProjectResponse]: Daftar proyek untuk pengguna.
+            ProjectListPage: Daftar proyek untuk pengguna.
         """
         validate_status_by_role(user=user, status_project=status_project)
         normalize_year_range(start_year=start_year, end_year=end_year)
 
         # Jalankan query paginasi dan ringkasan secara bersamaan
         paginate, summary = await asyncio.gather(
-            self.repo.paginate_user_projects(
+            self.repo.pagination_projects(
                 user_id=user.id,
                 user_role=user.role,
                 page=page,

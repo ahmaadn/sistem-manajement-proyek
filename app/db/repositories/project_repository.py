@@ -65,7 +65,7 @@ class InterfaceProjectRepository(
         """Daftar partisipasi proyek pengguna."""
 
     @abstractmethod
-    async def paginate_user_projects(
+    async def pagination_projects(
         self,
         *,
         user_id: int,
@@ -359,7 +359,7 @@ class ProjectSQLAlchemyRepository(
         res = await self.session.execute(stmt)
         return res.all()
 
-    async def paginate_user_projects(
+    async def pagination_projects(
         self,
         *,
         user_id: int,

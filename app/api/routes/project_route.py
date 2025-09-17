@@ -63,7 +63,7 @@ class _Project:
         **Akses** : User, Project Manajer, Admin
         """
 
-        return await self.project_service.list_user_projects(
+        return await self.project_service.list_projects(
             user=self.user,
             page=page,
             per_page=per_page,
