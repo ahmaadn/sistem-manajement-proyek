@@ -157,16 +157,16 @@ class ProjectService:
         # Kontributor hanya dapat notifikasi jika status project sebelumnya adalah
         # ACTIVE atau COMPLETED dan status project setelahnya adalah ACTIVE atau
         # COMPLETED
-        send_contributor = False
-        if project.status in (
-            StatusProject.ACTIVE,
-            StatusProject.COMPLETED,
-            StatusProject.TENDER,
-        ) and payload_update.status in (
-            StatusProject.ACTIVE,
-            StatusProject.COMPLETED,
-        ):
-            send_contributor = True
+        # send_contributor = False
+        # if project.status in (
+        #     StatusProject.ACTIVE,
+        #     StatusProject.COMPLETED,
+        #     StatusProject.TENDER,
+        # ) and payload_update.status in (
+        #     StatusProject.ACTIVE,
+        #     StatusProject.COMPLETED,
+        # ):
+        #     send_contributor = True
 
         # Mendapatkan admin untuk mendapatkan notifikasi juga walaupun dia bukan
         # member
@@ -175,7 +175,7 @@ class ProjectService:
                 self.uow.user_repository.get_admin_user_ids(),
                 self.uow.project_repo.list_project_members(
                     project_id=project.id,
-                    role=None if send_contributor else RoleProject.OWNER,
+                    role=RoleProject.OWNER,
                 ),
             ]
         )
