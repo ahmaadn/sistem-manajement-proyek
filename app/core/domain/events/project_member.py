@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from app.core.domain.event import DomainEvent
+from app.schemas.user import User
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -9,6 +10,8 @@ class ProjectMemberAddedEvent(DomainEvent):
     member_id: int
     member_name: str
     new_role: str
+    project_title: None | str = None
+    user: User
 
 
 @dataclass(frozen=True, kw_only=True)

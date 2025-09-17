@@ -16,6 +16,9 @@ from app.core.domain.handlers.audits.task_audit_handlers import (
 from app.core.domain.handlers.audits.user_handlers import (
     register_event_handlers as register_user_handlers,
 )
+from app.core.domain.handlers.notifications.project_member_notification_handlers import (
+    register_event_handlers as register_project_member_notification_handlers,
+)
 from app.core.domain.handlers.notifications.project_notification_handlers import (
     register_event_handlers as register_project_notification_handlers,
 )
@@ -38,6 +41,7 @@ def register_event_handlers():
 
     # Notifications
     register_project_notification_handlers()
+    register_project_member_notification_handlers()
     _registered = True
 
 

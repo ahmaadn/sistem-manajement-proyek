@@ -586,6 +586,8 @@ class ProjectService:
                 member_id=member.id,
                 member_name=member.name,
                 new_role=role,
+                project_title=project.title,
+                user=actor,
             )
         )
         return created
