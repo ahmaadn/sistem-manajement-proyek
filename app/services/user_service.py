@@ -139,16 +139,20 @@ class UserService:
         page: int = 1,
         per_page: int | None = None,
         search: str | None = None,
-    ) -> list[User]:
+    ) -> tuple[list[User], dict]:
         """
         Ambil semua pegawai dari provider eksternal, sinkronkan role jika belum ada
         (tanpa commit), lalu kembalikan daftar User dengan role.
         """
-        pegawai_list = await self.pegawai_service.list_user(
+        raw = await self.pegawai_service.list_user(
             page=page, per_page=per_page, search=search
         )
-        if not pegawai_list:
-            return []
+        raw_users = raw.get("data", []) if isinstance(raw, dict) else []
+        if not raw_users:
+            return [], raw
+
+        # map ke UserBase kembali
+        pegawai_list = [UserBase(**u) for u in raw_users]
 
         user_ids = [p.id for p in pegawai_list]
         existing_roles = await self.repo.list_roles_by_user_ids(user_ids)
@@ -165,9 +169,10 @@ class UserService:
             await self.repo.bulk_assign_roles_to_users(to_create)
             # commit tetap di boundary router
 
-        return [
+        users = [
             User(**p.model_dump(), role=existing_roles[p.id]) for p in pegawai_list
         ]
+        return users, raw
 
     async def change_user_role(
         self, *, actor: User, user_id: int, new_role: Role

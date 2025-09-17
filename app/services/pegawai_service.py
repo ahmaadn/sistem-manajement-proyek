@@ -167,46 +167,41 @@ class PegawaiService:
         page: int = 1,
         per_page: int | None = None,
         search: str | None = None,
-    ) -> list[UserBase]:
-        """Mendapatkan daftar semua pengguna.
+    ) -> dict:
+        """Mendapatkan daftar semua pengguna dengan metadata pagination mentah.
 
-        Args:
-            per_page (int | None): Jumlah item per halaman (opsional).
-            search (str | None): Kata kunci pencarian (opsional).
-
-        Returns:
-            list[UserBase]: Daftar informasi pegawai.
+        Mengembalikan dict dengan field seperti: current_page, next_page_url,
+        prev_page_url, per_page, total, data (list user yang sudah di-map).
         """
-        # Coba gunakan method extended jika tersedia (aiohttp client)
-        fetch_coro = None
         if hasattr(self.client, "get_list_pegawai_ext"):
             fetch_coro = self.client.get_list_pegawai_ext(  # type: ignore
                 page=page, per_page=per_page, search=search
             )
         else:
-            # fallback ke versi httpx (dirakit di URL langsung pada client)
-            fetch_coro = self.client.get_list_pegawai(
+            fetch_coro = self.client.get_list_pegawai(  # type: ignore
                 page=page, per_page=per_page, search=search
             )
 
         result = (await asyncio.gather(fetch_coro))[0]
         if not result:
-            return []
+            return {"data": []}
 
-        users = result.get("data", [])
+        users_raw = result.get("data", []) or []
         cache = self._get_ctx_cache()
         mapped_list: list[UserBase] = []
-        for raw in users:
+        for raw in users_raw:
             mapped = await self.map_to_pegawai_info(raw)
             mapped_list.append(mapped)
             uid = getattr(mapped, "id", None)
             if uid is not None:
                 cache[f"id:{uid}"] = mapped
-        return mapped_list
+
+        # ganti data dengan versi yang sudah di-map (dict)
+        result["data"] = [m.model_dump() for m in mapped_list]
+        return result
 
     async def list_user_by_ids(self, data: list[int]) -> list[UserBase | None]:
         """Mendapatkan daftar user berdasarkan list ID yang diberikan.
-        Jika suatu ID tidak ditemukan di data, kembalikan None pada posisi tersebut.
 
         Args:
             data (list[int]): Daftar ID pegawai.
@@ -222,15 +217,10 @@ class PegawaiService:
         # Ambil dari cache dulu
         result_list: list[UserBase | None] = []
         missing_ids: list[int] = []
-
         for uid in data:
             cval = cache.get(f"id:{uid}")
-
-            # jika tidak ada di cache, tandai untuk fetch
             if cval is None and f"id:{uid}" not in cache:
                 missing_ids.append(uid)
-
-            # isi result_list dengan nilai dari cache atau None
             result_list.append(cval if f"id:{uid}" in cache else None)
 
         logger.debug("Cache miss for user_id %s (need fetch)", missing_ids)
@@ -246,14 +236,18 @@ class PegawaiService:
 
         # Map fetched ke cache
         for raw in fetched:
-            if raw:
-                mapped = await self.map_to_pegawai_info(raw)
-                uid = getattr(mapped, "id", None)
-                if uid is not None:
-                    cache[f"id:{uid}"] = mapped
-
-                # Perbarui result_list pada posisi yang sesuai
-                result_list[data.index(uid)] = mapped  # type: ignore
+            if not raw:
+                continue
+            mapped = await self.map_to_pegawai_info(raw)
+            uid = getattr(mapped, "id", None)
+            if uid is not None:
+                cache[f"id:{uid}"] = mapped
+                # Perbarui result_list pada posisi yang sesuai jika index ada
+                try:
+                    idx = data.index(uid)
+                    result_list[idx] = mapped  # type: ignore
+                except ValueError:
+                    pass
         return result_list
 
 

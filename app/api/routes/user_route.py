@@ -10,7 +10,7 @@ from app.api.dependencies.user import (
 )
 from app.db.models.role_model import Role
 from app.db.uow.sqlalchemy import UnitOfWork
-from app.schemas.pagination import SimplePaginationSchema
+from app.schemas.pagination import UserPaginationSchema
 from app.schemas.user import User, UserDetail
 from app.services.user_service import UserService
 from app.utils.exceptions import AppErrorResponse
@@ -76,12 +76,12 @@ class _User:
 
     @r.get(
         "/users",
-        response_model=SimplePaginationSchema[User],
+        response_model=UserPaginationSchema[User],
         status_code=status.HTTP_200_OK,
         responses={
             status.HTTP_200_OK: {
                 "description": "OK",
-                "model": SimplePaginationSchema[User],
+                "model": UserPaginationSchema[User],
             },
             status.HTTP_401_UNAUTHORIZED: {
                 "description": "Tidak punyak akses",
@@ -104,18 +104,59 @@ class _User:
         search: str | None = Query(
             None, description="Kata kunci pencarian nama/email (opsional)"
         ),
-    ) -> SimplePaginationSchema[User]:
+    ) -> UserPaginationSchema[User]:
         """Mendapatkan semua user dengan pagination sederhana dan pencarian.
 
         **Akses**: Admin, Project Manajer
         """
-        users = await self.user_service.list_user(
+        users, raw = await self.user_service.list_user(
             page=page, per_page=per_page, search=search
         )
         await self.uow.commit()
-        return SimplePaginationSchema[User](
+
+        def build_meta(r: dict, default_page: int, default_per_page: int):
+            def _to_int(v):
+                try:
+                    return int(v)
+                except Exception:
+                    return None
+
+            if not isinstance(r, dict):
+                return {
+                    "total_items": None,
+                    "curr_page": default_page,
+                    "per_page": default_per_page,
+                    "next_page": None,
+                    "prev_page": None,
+                }
+            total_items = (
+                _to_int(r.get("total")) if r.get("total") is not None else None
+            )
+            per_page_val = _to_int(r.get("per_page")) or default_per_page
+            curr_page_val = _to_int(r.get("current_page")) or default_page
+            return {
+                "total_items": total_items,
+                "curr_page": curr_page_val,
+                "per_page": per_page_val,
+                "next_page": r.get("next_page_url"),
+                "prev_page": r.get("prev_page_url"),
+            }
+
+        meta = build_meta(raw, page, per_page)
+        total_page = 1
+        if meta["total_items"] is not None and meta["per_page"]:
+            total_page = (meta["total_items"] + meta["per_page"] - 1) // meta[
+                "per_page"
+            ]
+        return UserPaginationSchema[User](
             count=len(users),
             items=users,
+            curr_page=meta["curr_page"],
+            total_page=total_page,
+            next_page=meta["next_page"],
+            previous_page=meta["prev_page"],
+            per_page=meta["per_page"],
+            total_items=meta["total_items"],
         )
 
     @r.patch(
