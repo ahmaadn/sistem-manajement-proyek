@@ -243,6 +243,7 @@ class PegawaiApiClient:
     async def get_list_pegawai(
         *,
         token: str | None = None,
+        page: int = 1,
         per_page: int | None = None,
         search: str | None = None,
     ):
@@ -263,6 +264,8 @@ class PegawaiApiClient:
             query_params.append(f"per_page={per_page}")
         if search:
             query_params.append(f"search={search}")
+        if page > 1:
+            query_params.append(f"page={page}")
         url = PegawaiApiUrls.PEGAWAI_LIST
         if query_params:
             sep = "&" if "?" in url else "?"
@@ -459,6 +462,7 @@ class PegawaiAiohttpClient:
     async def get_list_pegawai_ext(
         *,
         token: str | None = None,
+        page: int = 1,
         per_page: int | None = None,
         search: str | None = None,
     ):
@@ -470,6 +474,8 @@ class PegawaiAiohttpClient:
             query_params.append(f"per_page={per_page}")
         if search:
             query_params.append(f"search={search}")
+        if page > 1:
+            query_params.append(f"page={page}")
         url = PegawaiApiUrls.PEGAWAI_LIST
         if query_params:
             sep = "&" if "?" in url else "?"

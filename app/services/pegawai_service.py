@@ -4,7 +4,7 @@ import urllib.parse
 
 from starlette_context import context
 
-from app.client import PegawaiAiohttpClient
+from app.client import PegawaiApiClient
 from app.schemas.user import UserBase
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class PegawaiService:
     def __init__(self) -> None:
         # menggunakan aiohttp client sebagai default
         # bisa juga menggunakan httpx client jika diperlukan
-        self.client = PegawaiAiohttpClient
+        self.client = PegawaiApiClient
 
     def _get_ctx_cache(self) -> dict:
         """
@@ -162,7 +162,11 @@ class PegawaiService:
         )
 
     async def list_user(
-        self, *, per_page: int | None = None, search: str | None = None
+        self,
+        *,
+        page: int = 1,
+        per_page: int | None = None,
+        search: str | None = None,
     ) -> list[UserBase]:
         """Mendapatkan daftar semua pengguna.
 
@@ -176,12 +180,14 @@ class PegawaiService:
         # Coba gunakan method extended jika tersedia (aiohttp client)
         fetch_coro = None
         if hasattr(self.client, "get_list_pegawai_ext"):
-            fetch_coro = self.client.get_list_pegawai_ext(
-                per_page=per_page, search=search
+            fetch_coro = self.client.get_list_pegawai_ext(  # type: ignore
+                page=page, per_page=per_page, search=search
             )
         else:
             # fallback ke versi httpx (dirakit di URL langsung pada client)
-            fetch_coro = self.client.get_list_pegawai()
+            fetch_coro = self.client.get_list_pegawai(
+                page=page, per_page=per_page, search=search
+            )
 
         result = (await asyncio.gather(fetch_coro))[0]
         if not result:

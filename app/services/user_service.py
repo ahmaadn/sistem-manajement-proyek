@@ -134,14 +134,18 @@ class UserService:
         )
 
     async def list_user(
-        self, *, per_page: int | None = None, search: str | None = None
+        self,
+        *,
+        page: int = 1,
+        per_page: int | None = None,
+        search: str | None = None,
     ) -> list[User]:
         """
         Ambil semua pegawai dari provider eksternal, sinkronkan role jika belum ada
         (tanpa commit), lalu kembalikan daftar User dengan role.
         """
         pegawai_list = await self.pegawai_service.list_user(
-            per_page=per_page, search=search
+            page=page, per_page=per_page, search=search
         )
         if not pegawai_list:
             return []

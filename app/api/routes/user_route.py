@@ -94,6 +94,7 @@ class _User:
     )
     async def list_users(
         self,
+        page: int = Query(1, ge=1, description="Halaman ke-X"),
         per_page: int = Query(
             100,
             ge=10,
@@ -108,7 +109,9 @@ class _User:
 
         **Akses**: Admin, Project Manajer
         """
-        users = await self.user_service.list_user(per_page=per_page, search=search)
+        users = await self.user_service.list_user(
+            page=page, per_page=per_page, search=search
+        )
         await self.uow.commit()
         return SimplePaginationSchema[User](
             count=len(users),
