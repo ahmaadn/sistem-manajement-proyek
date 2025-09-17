@@ -181,7 +181,7 @@ class ProjectService:
         )
 
         # menggunakan set agar tidak ada double notifikasi
-        recipients = {m.user_id for m in members if m.user_id != user.id}
+        recipients = {m.user_id for m in members}
         recipients.update(admins)
 
         # Tambah event update
