@@ -240,21 +240,35 @@ class PegawaiApiClient:
             return None
 
     @staticmethod
-    async def get_list_pegawai(*, token: str | None = None):
-        """Ambil daftar pegawai.
+    async def get_list_pegawai(
+        *,
+        token: str | None = None,
+        per_page: int | None = None,
+        search: str | None = None,
+    ):
+        """Ambil daftar pegawai dengan dukungan pagination sederhana.
 
         Args:
-            token (str | None): Token Bearer eksplisit (opsional). Default to None.
+            token (str | None): Token Bearer.
+            per_page (int | None): Jumlah item per halaman (opsional).
+            search (str | None): Kata kunci pencarian (opsional).
 
         Returns:
-            List/array pegawai jika sukses, else None.
+            dict | None: Data pegawai jika sukses; None jika gagal.
         """
         req = request_object.get()
         headers = _auth_headers(req, token)
+        query_params = []
+        if per_page is not None:
+            query_params.append(f"per_page={per_page}")
+        if search:
+            query_params.append(f"search={search}")
+        url = PegawaiApiUrls.PEGAWAI_LIST
+        if query_params:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}{'&'.join(query_params)}"
         try:
-            resp = await PegawaiApiClient._request(
-                "GET", PegawaiApiUrls.PEGAWAI_LIST, headers=headers
-            )
+            resp = await PegawaiApiClient._request("GET", url, headers=headers)
             if resp.status_code == 200:
                 data = resp.json()
                 logger.debug("response get_list_pegawai: %s", data)
@@ -439,6 +453,34 @@ class PegawaiAiohttpClient:
             return data if status == 200 else None
         except Exception as e:
             logger.error("Error fetching list pegawai: %s", e)
+            return None
+
+    @staticmethod
+    async def get_list_pegawai_ext(
+        *,
+        token: str | None = None,
+        per_page: int | None = None,
+        search: str | None = None,
+    ):
+        """Versi extended dengan query per_page dan search."""
+        req = request_object.get()
+        headers = _auth_headers(req, token)
+        query_params = []
+        if per_page is not None:
+            query_params.append(f"per_page={per_page}")
+        if search:
+            query_params.append(f"search={search}")
+        url = PegawaiApiUrls.PEGAWAI_LIST
+        if query_params:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}{'&'.join(query_params)}"
+        try:
+            status, data, _ = await PegawaiAiohttpClient._request(
+                "GET", url, headers=headers
+            )
+            return data if status == 200 else None
+        except Exception as e:
+            logger.error("Error fetching list pegawai (ext): %s", e)
             return None
 
     @staticmethod

@@ -161,13 +161,29 @@ class PegawaiService:
             profile_url=profile_photo_path,
         )
 
-    async def list_user(self) -> list[UserBase]:
+    async def list_user(
+        self, *, per_page: int | None = None, search: str | None = None
+    ) -> list[UserBase]:
         """Mendapatkan daftar semua pengguna.
+
+        Args:
+            per_page (int | None): Jumlah item per halaman (opsional).
+            search (str | None): Kata kunci pencarian (opsional).
 
         Returns:
             list[UserBase]: Daftar informasi pegawai.
         """
-        result = (await asyncio.gather(self.client.get_list_pegawai()))[0]
+        # Coba gunakan method extended jika tersedia (aiohttp client)
+        fetch_coro = None
+        if hasattr(self.client, "get_list_pegawai_ext"):
+            fetch_coro = self.client.get_list_pegawai_ext(
+                per_page=per_page, search=search
+            )
+        else:
+            # fallback ke versi httpx (dirakit di URL langsung pada client)
+            fetch_coro = self.client.get_list_pegawai()
+
+        result = (await asyncio.gather(fetch_coro))[0]
         if not result:
             return []
 

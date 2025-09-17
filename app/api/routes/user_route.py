@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi_utils.cbv import cbv
 
 from app.api.dependencies.uow import get_uow
@@ -92,12 +92,23 @@ class _User:
             Depends(permission_required([Role.ADMIN, Role.PROJECT_MANAGER]))
         ],
     )
-    async def list_users(self) -> SimplePaginationSchema[User]:
-        """Mendapatkan semua user
+    async def list_users(
+        self,
+        per_page: int = Query(
+            100,
+            ge=10,
+            le=100,
+            description="Jumlah user per halaman (min 10, max 100)",
+        ),
+        search: str | None = Query(
+            None, description="Kata kunci pencarian nama/email (opsional)"
+        ),
+    ) -> SimplePaginationSchema[User]:
+        """Mendapatkan semua user dengan pagination sederhana dan pencarian.
 
         **Akses**: Admin, Project Manajer
         """
-        users = await self.user_service.list_user()
+        users = await self.user_service.list_user(per_page=per_page, search=search)
         await self.uow.commit()
         return SimplePaginationSchema[User](
             count=len(users),
