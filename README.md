@@ -38,24 +38,12 @@ cd backend-sistem-manajement-project
 ```
 
 ### 2. Install dependencies
-
-Siapkan virtual environment (disarankan jika memakai pip):
-```bash
-# Windows (PowerShell)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# Linux / macOS
-python -m venv .venv
-source .venv/bin/activate
-```
-
 Lokal (development):
 ```bash
-# Menggunakan UV (recommended) - otomatis mengelola environment
+# Menggunakan UV (recommended)
 uv sync
 
-# Atau menggunakan pip (pastikan venv aktif jika pakai pip)
+# Atau menggunakan pip
 pip install -r requirements.txt
 ```
 
