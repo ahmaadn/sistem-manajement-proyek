@@ -11,16 +11,19 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from starlette_context import context, request_cycle_context
 
 from app.core.config.settings import get_settings
 from app.db.models import load_all_models
 from app.db.models.project_model import StatusProject
+from app.db.models.role_model import Role
 from app.db.models.task_model import PriorityLevel, StatusTask
 from app.db.uow.sqlalchemy import SQLAlchemyUnitOfWork as UnitOfWork
 from app.schemas.category import CategoryCreate
 from app.schemas.milestone import MilestoneCreate
 from app.schemas.project import ProjectCreate
 from app.schemas.task import TaskCreate
+from app.schemas.user import User
 from app.services.category_service import CategoryService
 from app.services.milestone_service import MilestoneService
 from app.services.pegawai_service import PegawaiService
@@ -40,6 +43,16 @@ SessionLocal = async_sessionmaker(
 )
 
 load_all_models()
+
+
+def dummy_context():
+    with request_cycle_context({}):
+        context["debug"] = True
+        yield context
+
+
+context_generator = dummy_context()
+context = next(context_generator)
 
 
 class Seeder:
@@ -166,13 +179,21 @@ class Seeder:
     # ------------------ CORE STEPS ------------------
     async def fetch_pm_user(self):
         if self.pm_user is None:
-            user = await self.user_service.get_user(self.pm_user_id)
-            if user.role.name.lower() != "project_manager":
-                raise RuntimeError(
-                    f"User {user.id} bukan project_manager (role sekarang: {user.role}). "  # noqa: E501
-                    "Ubah role dulu sebelum menjalankan seeder."
-                )
-            self.pm_user = user
+            # user = await self.user_service.get_user(self.pm_user_id)
+            # if user.role.name.lower() != "project_manager":
+            #     raise RuntimeError(
+            #         f"User {user.id} bukan project_manager (role sekarang: {user.role}). "  # noqa: E501
+            #         "Ubah role dulu sebelum menjalankan seeder."
+            #     )
+            self.pm_user = User(
+                id=self.pm_user_id,
+                name="Project Manager",
+                email="",
+                position="",
+                profile_url="",
+                employee_role="Project Manager",
+                role=Role.PROJECT_MANAGER,
+            )
 
     async def create_project(self, index: int):
         status, start_date, end_date = self.random_project_dates_and_status()
