@@ -58,16 +58,34 @@ logger = logging.getLogger(__name__)
 class UnitOfWork(Protocol):
     session: AsyncSession
 
-    comment_repo: InterfaceCommentRepository
-    task_repo: InterfaceTaskRepository
-    project_repo: InterfaceProjectRepository
-    dashboard_repo: InterfaceDashboardReadRepository
-    audit_repo: InterfaceAuditRepository
-    user_repository: InterfaceUserRepository
-    attachment_repo: InterfaceAttachmentRepository
-    milestone_repo: InterfaceMilestoneRepository
-    category_repo: InterfaceCategoryRepository
-    notification_repo: InterfaceNotificationRepository
+    @property
+    def comment_repo(self) -> InterfaceCommentRepository: ...
+
+    @property
+    def task_repo(self) -> InterfaceTaskRepository: ...
+
+    @property
+    def project_repo(self) -> InterfaceProjectRepository: ...
+
+    @property
+    def dashboard_repo(self) -> InterfaceDashboardReadRepository: ...
+    @property
+    def user_repository(self) -> InterfaceUserRepository: ...
+
+    @property
+    def attachment_repo(self) -> InterfaceAttachmentRepository: ...
+
+    @property
+    def audit_repo(self) -> InterfaceAuditRepository: ...
+
+    @property
+    def milestone_repo(self) -> InterfaceMilestoneRepository: ...
+
+    @property
+    def category_repo(self) -> InterfaceCategoryRepository: ...
+
+    @property
+    def notification_repo(self) -> InterfaceNotificationRepository: ...
 
     background_tasks: BackgroundTasks | None
 
@@ -88,26 +106,78 @@ class SQLAlchemyUnitOfWork(UnitOfWork):
         self._committed = False
 
         # init repo
-        self.comment_repo = CommentSQLAlchemyRepository(self.session)
-        self.task_repo = TaskSQLAlchemyRepository(self.session)
-        self.project_repo = ProjectSQLAlchemyRepository(self.session)
-        self.dashboard_repo = DashboardSQLAlchemyReadRepository(self.session)
-        self.user_repository = UserSQLAlchemyRepository(self.session)
-        self.attachment_repo = AttachmentSQLAlchemyRepository(self.session)
-        self.audit_repo: InterfaceAuditRepository = AuditSQLAlchemyRepository(
-            self.session
-        )
-        self.milestone_repo: InterfaceMilestoneRepository = (
-            MilestoneSQLAlchemyRepository(self.session)
-        )
-        self.category_repo: InterfaceCategoryRepository = (
-            CategorySQLAlchemyRepository(self.session)
-        )
-        self.notification_repo: InterfaceNotificationRepository = (
-            NotificationSQLAlchemyRepository(self.session)
-        )
+        self._comment_repo: InterfaceCommentRepository | None = None
+        self._task_repo: InterfaceTaskRepository | None = None
+        self._project_repo: InterfaceProjectRepository | None = None
+        self._dashboard_repo: InterfaceDashboardReadRepository | None = None
+        self._user_repository: InterfaceUserRepository | None = None
+        self._attachment_repo: InterfaceAttachmentRepository | None = None
+        self._audit_repo: InterfaceAuditRepository | None = None
+        self._milestone_repo: InterfaceMilestoneRepository | None = None
+        self._category_repo: InterfaceCategoryRepository | None = None
+        self._notification_repo: InterfaceNotificationRepository | None = None
 
         self.background_tasks = None
+
+    @property
+    def comment_repo(self) -> InterfaceCommentRepository:
+        if self._comment_repo is None:
+            self._comment_repo = CommentSQLAlchemyRepository(self.session)
+        return self._comment_repo
+
+    @property
+    def task_repo(self) -> InterfaceTaskRepository:
+        if self._task_repo is None:
+            self._task_repo = TaskSQLAlchemyRepository(self.session)
+        return self._task_repo
+
+    @property
+    def project_repo(self) -> InterfaceProjectRepository:
+        if self._project_repo is None:
+            self._project_repo = ProjectSQLAlchemyRepository(self.session)
+        return self._project_repo
+
+    @property
+    def dashboard_repo(self) -> InterfaceDashboardReadRepository:
+        if self._dashboard_repo is None:
+            self._dashboard_repo = DashboardSQLAlchemyReadRepository(self.session)
+        return self._dashboard_repo
+
+    @property
+    def user_repository(self) -> InterfaceUserRepository:
+        if self._user_repository is None:
+            self._user_repository = UserSQLAlchemyRepository(self.session)
+        return self._user_repository
+
+    @property
+    def attachment_repo(self) -> InterfaceAttachmentRepository:
+        if self._attachment_repo is None:
+            self._attachment_repo = AttachmentSQLAlchemyRepository(self.session)
+        return self._attachment_repo
+
+    @property
+    def audit_repo(self) -> InterfaceAuditRepository:
+        if self._audit_repo is None:
+            self._audit_repo = AuditSQLAlchemyRepository(self.session)
+        return self._audit_repo
+
+    @property
+    def milestone_repo(self) -> InterfaceMilestoneRepository:
+        if self._milestone_repo is None:
+            self._milestone_repo = MilestoneSQLAlchemyRepository(self.session)
+        return self._milestone_repo
+
+    @property
+    def category_repo(self) -> InterfaceCategoryRepository:
+        if self._category_repo is None:
+            self._category_repo = CategorySQLAlchemyRepository(self.session)
+        return self._category_repo
+
+    @property
+    def notification_repo(self) -> InterfaceNotificationRepository:
+        if self._notification_repo is None:
+            self._notification_repo = NotificationSQLAlchemyRepository(self.session)
+        return self._notification_repo
 
     def add_event(self, event: "DomainEvent") -> None:
         """Menambahkan event ke dalam unit of work.
