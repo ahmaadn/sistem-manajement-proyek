@@ -24,12 +24,16 @@ async def write_notifications(
     project_id: int | None = None,
     task_id: int | None = None,
     session: AsyncSession,
+    send_to_me: bool = False,
 ) -> list[Notification]:
     """
     Tulis notifikasi ke banyak penerima.
     Returns: jumlah notifikasi yang berhasil dibuat.
     """
-    recips = _normalize_recipients(recipients, actor_id)
+    if not send_to_me:
+        recips = _normalize_recipients(recipients, actor_id)
+    else:
+        recips = list({int(r) for r in recipients if r is not None and int(r) > 0})
     if not recips:
         return []
 
