@@ -52,9 +52,7 @@ class _Project:
             default=None, ge=1970, description="Tahun mulai (mis. 2010)"
         ),
         end_year: int | None = Query(
-            default=None,
-            ge=1970,
-            description=f"Tahun akhir (<= {datetime.now().year})",
+            default=None, ge=1970, description="Tahun akhir"
         ),
     ):
         """
