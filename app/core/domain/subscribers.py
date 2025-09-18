@@ -22,6 +22,9 @@ from app.core.domain.handlers.notifications.project_member_notification_handlers
 from app.core.domain.handlers.notifications.project_notification_handlers import (
     register_event_handlers as register_project_notification_handlers,
 )
+from app.core.domain.handlers.notifications.user_assign_notification_handlers import (
+    register_event_handlers as register_user_assign_notification_handlers,
+)
 
 _registered = False
 
@@ -42,6 +45,7 @@ def register_event_handlers():
     # Notifications
     register_project_notification_handlers()
     register_project_member_notification_handlers()
+    register_user_assign_notification_handlers()
     _registered = True
 
 

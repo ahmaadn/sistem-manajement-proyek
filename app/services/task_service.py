@@ -117,7 +117,7 @@ class TaskService:
                 created_at=attachment.created_at,
                 mime_type=attachment.mime_type,
             )
-            for attachment in await self.uow.attachment_repo.list_by_task_without_comment(
+            for attachment in await self.uow.attachment_repo.list_by_task_without_comment(  # noqa: E501
                 task_id=task.id
             )
         ]
@@ -568,8 +568,12 @@ class TaskService:
         self.uow.add_event(
             TaskAssignedAddedEvent(
                 task_id=task.id,
+                task_name=task.name,
                 performed_by=task.id,
+                performed_name=actor.name,
+                performed_profile_url=actor.profile_url or "",
                 project_id=task.project_id,
+                project_title="",  # TODO: fetch project title
                 user_id=actor.id,
                 assignee_id=target_user.id,
                 assignee_name=target_user.name,
