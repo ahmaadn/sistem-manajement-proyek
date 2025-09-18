@@ -29,7 +29,7 @@ class DashboardService:
         self, user_service: "UserService", limit: int
     ) -> AdminDashboardResponse:
         """Get admin dashboard data."""
-        users = await user_service.list_user()
+        users, _ = await user_service.list_user()
         role_counts = dict.fromkeys(Role, 0)
 
         # Mendapatkan ringkasan status proyek
