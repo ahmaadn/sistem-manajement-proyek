@@ -530,13 +530,16 @@ class ProjectService:
 
         self._on_remove_member(actor, member, project)
 
-    def _on_remove_member(self, actor, member, project):
+    def _on_remove_member(self, actor: User, member: User, project: Project):
         self.uow.add_event(
             ProjectMemberRemovedEvent(
                 performed_by=actor.id,
                 project_id=project.id,
                 member_id=member.id,
                 member_name=member.name,
+                project_title=project.title,
+                performed_name=actor.name,
+                performed_profile_url=actor.profile_url,
             )
         )
 

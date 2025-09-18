@@ -31,3 +31,6 @@ class ProjectMemberRemovedEvent(DomainEvent):
     project_id: int
     member_id: int
     member_name: str
+    project_title: str
+    performed_name: str
+    performed_profile_url: str
