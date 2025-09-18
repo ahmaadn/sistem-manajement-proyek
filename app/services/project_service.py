@@ -593,21 +593,31 @@ class ProjectService:
         )
 
         self._on_member_role_update(
-            project_id, actor, member, new_role, existing_member
+            project, actor, member, new_role, existing_member
         )
         return await self.repo.update_project_member_role(
             existing_member, project_id, new_role
         )
 
-    def _on_member_role_update(self, project_id, actor, member, new_role, current):
+    def _on_member_role_update(
+        self,
+        project: Project,
+        actor: User,
+        member: User,
+        new_role: RoleProject,
+        current: ProjectMember,
+    ):
         self.uow.add_event(
             ProjectMemberUpdatedEvent(
                 performed_by=actor.id,
-                project_id=project_id,
+                project_id=project.id,
                 member_id=member.id,
                 member_name=member.name,
                 after=new_role,
                 before=current.role,
+                project_title=project.title,
+                performed_name=actor.name,
+                performed_profile_url=actor.profile_url,
             )
         )
 

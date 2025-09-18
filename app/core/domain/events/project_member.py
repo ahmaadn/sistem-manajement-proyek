@@ -21,6 +21,9 @@ class ProjectMemberUpdatedEvent(DomainEvent):
     member_name: str
     before: str
     after: str
+    project_title: str
+    performed_name: str
+    performed_profile_url: str
 
 
 @dataclass(frozen=True, kw_only=True)
