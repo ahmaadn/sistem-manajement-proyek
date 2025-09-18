@@ -15,7 +15,7 @@ async def notification_user_assigned_to_task(ev: TaskAssignedAddedEvent):
     async with async_session_maker() as session:
         message = (
             f"You have been assigned to the task '{ev.task_name}' in "
-            "project '{ev.project_title}'."
+            f"project '{ev.project_title}'."
         )
 
         notifications = await write_notifications(
