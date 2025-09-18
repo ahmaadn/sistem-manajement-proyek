@@ -66,7 +66,7 @@ class _Project:
             raise exceptions.UserNotFoundError
 
         async with self.uow:
-            await self.project_service.add_member_by_actor(
+            await self.project_service.assign_project_member(
                 project_id, self.user, member_info, payload.role
             )
             await self.uow.commit()
@@ -107,7 +107,7 @@ class _Project:
             raise exceptions.MemberNotFoundError
 
         async with self.uow:
-            await self.project_service.remove_member_by_actor(
+            await self.project_service.remove_project_member(
                 project_id, self.user, member_info
             )
             await self.uow.commit()

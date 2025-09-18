@@ -539,7 +539,7 @@ class ProjectService:
             raise exceptions.ProjectNotFoundError
         return project
 
-    async def add_member_by_actor(
+    async def assign_project_member(
         self, project_id: int, actor: User, member: User, role: RoleProject
     ) -> ProjectMember:
         """Menambahkan anggota ke proyek.
@@ -579,6 +579,12 @@ class ProjectService:
 
         created = await self.repo.add_project_member(project_id, member.id, role)
 
+        self._on_member_added(actor, member, role, project)
+        return created
+
+    def _on_member_added(
+        self, actor: User, member: User, role: RoleProject, project: Project
+    ):
         self.uow.add_event(
             ProjectMemberAddedEvent(
                 performed_by=actor.id,
@@ -590,9 +596,8 @@ class ProjectService:
                 user=actor,
             )
         )
-        return created
 
-    async def remove_member_by_actor(
+    async def remove_project_member(
         self, project_id: int, actor: User, member: User
     ) -> None:
         """Menghapus anggota dari proyek.
@@ -632,6 +637,9 @@ class ProjectService:
 
         await self.repo.remove_project_member(project_id, member.id)
 
+        self._on_remove_member(actor, member, project)
+
+    def _on_remove_member(self, actor, member, project):
         self.uow.add_event(
             ProjectMemberRemovedEvent(
                 performed_by=actor.id,
