@@ -137,14 +137,14 @@ class _Project:
         - Tidak dapat menganti role creator
         - Tidak dapat menggati role jika user saat ini
 
-        **Akses** : Project Manajer (Owner), Admin (Owner)
+        **Akses** : Project Manajer (Owner), Admin
         """
         member_info = await self.user_service.get_user(user_id)
         if not member_info:
             raise exceptions.MemberNotFoundError
 
         async with self.uow:
-            await self.project_service.change_role_member_by_actor(
+            await self.project_service.update_member_role(
                 project_id, self.user, member_info, payload.role
             )
             await self.uow.commit()

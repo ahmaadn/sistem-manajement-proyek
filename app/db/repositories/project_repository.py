@@ -26,43 +26,106 @@ class InterfaceProjectRepository(
     async def get_member_by_ids(
         self, project_id: int, member_id: int
     ) -> ProjectMember | None:
-        """Mendapatkan anggota proyek berdasarkan ID proyek dan ID anggota."""
+        """Mendapatkan anggota proyek berdasarkan ID proyek dan ID anggota.
+
+        Args:
+            project_id (int): ID proyek.
+            member_id (int): ID anggota.
+
+        Returns:
+            ProjectMember | None: Anggota proyek yang ditemukan atau None.
+        """
 
     @abstractmethod
     async def add_project_member(
         self, project_id: int, user_id: int, role: RoleProject
     ) -> ProjectMember:
-        """Menambahkan anggota baru ke proyek."""
+        """Menambahkan anggota baru ke proyek.
+
+        Args:
+            project_id (int): ID proyek.
+            user_id (int): ID pengguna.
+            role (RoleProject): Peran anggota dalam proyek.
+
+        Returns:
+            ProjectMember: Anggota proyek yang baru ditambahkan.
+        """
 
     @abstractmethod
     async def remove_project_member(self, project_id: int, user_id: int) -> None:
-        """Menghapus anggota dari proyek."""
+        """Menghapus anggota dari proyek.
+
+        Args:
+            project_id (int): ID proyek.
+            user_id (int): ID pengguna.
+        """
 
     @abstractmethod
     async def update_project_member_role(
         self, member: ProjectMember, project_id: int, role: RoleProject
     ) -> ProjectMember:
-        """Memperbarui peran anggota proyek."""
+        """Memperbarui peran anggota proyek.
+
+        Args:
+            project_id (int): ID proyek.
+            user_id (int): ID pengguna.
+            role (RoleProject): Peran baru anggota dalam proyek.
+
+        Returns:
+            ProjectMember: Anggota proyek yang diperbarui.
+        """
 
     @abstractmethod
-    async def get_owned_project_by_user(
-        self, user_id: int, project_id: int
+    async def get_user_project_by_role(
+        self,
+        user_id: int,
+        project_id: int,
+        project_role: RoleProject = RoleProject.OWNER,
     ) -> Project | None:
-        """Mendapatkan proyek milik pengguna tertentu."""
+        """Mendapatkan proyek bedasarkan peran user di proyek.
+
+        Args:
+            user_id (int): ID user.
+            project_id (int): ID proyek.
+            project_role (RoleProject, optional): Peran project. Defaults to
+                RoleProject.OWNER.
+
+        Returns:
+            Project | None: Proyek yang ditemukan atau None.
+        """
 
     @abstractmethod
     async def get_project_statistics_for_user(self, user_id: int) -> dict[str, int]:
-        """Statistik proyek pengguna."""
+        """Statistik proyek untuk user tertentu.
+
+        Args:
+            user_id (int): ID user.
+
+        Returns:
+            dict[str, int]: Statistik proyek untuk user tertentu.
+        """
 
     @abstractmethod
     async def get_overall_project_statistics(self) -> dict[str, int]:
-        """Statistik semua proyek."""
+        """Statistik keseluruhan proyek.
+
+        Returns:
+            dict[str, int]: Statistik keseluruhan proyek.
+        """
 
     @abstractmethod
     async def list_user_project_participations(
         self, user_id: int
     ) -> Sequence[Row[tuple[int, str, RoleProject]]]:
-        """Daftar partisipasi proyek pengguna."""
+        """Mendapatkan daftar partisipasi proyek user.
+
+        Args:
+            user_id (int): ID user.
+
+        Returns:
+            Sequence[Row[tuple[int, str, RoleProject]]]: Daftar partisipasi proyek
+                user.
+        """
 
     @abstractmethod
     async def pagination_projects(
@@ -76,7 +139,26 @@ class InterfaceProjectRepository(
         start_year: int | None = None,
         end_year: int | None = None,
     ) -> dict[str, Any]:
-        """Paginasi proyek pengguna."""
+        """Mendapatkan daftar proyek dengan pagination dan filter.
+        filter bedasarkan peran user:
+            - Admin: semua project (tanpa syarat member, semua status)
+            - PM: hanya project yang ia ikuti (tanpa filter status)
+            - User biasa: hanya project yang ia ikuti (status ACTIVE/COMPLETED)
+
+        Args:
+            user_id (int): ID user.
+            user_role (Role): Peran user.
+            page (int): Halaman.
+            per_page (int): Jumlah item per halaman.
+            status_filter (StatusProject | None, optional): filter status project.
+                Defaults to None.
+            start_year (int | None, optional): Filter tahun awal proyek. Defaults
+                to None.
+            end_year (int | None, optional): Filter tahun terakhir. Defaults to None.
+
+        Returns:
+            dict[str, Any]: Daftar proyek dengan pagination dan filter.
+        """
 
     @abstractmethod
     async def summarize_user_projects(
@@ -87,13 +169,18 @@ class InterfaceProjectRepository(
         start_year: int | None = None,
         end_year: int | None = None,
     ) -> dict[str, int]:
-        """Ringkasan proyek per status dengan filter yang sama."""
+        """Ringkasan proyek untuk user tertentu bedasarkan range tahun.
 
-    @abstractmethod
-    async def map_user_roles_in_projects(
-        self, user_id: int, project_ids: list[int]
-    ) -> dict[int, RoleProject]:
-        """Peta peran pengguna di beberapa proyek."""
+        Args:
+            user_id (int): ID user.
+            not_admin (bool, optional): untuk memastikan user bukan admin. Defaults
+                to True.
+            start_year (int | None, optional): filter tahun awal. Defaults to None.
+            end_year (int | None, optional): filter tahun terakhir. Defaults to None.
+
+        Returns:
+            dict[str, int]: Ringkasan proyek untuk user tertentu.
+        """
 
     @abstractmethod
     async def get_user_scoped_project_detail(
@@ -102,7 +189,16 @@ class InterfaceProjectRepository(
         project_id: int,
         user_role: Role,
     ) -> Project | None:
-        """Detail proyek untuk pengguna."""
+        """Mendapatkan detail proyek yang diakses user bedasarkan perannya.
+
+        Args:
+            user_id (int): ID user.
+            project_id (int): ID proyek.
+            user_role (Role): Peran user.
+
+        Returns:
+            Project | None: Proyek yang ditemukan atau None.
+        """
 
     @abstractmethod
     async def is_user_owner_of_project(self, project_id: int, user_id: int) -> bool:
@@ -165,7 +261,16 @@ class InterfaceProjectRepository(
     @abstractmethod
     async def list_project_members(
         self, project_id: int, role: RoleProject | None = None
-    ) -> Sequence[ProjectMember]: ...
+    ) -> Sequence[ProjectMember]:
+        """List anggota proyek, dengan opsi filter berdasarkan peran.
+
+        Args:
+            project_id (int): ID proyek.
+            role (RoleProject | None, optional): role peran. Defaults to None.
+
+        Returns:
+            Sequence[ProjectMember]: Daftar anggota proyek.
+        """
 
     @abstractmethod
     async def get_project_by_id(
@@ -203,24 +308,11 @@ class ProjectSQLAlchemyRepository(
     async def get_member_by_ids(
         self, project_id: int, member_id: int
     ) -> ProjectMember | None:
-        """
-        Mendapatkan anggota proyek berdasarkan ID proyek dan ID anggota.
-        """
         return await self.session.get(ProjectMember, (project_id, member_id))
 
     async def add_project_member(
         self, project_id: int, user_id: int, role: RoleProject
     ) -> ProjectMember:
-        """Menambahkan anggota baru ke proyek.
-
-        Args:
-            project_id (int): ID proyek.
-            user_id (int): ID pengguna.
-            role (RoleProject): Peran anggota dalam proyek.
-
-        Returns:
-            ProjectMember: Anggota proyek yang baru ditambahkan.
-        """
         member = ProjectMember(project_id=project_id, user_id=user_id, role=role)
         self.session.add(member)
         await self.session.flush()
@@ -228,12 +320,6 @@ class ProjectSQLAlchemyRepository(
         return member
 
     async def remove_project_member(self, project_id: int, user_id: int) -> None:
-        """Menghapus anggota dari proyek.
-
-        Args:
-            project_id (int): ID proyek.
-            user_id (int): ID pengguna.
-        """
         member = await self.get_member_by_ids(project_id, user_id)
         if member:
             await self.session.delete(member)
@@ -242,23 +328,16 @@ class ProjectSQLAlchemyRepository(
     async def update_project_member_role(
         self, member: ProjectMember, project_id: int, role: RoleProject
     ) -> ProjectMember:
-        """Memperbarui peran anggota proyek.
-
-        Args:
-            project_id (int): ID proyek.
-            user_id (int): ID pengguna.
-            role (RoleProject): Peran baru anggota dalam proyek.
-
-        Returns:
-            ProjectMember: Anggota proyek yang diperbarui.
-        """
         member.role = role
         await self.session.flush()
         await self.session.refresh(member)
         return member
 
-    async def get_owned_project_by_user(
-        self, user_id: int, project_id: int
+    async def get_user_project_by_role(
+        self,
+        user_id: int,
+        project_id: int,
+        project_role: RoleProject = RoleProject.OWNER,
     ) -> Project | None:
         stmt = select(Project).where(
             Project.id == project_id,
@@ -269,7 +348,7 @@ class ProjectSQLAlchemyRepository(
                 .where(
                     ProjectMember.project_id == project_id,
                     ProjectMember.user_id == user_id,
-                    ProjectMember.role == RoleProject.OWNER,
+                    ProjectMember.role == project_role,
                 )
             ),
         )
@@ -370,12 +449,6 @@ class ProjectSQLAlchemyRepository(
         start_year: int | None = None,
         end_year: int | None = None,
     ) -> dict[str, Any]:
-        """
-        - Admin: semua project (tanpa syarat member, semua status)
-        - PM: hanya project yang ia ikuti (tanpa filter status)
-        - User biasa: hanya project yang ia ikuti (status ACTIVE/COMPLETED)
-        """
-
         conditions: list[Any] = [Project.deleted_at.is_(None)]
 
         # Scope membership
@@ -481,20 +554,6 @@ class ProjectSQLAlchemyRepository(
             "project_cancel": (row.project_cancel if row else 0) or 0,
         }
 
-    async def map_user_roles_in_projects(
-        self, user_id: int, project_ids: list[int]
-    ) -> dict[int, RoleProject]:
-        if not project_ids:
-            return {}
-        res = await self.session.execute(
-            select(ProjectMember.project_id, ProjectMember.role).where(
-                ProjectMember.user_id == user_id,
-                ProjectMember.project_id.in_(project_ids),
-            )
-        )
-        rows = res.all()
-        return {pid: role for pid, role in rows}  # noqa: C416
-
     async def get_user_scoped_project_detail(
         self,
         user_id: int,
@@ -529,17 +588,6 @@ class ProjectSQLAlchemyRepository(
         return res.scalars().first()
 
     async def is_user_owner_of_project(self, project_id: int, user_id: int) -> bool:
-        """
-        Memeriksa apakah pengguna adalah pemilik proyek yang terkait dengan tugas.
-
-        Args:
-            task_id: ID tugas
-            user_id: ID pengguna
-
-        Returns:
-            bool: True jika pengguna adalah pemilik proyek, False jika tidak
-        """
-
         stmt = select(
             exists().where(
                 ProjectMember.project_id == project_id,

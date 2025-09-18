@@ -81,9 +81,7 @@ class Seeder:
             uow=self.uow,
             repo=self.uow.user_repository,
         )
-        self.project_service = ProjectService(
-            uow=self.uow, repo=self.uow.project_repo
-        )
+        self.project_service = ProjectService(uow=self.uow)
         self.milestone_service = MilestoneService(uow=self.uow)
         self.task_service = TaskService(uow=self.uow)
         self.category_service = CategoryService(uow=self.uow)
@@ -211,7 +209,7 @@ class Seeder:
         )
         project = await self.project_service.create_project(
             user=self.pm_user,  # type: ignore
-            project_create=payload,
+            payload=payload,
         )
         print(
             f"  -> Project dibuat id={project.id} status={status} "

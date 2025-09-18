@@ -132,7 +132,7 @@ class _Project:
         """
         async with self.uow:
             project = await self.project_service.update_project(
-                project_id=project_id, user=self.user, project_update=payload
+                project_id=project_id, user=self.user, payload=payload
             )
             await self.uow.commit()
 
